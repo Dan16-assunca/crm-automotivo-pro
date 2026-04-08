@@ -45,7 +45,7 @@ function qualScore(lead: Lead) {
   return { intent, capacity, urgency }
 }
 
-async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+async function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string): Promise<T> {
   const timeout = new Promise<never>((_, rej) =>
     setTimeout(() => rej(new Error(`[${label}] Timeout após ${ms / 1000}s`)), ms)
   )
