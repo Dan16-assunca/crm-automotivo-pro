@@ -13,12 +13,22 @@ export const evolutionApi = {
   },
 
   connectInstance: async (instanceName: string) => {
-    const res = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
+    // Tenta reconectar instância existente primeiro
+    const connectRes = await fetch(`${EVOLUTION_API_URL}/instance/connect/${instanceName}`, { headers })
+    if (connectRes.ok) {
+      const data = await connectRes.json()
+      // Normaliza para o mesmo formato de /instance/create
+      if (data.base64) return { qrcode: { base64: data.base64 } }
+      if (data.qrcode?.base64) return data
+      return data
+    }
+    // Se não existir, cria nova instância
+    const createRes = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ instanceName, qrcode: true }),
     })
-    return res.json()
+    return createRes.json()
   },
 
   getInstanceStatus: async (instanceName: string) => {
