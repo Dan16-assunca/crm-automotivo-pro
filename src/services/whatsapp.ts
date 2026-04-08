@@ -46,7 +46,7 @@ export const evolutionApi = {
       const createRes = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ instanceName, qrcode: true }),
+        body: JSON.stringify({ instanceName, qrcode: true, integration: 'WHATSAPP-BAILEYS' }),
       })
       if (!createRes.ok) return { error: 'Falha ao criar instância' }
       const created = await createRes.json()
