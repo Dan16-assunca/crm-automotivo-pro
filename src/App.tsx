@@ -9,6 +9,7 @@ import { ToastContainer } from '@/components/ui/Toast'
 
 // Lazy pages
 const Login = lazy(() => import('@/pages/auth/Login'))
+const ResetPassword = lazy(() => import('@/pages/auth/ResetPassword'))
 const Dashboard = lazy(() => import('@/pages/dashboard/Dashboard'))
 const Pipeline = lazy(() => import('@/pages/pipeline/Pipeline'))
 const Leads = lazy(() => import('@/pages/leads/Leads'))
@@ -51,6 +52,7 @@ function AppInner() {
       <Suspense fallback={<PageLoading />}>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route
             path="/"
             element={

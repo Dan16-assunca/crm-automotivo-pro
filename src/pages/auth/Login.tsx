@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { motion } from 'framer-motion'
-import { Mail, Lock, Car, Eye, EyeOff } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Mail, Lock, Car, Eye, EyeOff, ArrowLeft } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/Button'
@@ -23,6 +23,10 @@ export default function Login() {
   const { user, setUser, setStore, setLoading } = useAuthStore()
   const [showPassword, setShowPassword] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isForgotPassword, setIsForgotPassword] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotSending, setForgotSending] = useState(false)
+  const [forgotSent, setForgotSent] = useState(false)
 
   useEffect(() => {
     if (user) navigate('/dashboard', { replace: true })
@@ -31,6 +35,23 @@ export default function Login() {
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
+
+  const handleForgotPassword = async () => {
+    if (!forgotEmail) return
+    setForgotSending(true)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+        redirectTo: 'https://app.crmautomotivopro.com/reset-password',
+      })
+      if (error) throw error
+      setForgotSent(true)
+      toast.success('Email enviado!', 'Verifique sua caixa de entrada')
+    } catch {
+      toast.error('Erro ao enviar', 'Verifique o email e tente novamente')
+    } finally {
+      setForgotSending(false)
+    }
+  }
 
   const onSubmit = async (data: FormData) => {
     setIsSubmitting(true)
@@ -129,63 +150,125 @@ export default function Login() {
 
         {/* Form card */}
         <div className="glass rounded-2xl p-8 shadow-2xl">
-          <h2 className="text-xl font-semibold text-white mb-1">Entrar na plataforma</h2>
-          <p className="text-sm text-[#555] mb-6">Acesse com suas credenciais</p>
-
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <Input
-              label="Email"
-              type="email"
-              placeholder="seu@email.com"
-              icon={<Mail size={14} />}
-              error={errors.email?.message}
-              {...register('email')}
-            />
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-[#A0A0A0] uppercase tracking-wider">Senha</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555]">
-                  <Lock size={14} />
-                </span>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  className="w-full h-10 rounded-lg bg-[#1A1A1A] border border-[#222] text-white placeholder:text-[#555] pl-10 pr-10 text-sm transition-all duration-200 focus:outline-none focus:border-[#39FF14] focus:shadow-[0_0_0_3px_rgba(57,255,20,0.1)]"
-                  {...register('password')}
-                />
+          <AnimatePresence mode="wait">
+            {isForgotPassword ? (
+              <motion.div
+                key="forgot"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.25 }}
+              >
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#555] hover:text-[#A0A0A0]"
+                  onClick={() => { setIsForgotPassword(false); setForgotSent(false); setForgotEmail('') }}
+                  className="flex items-center gap-1.5 text-xs text-[#555] hover:text-[#A0A0A0] mb-4"
                 >
-                  {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                  <ArrowLeft size={12} /> Voltar ao login
                 </button>
-              </div>
-              {errors.password && <p className="text-xs text-red-400">{errors.password.message}</p>}
-            </div>
+                <h2 className="text-xl font-semibold text-white mb-1">Redefinir senha</h2>
+                <p className="text-sm text-[#555] mb-6">
+                  Informe seu email e enviaremos um link para criar uma nova senha.
+                </p>
+                {forgotSent ? (
+                  <div className="rounded-lg bg-[#39FF14]/10 border border-[#39FF14]/30 p-4 text-sm text-[#39FF14] text-center">
+                    Email enviado para <strong>{forgotEmail}</strong>.<br />
+                    Verifique sua caixa de entrada.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <Input
+                      label="Email"
+                      type="email"
+                      placeholder="seu@email.com"
+                      icon={<Mail size={14} />}
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                    />
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      className="w-full"
+                      loading={forgotSending}
+                      onClick={handleForgotPassword}
+                    >
+                      Enviar link de redefinição
+                    </Button>
+                  </div>
+                )}
+              </motion.div>
+            ) : (
+              <motion.div
+                key="login"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ duration: 0.25 }}
+              >
+                <h2 className="text-xl font-semibold text-white mb-1">Entrar na plataforma</h2>
+                <p className="text-sm text-[#555] mb-6">Acesse com suas credenciais</p>
 
-            <div className="flex justify-end">
-              <button type="button" className="text-xs text-[#39FF14] hover:underline">
-                Esqueci minha senha
-              </button>
-            </div>
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                  <Input
+                    label="Email"
+                    type="email"
+                    placeholder="seu@email.com"
+                    icon={<Mail size={14} />}
+                    error={errors.email?.message}
+                    {...register('email')}
+                  />
 
-            <Button
-              type="submit"
-              variant="primary"
-              size="lg"
-              className="w-full mt-2"
-              loading={isSubmitting}
-            >
-              {isSubmitting ? 'Entrando...' : 'Entrar'}
-            </Button>
-          </form>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-[#A0A0A0] uppercase tracking-wider">Senha</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555]">
+                        <Lock size={14} />
+                      </span>
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="••••••••"
+                        className="w-full h-10 rounded-lg bg-[#1A1A1A] border border-[#222] text-white placeholder:text-[#555] pl-10 pr-10 text-sm transition-all duration-200 focus:outline-none focus:border-[#39FF14] focus:shadow-[0_0_0_3px_rgba(57,255,20,0.1)]"
+                        {...register('password')}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#555] hover:text-[#A0A0A0]"
+                      >
+                        {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                    {errors.password && <p className="text-xs text-red-400">{errors.password.message}</p>}
+                  </div>
 
-          <p className="text-center text-xs text-[#555] mt-6">
-            Problemas para acessar?{' '}
-            <span className="text-[#39FF14] cursor-pointer hover:underline">Fale com o suporte</span>
-          </p>
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setIsForgotPassword(true)}
+                      className="text-xs text-[#39FF14] hover:underline"
+                    >
+                      Esqueci minha senha
+                    </button>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="lg"
+                    className="w-full mt-2"
+                    loading={isSubmitting}
+                  >
+                    {isSubmitting ? 'Entrando...' : 'Entrar'}
+                  </Button>
+                </form>
+
+                <p className="text-center text-xs text-[#555] mt-6">
+                  Problemas para acessar?{' '}
+                  <span className="text-[#39FF14] cursor-pointer hover:underline">Fale com o suporte</span>
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <p className="text-center text-xs text-[#333] mt-6">
