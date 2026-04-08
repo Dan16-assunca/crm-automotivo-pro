@@ -1,0 +1,244 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+/* ================================================
+   CRM AUTOMOTIVO PRO — DESIGN TOKENS (DARK)
+   ================================================ */
+:root {
+  /* Backgrounds */
+  --bg-base:        #080808;
+  --bg-surface:     #0D0D0D;
+  --bg-card:        #111111;
+  --bg-elevated:    #161616;
+  --bg-input:       #111111;
+  --bg-hover:       #1A1A1A;
+  --bg-selected:    rgba(57, 255, 20, 0.08);
+
+  /* Aliases para compatibilidade com o design de referência */
+  --bg:   #080808;
+  --bg2:  #0D0D0D;
+  --bg3:  #111111;
+  --bg4:  #161616;
+
+  /* Bordas */
+  --border-subtle:  #1E1E1E;
+  --border-default: #2A2A2A;
+  --border-strong:  #3A3A3A;
+  --border-neon:    rgba(57, 255, 20, 0.4);
+  --border-neon-full: #39FF14;
+  --border:  #1E1E1E;
+  --border2: #2A2A2A;
+
+  /* Verde Neon */
+  --neon:           #39FF14;
+  --neon-dim:       rgba(57, 255, 20, 0.12);
+  --neon-border:    rgba(57, 255, 20, 0.4);
+  --neon-muted:     rgba(57, 255, 20, 0.12);
+  --neon-glow:      0 0 20px rgba(57,255,20,0.4), 0 0 40px rgba(57,255,20,0.15);
+  --neon-glow-sm:   0 0 10px rgba(57,255,20,0.3);
+  --neon-glow-text: 0 0 8px rgba(57,255,20,0.6);
+
+  /* Texto */
+  --text-primary:   #FFFFFF;
+  --text-secondary: #CCCCCC;
+  --text-muted:     #666666;
+  --text-neon:      #39FF14;
+  --text-inverse:   #080808;
+
+  /* Aliases */
+  --text:  #FFFFFF;
+  --text2: #CCCCCC;
+  --text3: #999999;
+  --text4: #555555;
+
+  /* Status */
+  --status-hot:     #FF4444;
+  --status-warm:    #F5A623;
+  --status-cold:    #4A9EFF;
+  --status-won:     #39FF14;
+  --status-lost:    #FF4444;
+  --status-info:    #4A9EFF;
+  --status-warning: #F5A623;
+  --status-error:   #FF4444;
+
+  --red:    #FF4444;
+  --amber:  #F5A623;
+  --blue:   #4A9EFF;
+  --purple: #A855F7;
+  --green:  #39FF14;
+
+  /* Sombras */
+  --shadow-sm:   0 1px 3px rgba(0,0,0,0.5);
+  --shadow-md:   0 4px 16px rgba(0,0,0,0.6);
+  --shadow-lg:   0 8px 32px rgba(0,0,0,0.7);
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.03);
+
+  /* Raios */
+  --radius-sm:   4px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-xl:   16px;
+  --radius-full: 9999px;
+
+  /* Sidebar */
+  --sidebar-w: 220px;
+
+  color-scheme: dark;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── LIGHT MODE ── */
+.light {
+  --bg-base:        #F0F2F5;
+  --bg-surface:     #FFFFFF;
+  --bg-card:        #F5F6FA;
+  --bg-elevated:    #EBEDF2;
+  --bg-input:       #FFFFFF;
+  --bg-hover:       #F0F2F5;
+  --bg-selected:    rgba(22, 168, 7, 0.08);
+  --bg:   #F0F2F5;
+  --bg2:  #FFFFFF;
+  --bg3:  #F5F6FA;
+  --bg4:  #EBEDF2;
+
+  --border-subtle:  #E0E3EB;
+  --border-default: #D0D4DE;
+  --border-strong:  #B8BDD0;
+  --border-neon:    rgba(22, 168, 7, 0.4);
+  --border-neon-full: #16A807;
+  --border:  #E0E3EB;
+  --border2: #D0D4DE;
+
+  --neon:           #16A807;
+  --neon-dim:       rgba(22, 168, 7, 0.12);
+  --neon-border:    rgba(22, 168, 7, 0.4);
+  --neon-muted:     rgba(22, 168, 7, 0.12);
+  --neon-glow:      0 0 16px rgba(22,168,7,0.25);
+  --neon-glow-sm:   0 0 8px rgba(22,168,7,0.2);
+  --neon-glow-text: none;
+
+  --text-primary:   #0F1117;
+  --text-secondary: #1A1D26;
+  --text-muted:     #9BA3B8;
+  --text-neon:      #16A807;
+  --text-inverse:   #FFFFFF;
+  --text:  #0F1117;
+  --text2: #1A1D26;
+  --text3: #5A6072;
+  --text4: #9BA3B8;
+
+  --status-hot:     #D92B2B;
+  --status-warm:    #C47A00;
+  --status-cold:    #1A6FD4;
+  --status-won:     #16A807;
+  --status-lost:    #D92B2B;
+  --status-error:   #D92B2B;
+  --red:    #D92B2B;
+  --amber:  #C47A00;
+  --blue:   #1A6FD4;
+  --purple: #7C3AED;
+  --green:  #16A807;
+
+  --shadow-sm:   0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md:   0 4px 16px rgba(0,0,0,0.1);
+  --shadow-lg:   0 8px 32px rgba(0,0,0,0.12);
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04);
+
+  color-scheme: light;
+}
+
+/* ── RESET ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
+#root { min-height: 100dvh; }
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+
+/* ── FONTS ── */
+.font-display { font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.05em; }
+.font-mono    { font-family: 'JetBrains Mono', monospace; }
+
+/* ── GRID PATTERN (login background) ── */
+.grid-pattern {
+  background-image:
+    linear-gradient(rgba(57,255,20,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(57,255,20,0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* ── SKELETON ── */
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position:  200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-elevated) 50%, var(--bg-card) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-md);
+}
+
+/* ── ANIMATIONS ── */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.8); }
+}
+@keyframes pulse-border-red {
+  0%, 100% { box-shadow: 0 0 8px rgba(255,68,68,0.15); }
+  50%       { box-shadow: 0 0 20px rgba(255,68,68,0.3); }
+}
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.page-enter { animation: page-enter 300ms ease forwards; }
+.count-up   { animation: count-up 0.5s ease forwards; }
+.red-pulse  { animation: pulse-border-red 2s ease-in-out infinite; }
+.pulse-dot  { animation: pulse-dot 2s ease-in-out infinite; }
+
+/* ── NEON UTILS ── */
+.neon-glow { box-shadow: var(--neon-glow); }
+.neon-text { color: var(--neon); text-shadow: var(--neon-glow-text); }
+
+/* ── SCORE BADGES ── */
+.s-hot  { background: rgba(255,68,68,0.15);  color: #FF4444; border: 1px solid rgba(255,68,68,0.3); }
+.s-warm { background: rgba(245,166,35,0.15); color: #F5A623; border: 1px solid rgba(245,166,35,0.3); }
+.s-cold { background: rgba(74,158,255,0.15); color: #4A9EFF; border: 1px solid rgba(74,158,255,0.3); }
+
+/* ── TAG COLORS ── */
+.t-fin  { background: rgba(168,85,247,0.15); color: #C084FC; }
+.t-troc { background: rgba(57,255,20,0.12);  color: #39FF14; }
+.t-avs  { background: rgba(74,158,255,0.15); color: #4A9EFF; }
+.t-urg  { background: rgba(255,68,68,0.15);  color: #FF4444; }
