@@ -10,11 +10,14 @@ import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { toast } from '@/components/ui/Toast'
 import { timeAgo, formatDateTime } from '@/utils/format'
-import type { WhatsAppMessage, Lead } from '@/types'
+import type { WhatsAppMessage } from '@/types'
 
-interface Conversation {
-  lead: Lead
-  lastMessage: WhatsAppMessage | null
+interface EvoChat {
+  remoteJid: string
+  pushName: string
+  profilePicUrl?: string
+  lastMessageContent?: string
+  lastMessageTs?: number
   unreadCount: number
 }
 
@@ -49,65 +52,93 @@ function MessageBubble({ msg }: { msg: WhatsAppMessage }) {
 export default function WhatsApp() {
   const { store } = useAuthStore()
   const queryClient = useQueryClient()
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
+  const [selectedChat, setSelectedChat] = useState<EvoChat | null>(null)
   const [message, setMessage] = useState('')
   const [search, setSearch] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Conversations list
+  const instanceName = (store?.settings as Record<string, string>)?.whatsapp_instance ?? ''
+
+  // Conversations list via Evolution API (workaround: pushName vazio no v2.3.7)
   const { data: conversations, isLoading } = useQuery({
-    queryKey: ['whatsapp-conversations', store?.id],
+    queryKey: ['whatsapp-conversations', instanceName],
     queryFn: async () => {
-      const { data: leads } = await supabase
-        .from('leads')
-        .select('*')
-        .eq('store_id', store!.id)
-        .not('client_phone', 'is', null)
-        .order('last_contact_at', { ascending: false, nullsFirst: false })
-        .limit(50)
+      if (!instanceName) return []
 
-      if (!leads) return []
+      // 1. Buscar todos os chats
+      const chats = await evolutionApi.findChats(instanceName)
+      if (!Array.isArray(chats)) return []
 
-      const convs: Conversation[] = await Promise.all(leads.map(async (lead) => {
-        const { data: msgs } = await supabase
-          .from('whatsapp_messages')
-          .select('*')
-          .eq('lead_id', lead.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
+      // 2. Para cada chat individual, buscar última mensagem para obter pushName
+      const evoChats: EvoChat[] = await Promise.all(
+        chats
+          .filter((c: Record<string, unknown>) =>
+            typeof c.id === 'string' && c.id.endsWith('@s.whatsapp.net')
+          )
+          .map(async (chat: Record<string, unknown>) => {
+            const remoteJid = chat.id as string
+            let pushName = ((chat.pushName || chat.name || '') as string).trim()
+            let lastMessageContent = ''
+            let lastMessageTs: number | undefined
 
-        const { count: unread } = await supabase
-          .from('whatsapp_messages')
-          .select('id', { count: 'exact' })
-          .eq('lead_id', lead.id)
-          .eq('direction', 'inbound')
-          .is('read_at', null)
+            try {
+              const msgsRes = await evolutionApi.findMessages(instanceName, remoteJid, 1)
+              const records: Record<string, unknown>[] =
+                msgsRes?.messages?.records ?? msgsRes?.records ?? []
+              const lastMsg = records[0] as Record<string, unknown> | undefined
+              if (lastMsg) {
+                if (!pushName) pushName = (lastMsg.pushName as string | undefined) ?? ''
+                const msgContent = lastMsg.message as Record<string, unknown> | undefined
+                lastMessageContent =
+                  (msgContent?.conversation as string) ||
+                  ((msgContent?.extendedTextMessage as Record<string, unknown>)?.text as string) ||
+                  ((msgContent?.imageMessage as Record<string, unknown>)?.caption as string) ||
+                  ''
+                lastMessageTs = lastMsg.messageTimestamp as number | undefined
+              }
+            } catch {
+              // ignora erros por chat individual
+            }
 
-        return {
-          lead: lead as Lead,
-          lastMessage: msgs?.[0] ?? null,
-          unreadCount: unread ?? 0,
-        }
-      }))
+            // Não bloqueia — conta não-lidas do Supabase
+            const { count: unread } = await supabase
+              .from('whatsapp_messages')
+              .select('id', { count: 'exact' })
+              .eq('store_id', store!.id)
+              .eq('remote_jid', remoteJid)
+              .eq('direction', 'inbound')
+              .is('read_at', null)
 
-      return convs.filter(c => c.lastMessage || true)
+            return {
+              remoteJid,
+              pushName: pushName || remoteJid.replace('@s.whatsapp.net', ''),
+              profilePicUrl: (chat.profilePicUrl as string | undefined) || undefined,
+              lastMessageContent,
+              lastMessageTs,
+              unreadCount: unread ?? 0,
+            }
+          })
+      )
+
+      return evoChats.sort((a, b) => (b.lastMessageTs ?? 0) - (a.lastMessageTs ?? 0))
     },
-    enabled: !!store?.id,
+    enabled: !!instanceName,
     refetchInterval: 10000,
   })
 
-  // Messages for selected lead
+  // Messages for selected chat
   const { data: messages } = useQuery({
-    queryKey: ['whatsapp-messages', selectedLead?.id],
+    queryKey: ['whatsapp-messages', selectedChat?.remoteJid],
     queryFn: async () => {
       const { data } = await supabase
         .from('whatsapp_messages')
         .select('*')
-        .eq('lead_id', selectedLead!.id)
+        .eq('store_id', store!.id)
+        .eq('remote_jid', selectedChat!.remoteJid)
         .order('created_at', { ascending: true })
       return (data ?? []) as WhatsAppMessage[]
     },
-    enabled: !!selectedLead?.id,
+    enabled: !!selectedChat?.remoteJid,
     refetchInterval: 5000,
   })
 
@@ -119,31 +150,27 @@ export default function WhatsApp() {
   // Send message
   const sendMutation = useMutation({
     mutationFn: async (text: string) => {
-      if (!selectedLead?.client_phone || !store?.settings) throw new Error('Missing data')
-
-      const instanceName = (store.settings as Record<string, string>).whatsapp_instance
+      if (!selectedChat?.remoteJid) throw new Error('Nenhum chat selecionado')
       if (!instanceName) throw new Error('WhatsApp não configurado')
 
+      const phoneNumber = selectedChat.remoteJid.replace('@s.whatsapp.net', '')
+
       // Send via Evolution API
-      await evolutionApi.sendText(instanceName, selectedLead.client_phone, text)
+      await evolutionApi.sendText(instanceName, phoneNumber, text)
 
       // Save to DB
       await supabase.from('whatsapp_messages').insert({
-        store_id: store.id,
-        lead_id: selectedLead.id,
+        store_id: store!.id,
         instance_name: instanceName,
-        remote_jid: selectedLead.client_phone,
+        remote_jid: selectedChat.remoteJid,
         direction: 'outbound',
         type: 'text',
         content: text,
         status: 'sent',
       })
-
-      // Update lead last contact
-      await supabase.from('leads').update({ last_contact_at: new Date().toISOString() }).eq('id', selectedLead.id)
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['whatsapp-messages', selectedLead?.id] })
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-messages', selectedChat?.remoteJid] })
       queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] })
       setMessage('')
     },
@@ -156,8 +183,8 @@ export default function WhatsApp() {
   }
 
   const filteredConvs = conversations?.filter(c =>
-    c.lead.client_name.toLowerCase().includes(search.toLowerCase()) ||
-    c.lead.client_phone?.includes(search)
+    c.pushName.toLowerCase().includes(search.toLowerCase()) ||
+    c.remoteJid.includes(search)
   )
 
   return (
@@ -194,33 +221,41 @@ export default function WhatsApp() {
               ))}
             </div>
           ) : (
-            filteredConvs?.map(({ lead, lastMessage, unreadCount }) => (
+            filteredConvs?.map((chat) => (
               <button
-                key={lead.id}
-                onClick={() => setSelectedLead(lead)}
+                key={chat.remoteJid}
+                onClick={() => setSelectedChat(chat)}
                 className={`w-full flex items-center gap-3 p-4 hover:bg-[#111] transition-colors border-b border-[#1A1A1A] text-left ${
-                  selectedLead?.id === lead.id ? 'bg-[#111] border-l-2 border-l-[#39FF14]' : ''
+                  selectedChat?.remoteJid === chat.remoteJid ? 'bg-[#111] border-l-2 border-l-[#39FF14]' : ''
                 }`}
               >
-                <div className="w-10 h-10 rounded-full bg-[#39FF14]/10 border border-[#39FF14]/20 flex items-center justify-center text-sm font-bold text-[#39FF14] shrink-0">
-                  {lead.client_name.slice(0, 2).toUpperCase()}
-                </div>
+                {chat.profilePicUrl ? (
+                  <img
+                    src={chat.profilePicUrl}
+                    alt={chat.pushName}
+                    className="w-10 h-10 rounded-full object-cover shrink-0"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-[#39FF14]/10 border border-[#39FF14]/20 flex items-center justify-center text-sm font-bold text-[#39FF14] shrink-0">
+                    {chat.pushName.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-white truncate">{lead.client_name}</p>
-                    {lastMessage && (
+                    <p className="text-sm font-medium text-white truncate">{chat.pushName}</p>
+                    {chat.lastMessageTs && (
                       <span className="text-[10px] text-[#555] shrink-0 ml-1">
-                        {timeAgo(lastMessage.created_at)}
+                        {timeAgo(new Date(chat.lastMessageTs * 1000).toISOString())}
                       </span>
                     )}
                   </div>
                   <div className="flex items-center justify-between mt-0.5">
                     <p className="text-xs text-[#555] truncate">
-                      {lastMessage?.content ?? lead.client_phone}
+                      {chat.lastMessageContent || chat.remoteJid.replace('@s.whatsapp.net', '')}
                     </p>
-                    {unreadCount > 0 && (
+                    {chat.unreadCount > 0 && (
                       <span className="bg-[#39FF14] text-black text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shrink-0 ml-1">
-                        {unreadCount}
+                        {chat.unreadCount}
                       </span>
                     )}
                   </div>
@@ -232,17 +267,25 @@ export default function WhatsApp() {
       </div>
 
       {/* Chat area */}
-      {selectedLead ? (
+      {selectedChat ? (
         <div className="flex-1 flex flex-col">
           {/* Chat header */}
           <div className="h-16 px-4 border-b border-[#222] flex items-center justify-between bg-[#111]">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-[#39FF14]/10 border border-[#39FF14]/20 flex items-center justify-center text-sm font-bold text-[#39FF14]">
-                {selectedLead.client_name.slice(0, 2).toUpperCase()}
-              </div>
+              {selectedChat.profilePicUrl ? (
+                <img
+                  src={selectedChat.profilePicUrl}
+                  alt={selectedChat.pushName}
+                  className="w-9 h-9 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-[#39FF14]/10 border border-[#39FF14]/20 flex items-center justify-center text-sm font-bold text-[#39FF14]">
+                  {selectedChat.pushName.slice(0, 2).toUpperCase()}
+                </div>
+              )}
               <div>
-                <p className="text-sm font-semibold text-white">{selectedLead.client_name}</p>
-                <p className="text-xs text-[#555]">{selectedLead.client_phone}</p>
+                <p className="text-sm font-semibold text-white">{selectedChat.pushName}</p>
+                <p className="text-xs text-[#555]">{selectedChat.remoteJid.replace('@s.whatsapp.net', '')}</p>
               </div>
             </div>
             <div className="flex items-center gap-1">

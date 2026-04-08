@@ -52,6 +52,27 @@ export const evolutionApi = {
     return evolutionApi.sendText(instance, number, text)
   },
 
+  findChats: async (instance: string) => {
+    const res = await fetch(`${EVOLUTION_API_URL}/chat/findChats/${instance}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    })
+    return res.json()
+  },
+
+  findMessages: async (instance: string, remoteJid: string, limit = 1) => {
+    const res = await fetch(`${EVOLUTION_API_URL}/chat/findMessages/${instance}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        where: { key: { remoteJid } },
+        limit,
+      }),
+    })
+    return res.json()
+  },
+
   disconnectInstance: async (instanceName: string) => {
     const res = await fetch(`${EVOLUTION_API_URL}/instance/logout/${instanceName}`, {
       method: 'DELETE',
