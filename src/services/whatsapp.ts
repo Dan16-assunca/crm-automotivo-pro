@@ -12,23 +12,53 @@ export const evolutionApi = {
     return res.json()
   },
 
-  connectInstance: async (instanceName: string) => {
-    // Tenta reconectar instância existente primeiro
+  // Retorna 'open' | 'close' | 'connecting' | 'qr' | 'not_found'
+  getConnectionState: async (instanceName: string): Promise<string> => {
+    try {
+      const res = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${instanceName}`, { headers })
+      if (res.status === 404) return 'not_found'
+      if (!res.ok) return 'not_found'
+      const data = await res.json()
+      return data?.instance?.state ?? data?.state ?? 'close'
+    } catch {
+      return 'not_found'
+    }
+  },
+
+  // Retorna { base64: string } se QR disponível, { connected: true } se já conectado
+  // Cria a instância automaticamente se não existir
+  getQrCode: async (instanceName: string): Promise<{ base64?: string; connected?: boolean; error?: string }> => {
+    // 1. Tenta conectar instância existente
     const connectRes = await fetch(`${EVOLUTION_API_URL}/instance/connect/${instanceName}`, { headers })
     if (connectRes.ok) {
       const data = await connectRes.json()
-      // Normaliza para o mesmo formato de /instance/create
-      if (data.base64) return { qrcode: { base64: data.base64 } }
-      if (data.qrcode?.base64) return data
-      return data
+      // Já conectado
+      if (data?.instance?.state === 'open') return { connected: true }
+      // QR disponível — strip do prefixo data URI se existir
+      const raw: string = data?.base64 ?? data?.qrcode?.base64 ?? ''
+      if (raw) {
+        const base64 = raw.startsWith('data:') ? raw.split(',')[1] : raw
+        return { base64 }
+      }
     }
-    // Se não existir, cria nova instância
-    const createRes = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ instanceName, qrcode: true }),
-    })
-    return createRes.json()
+    // 2. Se 404, instância não existe → cria
+    if (connectRes.status === 404 || !connectRes.ok) {
+      const createRes = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ instanceName, qrcode: true }),
+      })
+      if (!createRes.ok) return { error: 'Falha ao criar instância' }
+      const created = await createRes.json()
+      const raw: string = created?.qrcode?.base64 ?? ''
+      if (raw) {
+        const base64 = raw.startsWith('data:') ? raw.split(',')[1] : raw
+        return { base64 }
+      }
+      // Instância criada mas QR ainda não disponível — tenta buscar em seguida
+      return { error: 'QR não disponível ainda, tente novamente em instantes' }
+    }
+    return { error: 'Resposta inesperada da API' }
   },
 
   getInstanceStatus: async (instanceName: string) => {
