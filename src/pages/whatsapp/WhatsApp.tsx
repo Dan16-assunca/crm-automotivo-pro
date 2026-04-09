@@ -121,6 +121,7 @@ export default function WhatsApp() {
   const [message, setMessage] = useState('')
   const [search, setSearch] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const bulkUpsertedRef = useRef(false) // evita rodar múltiplas vezes
 
   const instanceName = (store?.settings as Record<string, string>)?.whatsapp_instance ?? ''
 
@@ -239,6 +240,60 @@ export default function WhatsApp() {
     enabled: !!instanceName,
     refetchInterval: 8000,
   })
+
+  // ── auto-criar leads para todos os contatos ao carregar ──────────────────
+
+  useEffect(() => {
+    if (!conversations?.length || !store?.id || !user?.id) return
+    if (bulkUpsertedRef.current) return
+    bulkUpsertedRef.current = true
+
+    const run = async () => {
+      // Busca o primeiro estágio do pipeline uma vez
+      const { data: firstStage } = await supabase
+        .from('pipeline_stages')
+        .select('id, name')
+        .eq('store_id', store.id)
+        .eq('position', 1)
+        .single()
+
+      if (!firstStage) return
+
+      // Busca todos os leads existentes com source=whatsapp para evitar duplicatas
+      const { data: existing } = await supabase
+        .from('leads')
+        .select('client_phone')
+        .eq('store_id', store.id)
+
+      const existingPhones = new Set((existing ?? []).map(l => l.client_phone ?? ''))
+
+      // Filtra contatos que ainda não são leads
+      const toInsert = conversations
+        .filter(c => c.phoneNumber.length >= 8)
+        .filter(c => {
+          const last8 = c.phoneNumber.slice(-8)
+          return !Array.from(existingPhones).some(p => p.includes(last8))
+        })
+        .map(c => ({
+          store_id: store.id,
+          salesperson_id: user.id,
+          stage_id: firstStage.id,
+          client_name: c.pushName,
+          client_phone: c.phoneNumber,
+          source: 'whatsapp',
+          status: 'active',
+        }))
+
+      if (!toInsert.length) return
+
+      await supabase.from('leads').insert(toInsert)
+      queryClient.invalidateQueries({ queryKey: ['pipeline-leads'] })
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+    }
+
+    run().catch(console.error)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversations, store?.id, user?.id])
 
   // ── mensagens do chat selecionado ─────────────────────────────────────────
 

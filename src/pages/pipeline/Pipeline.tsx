@@ -795,11 +795,11 @@ export default function Pipeline() {
   const { data: stages, isLoading: stagesLoading, isError: stagesError, error: stagesErr } = useQuery({
     queryKey: ['pipeline-stages', storeId],
     staleTime: 5 * 60 * 1000,
-    retry: 0,
+    retry: 2,
     queryFn: async () => {
       const { data, error } = await withTimeout(
         supabase.from('pipeline_stages').select('*').eq('store_id', storeId).order('position'),
-        8000, 'stages'
+        20000, 'stages'
       )
       if (error) throw error
       return (data ?? []) as PipelineStage[]
@@ -810,11 +810,11 @@ export default function Pipeline() {
   const { data: leads } = useQuery({
     queryKey: ['pipeline-leads', storeId],
     staleTime: 30 * 1000,
-    retry: 0,
+    retry: 2,
     queryFn: async () => {
       const { data, error } = await withTimeout(
         supabase.from('leads').select('*').eq('store_id', storeId).eq('status', 'active').order('created_at', { ascending: false }),
-        8000, 'leads'
+        20000, 'leads'
       )
       if (error) throw error
       return (data ?? []) as Lead[]

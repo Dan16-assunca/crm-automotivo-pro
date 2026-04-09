@@ -1,21 +1,17 @@
-const EVOLUTION_API_URL = import.meta.env.VITE_EVOLUTION_API_URL as string
-const EVOLUTION_API_KEY = import.meta.env.VITE_EVOLUTION_API_KEY as string
-
-const headers = {
-  'Content-Type': 'application/json',
-  apikey: EVOLUTION_API_KEY,
-}
+// Todas as chamadas passam pelo proxy Vercel /api/evolution/* para evitar CORS
+const BASE = '/api/evolution'
+const headers = { 'Content-Type': 'application/json' }
 
 export const evolutionApi = {
   getInstances: async () => {
-    const res = await fetch(`${EVOLUTION_API_URL}/instance/fetchInstances`, { headers })
+    const res = await fetch(`${BASE}/instance/fetchInstances`, { headers })
     return res.json()
   },
 
   // Retorna 'open' | 'close' | 'connecting' | 'qr' | 'not_found'
   getConnectionState: async (instanceName: string): Promise<string> => {
     try {
-      const res = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${instanceName}`, { headers })
+      const res = await fetch(`${BASE}/instance/connectionState/${instanceName}`, { headers })
       if (res.status === 404) return 'not_found'
       if (!res.ok) return 'not_found'
       const data = await res.json()
@@ -29,7 +25,7 @@ export const evolutionApi = {
   // Cria a instância automaticamente se não existir
   getQrCode: async (instanceName: string): Promise<{ base64?: string; connected?: boolean; error?: string }> => {
     // 1. Tenta conectar instância existente
-    const connectRes = await fetch(`${EVOLUTION_API_URL}/instance/connect/${instanceName}`, { headers })
+    const connectRes = await fetch(`${BASE}/instance/connect/${instanceName}`, { headers })
     if (connectRes.ok) {
       const data = await connectRes.json()
       // Já conectado
@@ -43,7 +39,7 @@ export const evolutionApi = {
     }
     // 2. Se 404, instância não existe → cria
     if (connectRes.status === 404 || !connectRes.ok) {
-      const createRes = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
+      const createRes = await fetch(`${BASE}/instance/create`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ instanceName, qrcode: true, integration: 'WHATSAPP-BAILEYS' }),
@@ -55,19 +51,18 @@ export const evolutionApi = {
         const base64 = raw.startsWith('data:') ? raw.split(',')[1] : raw
         return { base64 }
       }
-      // Instância criada mas QR ainda não disponível — tenta buscar em seguida
       return { error: 'QR não disponível ainda, tente novamente em instantes' }
     }
     return { error: 'Resposta inesperada da API' }
   },
 
   getInstanceStatus: async (instanceName: string) => {
-    const res = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${instanceName}`, { headers })
+    const res = await fetch(`${BASE}/instance/connectionState/${instanceName}`, { headers })
     return res.json()
   },
 
   sendText: async (instance: string, number: string, text: string) => {
-    const res = await fetch(`${EVOLUTION_API_URL}/message/sendText/${instance}`, {
+    const res = await fetch(`${BASE}/message/sendText/${instance}`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ number, text }),
@@ -76,7 +71,7 @@ export const evolutionApi = {
   },
 
   sendMedia: async (instance: string, number: string, mediaUrl: string, caption: string) => {
-    const res = await fetch(`${EVOLUTION_API_URL}/message/sendMedia/${instance}`, {
+    const res = await fetch(`${BASE}/message/sendMedia/${instance}`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ number, mediaUrl, caption }),
@@ -93,7 +88,7 @@ export const evolutionApi = {
   },
 
   findChats: async (instance: string) => {
-    const res = await fetch(`${EVOLUTION_API_URL}/chat/findChats/${instance}`, {
+    const res = await fetch(`${BASE}/chat/findChats/${instance}`, {
       method: 'POST',
       headers,
       body: JSON.stringify({}),
@@ -101,8 +96,8 @@ export const evolutionApi = {
     return res.json()
   },
 
-  findMessages: async (instance: string, remoteJid: string, limit = 1) => {
-    const res = await fetch(`${EVOLUTION_API_URL}/chat/findMessages/${instance}`, {
+  findMessages: async (instance: string, remoteJid: string, limit = 50) => {
+    const res = await fetch(`${BASE}/chat/findMessages/${instance}`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -114,7 +109,7 @@ export const evolutionApi = {
   },
 
   disconnectInstance: async (instanceName: string) => {
-    const res = await fetch(`${EVOLUTION_API_URL}/instance/logout/${instanceName}`, {
+    const res = await fetch(`${BASE}/instance/logout/${instanceName}`, {
       method: 'DELETE',
       headers,
     })
