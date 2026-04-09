@@ -2,10 +2,22 @@
 const BASE = '/api/evolution'
 const headers = { 'Content-Type': 'application/json' }
 
+/** Parseia uma Response de forma segura. Retorna null se não for JSON válido. */
+async function safeJson(res: Response): Promise<Record<string, unknown> | null> {
+  const text = await res.text()
+  try {
+    const parsed = JSON.parse(text)
+    return parsed as Record<string, unknown>
+  } catch {
+    console.error('[whatsapp.ts] Response is not JSON:', text.slice(0, 200))
+    return null
+  }
+}
+
 export const evolutionApi = {
   getInstances: async () => {
     const res = await fetch(`${BASE}/instance/fetchInstances`, { headers })
-    return res.json()
+    return safeJson(res)
   },
 
   // Retorna 'open' | 'close' | 'connecting' | 'qr' | 'not_found'
@@ -14,8 +26,10 @@ export const evolutionApi = {
       const res = await fetch(`${BASE}/instance/connectionState/${instanceName}`, { headers })
       if (res.status === 404) return 'not_found'
       if (!res.ok) return 'not_found'
-      const data = await res.json()
-      return data?.instance?.state ?? data?.state ?? 'close'
+      const data = await safeJson(res)
+      if (!data) return 'not_found'
+      const state = (data?.instance as Record<string,string>)?.state ?? (data?.state as string) ?? 'close'
+      return state
     } catch {
       return 'not_found'
     }
@@ -24,41 +38,59 @@ export const evolutionApi = {
   // Retorna { base64: string } se QR disponível, { connected: true } se já conectado
   // Cria a instância automaticamente se não existir
   getQrCode: async (instanceName: string): Promise<{ base64?: string; connected?: boolean; error?: string }> => {
-    // 1. Tenta conectar instância existente
-    const connectRes = await fetch(`${BASE}/instance/connect/${instanceName}`, { headers })
-    if (connectRes.ok) {
-      const data = await connectRes.json()
-      // Já conectado
-      if (data?.instance?.state === 'open') return { connected: true }
-      // QR disponível — strip do prefixo data URI se existir
-      const raw: string = data?.base64 ?? data?.qrcode?.base64 ?? ''
-      if (raw) {
-        const base64 = raw.startsWith('data:') ? raw.split(',')[1] : raw
-        return { base64 }
+    try {
+      // 1. Tenta conectar instância existente
+      const connectRes = await fetch(`${BASE}/instance/connect/${instanceName}`, { headers })
+      const data = await safeJson(connectRes)
+
+      if (!data) {
+        return { error: 'Proxy não respondeu com JSON válido. Verifique os logs do Vercel.' }
       }
-    }
-    // 2. Se 404, instância não existe → cria
-    if (connectRes.status === 404 || !connectRes.ok) {
-      const createRes = await fetch(`${BASE}/instance/create`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ instanceName, qrcode: true, integration: 'WHATSAPP-BAILEYS' }),
-      })
-      if (!createRes.ok) return { error: 'Falha ao criar instância' }
-      const created = await createRes.json()
-      const raw: string = created?.qrcode?.base64 ?? ''
-      if (raw) {
-        const base64 = raw.startsWith('data:') ? raw.split(',')[1] : raw
-        return { base64 }
+
+      if (connectRes.ok) {
+        // Já conectado
+        const state = (data?.instance as Record<string,string>)?.state
+        if (state === 'open') return { connected: true }
+
+        // QR disponível — strip do prefixo data URI se existir
+        const raw = (data?.base64 ?? (data?.qrcode as Record<string,string>)?.base64 ?? '') as string
+        if (raw) {
+          const base64 = raw.startsWith('data:') ? raw.split(',')[1] : raw
+          return { base64 }
+        }
       }
-      return { error: 'QR não disponível ainda, tente novamente em instantes' }
+
+      // 2. Se 404 ou instância inexistente → cria
+      const errMsg = ((data?.response as Record<string,unknown>)?.message as string[])?.join(' ') ?? ''
+      const notFound = connectRes.status === 404 || errMsg.includes('does not exist')
+
+      if (notFound || !connectRes.ok) {
+        const createRes = await fetch(`${BASE}/instance/create`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ instanceName, qrcode: true, integration: 'WHATSAPP-BAILEYS' }),
+        })
+        const created = await safeJson(createRes)
+        if (!createRes.ok || !created) return { error: 'Falha ao criar instância' }
+
+        const raw = ((created?.qrcode as Record<string,string>)?.base64 ?? '') as string
+        if (raw) {
+          const base64 = raw.startsWith('data:') ? raw.split(',')[1] : raw
+          return { base64 }
+        }
+        return { error: 'QR não disponível ainda, tente novamente em instantes' }
+      }
+
+      return { error: 'Resposta inesperada da API' }
+    } catch (err) {
+      console.error('[whatsapp.ts] getQrCode error:', err)
+      return { error: `Erro interno: ${String(err)}` }
     }
-    return { error: 'Resposta inesperada da API' }
   },
 
   getInstanceStatus: async (instanceName: string) => {
     const res = await fetch(`${BASE}/instance/connectionState/${instanceName}`, { headers })
-    return res.json()
+    return safeJson(res)
   },
 
   sendText: async (instance: string, number: string, text: string) => {
@@ -67,7 +99,7 @@ export const evolutionApi = {
       headers,
       body: JSON.stringify({ number, text }),
     })
-    return res.json()
+    return safeJson(res)
   },
 
   sendMedia: async (instance: string, number: string, mediaUrl: string, caption: string) => {
@@ -76,7 +108,7 @@ export const evolutionApi = {
       headers,
       body: JSON.stringify({ number, mediaUrl, caption }),
     })
-    return res.json()
+    return safeJson(res)
   },
 
   sendTemplate: async (instance: string, number: string, template: string, variables: Record<string, string>) => {
@@ -93,7 +125,7 @@ export const evolutionApi = {
       headers,
       body: JSON.stringify({}),
     })
-    return res.json()
+    return safeJson(res)
   },
 
   findMessages: async (instance: string, remoteJid: string, limit = 50) => {
@@ -105,7 +137,7 @@ export const evolutionApi = {
         limit,
       }),
     })
-    return res.json()
+    return safeJson(res)
   },
 
   disconnectInstance: async (instanceName: string) => {
@@ -113,6 +145,6 @@ export const evolutionApi = {
       method: 'DELETE',
       headers,
     })
-    return res.json()
+    return safeJson(res)
   },
 }

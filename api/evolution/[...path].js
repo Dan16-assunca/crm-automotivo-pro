@@ -2,6 +2,24 @@ const EVOLUTION_API_URL = (process.env.VITE_EVOLUTION_API_URL ?? '').replace(/\/
 const EVOLUTION_API_KEY = process.env.VITE_EVOLUTION_API_KEY ?? ''
 
 export default async function handler(req, res) {
+  // CORS preflight
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, apikey, Authorization')
+  if (req.method === 'OPTIONS') {
+    res.status(204).end()
+    return
+  }
+
+  if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY) {
+    console.error('[evolution-proxy] Missing env vars', {
+      url: EVOLUTION_API_URL ? 'set' : 'MISSING',
+      key: EVOLUTION_API_KEY ? 'set' : 'MISSING',
+    })
+    res.status(500).json({ error: 'Proxy not configured (missing env vars)' })
+    return
+  }
+
   const segments = req.query.path
   const path = Array.isArray(segments) ? segments.join('/') : (segments ?? '')
 
@@ -28,15 +46,26 @@ export default async function handler(req, res) {
     fetchOptions.body = JSON.stringify(req.body)
   }
 
+  console.log(`[evolution-proxy] ${req.method} → ${targetUrl}`)
+
   try {
     const response = await fetch(targetUrl, fetchOptions)
     const text = await response.text()
-    let data
-    try { data = JSON.parse(text) } catch { data = text }
 
-    res.setHeader('Access-Control-Allow-Origin', '*')
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch {
+      data = { raw: text }
+    }
+
+    if (!response.ok) {
+      console.error(`[evolution-proxy] upstream error ${response.status}:`, text.slice(0, 300))
+    }
+
     res.status(response.status).json(data)
   } catch (err) {
+    console.error('[evolution-proxy] fetch failed:', err)
     res.status(502).json({ error: 'Evolution API unreachable', detail: String(err) })
   }
 }

@@ -114,8 +114,10 @@ export default function Settings() {
       }
       toast.error('QR não disponível', 'A API não retornou o QR Code. Tente novamente.')
     } catch (err) {
-      toast.error('Erro de conexão', 'Verifique se a Evolution API está acessível')
+      const msg = err instanceof Error ? err.message : String(err)
+      toast.error('Erro de conexão', msg.slice(0, 120))
       setStatus('disconnected')
+      console.error('[Settings] handleGenerateQr error:', err)
     } finally {
       setIsLoadingQr(false)
     }

@@ -300,8 +300,9 @@ export default function WhatsApp() {
   const { data: messages, isLoading: loadingMsgs } = useQuery({
     queryKey: ['whatsapp-messages', instanceName, selectedChat?.remoteJid],
     queryFn: async () => {
-      const res = await evolutionApi.findMessages(instanceName, selectedChat!.remoteJid, 50)
-      const records: Record<string, unknown>[] = res?.messages?.records ?? res?.records ?? []
+      const res = await evolutionApi.findMessages(instanceName, selectedChat!.remoteJid, 50) as Record<string, unknown> | null
+      const msgs = res?.messages as Record<string, unknown> | undefined
+      const records: Record<string, unknown>[] = (msgs?.records ?? res?.records ?? []) as Record<string, unknown>[]
       return records
         .map((msg): EvoMessage => {
           const key = msg.key as Record<string, unknown>
