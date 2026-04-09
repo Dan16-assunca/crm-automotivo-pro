@@ -1,53 +1,93 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { motion } from 'framer-motion'
-import { Send, Search, Phone, MoreVertical, Paperclip, Smile, Check, CheckCheck, Clock } from 'lucide-react'
+import { Send, Search, Phone, MoreVertical, Paperclip, Smile, Check, CheckCheck, Clock, MessageCircleOff } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { evolutionApi } from '@/services/whatsapp'
-import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { toast } from '@/components/ui/Toast'
-import { timeAgo, formatDateTime } from '@/utils/format'
-import type { WhatsAppMessage } from '@/types'
+import { timeAgo } from '@/utils/format'
+
+// ---------- tipos locais ----------
 
 interface EvoChat {
-  remoteJid: string
+  remoteJid: string      // JID completo (@s.whatsapp.net ou @lid)
+  phoneNumber: string    // número limpo para envio
   pushName: string
   profilePicUrl?: string
   lastMessageContent?: string
   lastMessageTs?: number
+  lastFromMe?: boolean
   unreadCount: number
 }
 
-function MessageBubble({ msg }: { msg: WhatsAppMessage }) {
-  const isOutbound = msg.direction === 'outbound'
+interface EvoMessage {
+  id: string
+  fromMe: boolean
+  content: string
+  type: string
+  timestamp: number
+  status?: string
+}
+
+// ---------- helpers ----------
+
+/** Extrai número de telefone de qualquer formato de JID */
+function extractPhone(remoteJid: string, remoteJidAlt?: string): string {
+  if (remoteJidAlt) return remoteJidAlt.replace('@s.whatsapp.net', '')
+  return remoteJid.replace(/@.+$/, '')
+}
+
+/** Extrai texto legível de qualquer tipo de mensagem */
+function extractContent(msg: Record<string, unknown>): string {
+  const m = msg?.message as Record<string, unknown> | undefined
+  if (!m) return ''
+  return (
+    (m.conversation as string) ||
+    ((m.extendedTextMessage as Record<string, unknown>)?.text as string) ||
+    ((m.imageMessage as Record<string, unknown>)?.caption as string) ||
+    ((m.videoMessage as Record<string, unknown>)?.caption as string) ||
+    ((m.documentMessage as Record<string, unknown>)?.title as string) ||
+    (msg.messageType as string) || ''
+  )
+}
+
+// ---------- componentes ----------
+
+function MessageBubble({ msg }: { msg: EvoMessage }) {
+  const time = new Date(msg.timestamp * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 
   const StatusIcon = () => {
-    if (!isOutbound) return null
-    if (msg.status === 'read') return <CheckCheck size={12} className="text-[#39FF14]" />
-    if (msg.status === 'delivered') return <CheckCheck size={12} className="text-[#555]" />
-    if (msg.status === 'sent') return <Check size={12} className="text-[#555]" />
+    if (!msg.fromMe) return null
+    if (msg.status === 'READ') return <CheckCheck size={12} className="text-[#39FF14]" />
+    if (msg.status === 'DELIVERY_ACK' || msg.status === 'PLAYED') return <CheckCheck size={12} className="text-[#555]" />
+    if (msg.status === 'SERVER_ACK') return <Check size={12} className="text-[#555]" />
     return <Clock size={12} className="text-[#555]" />
   }
 
   return (
-    <div className={`flex ${isOutbound ? 'justify-end' : 'justify-start'} mb-2`}>
+    <div className={`flex ${msg.fromMe ? 'justify-end' : 'justify-start'} mb-2`}>
       <div className={`max-w-[70%] rounded-2xl px-4 py-2 ${
-        isOutbound
+        msg.fromMe
           ? 'bg-[#39FF14]/15 border border-[#39FF14]/20 rounded-tr-sm'
           : 'bg-[#1A1A1A] border border-[#222] rounded-tl-sm'
       }`}>
-        <p className="text-sm text-white break-words">{msg.content}</p>
+        {msg.content ? (
+          <p className="text-sm text-white break-words">{msg.content}</p>
+        ) : (
+          <p className="text-sm text-[#555] italic">{msg.type}</p>
+        )}
         <div className="flex items-center justify-end gap-1 mt-1">
-          <span className="text-[10px] text-[#555]">{formatDateTime(msg.created_at)}</span>
+          <span className="text-[10px] text-[#555]">{time}</span>
           <StatusIcon />
         </div>
       </div>
     </div>
   )
 }
+
+// ---------- página principal ----------
 
 export default function WhatsApp() {
   const { store } = useAuthStore()
@@ -59,106 +99,93 @@ export default function WhatsApp() {
 
   const instanceName = (store?.settings as Record<string, string>)?.whatsapp_instance ?? ''
 
-  // Conversations list via Evolution API (workaround: pushName vazio no v2.3.7)
+  // ---- lista de conversas ----
   const { data: conversations, isLoading } = useQuery({
     queryKey: ['whatsapp-conversations', instanceName],
     queryFn: async () => {
       if (!instanceName) return []
 
-      // 1. Buscar todos os chats
       const chats = await evolutionApi.findChats(instanceName)
       if (!Array.isArray(chats)) return []
 
-      // 2. Para cada chat individual, buscar última mensagem para obter pushName
-      const evoChats: EvoChat[] = await Promise.all(
-        chats
-          .filter((c: Record<string, unknown>) =>
-            typeof c.id === 'string' && c.id.endsWith('@s.whatsapp.net')
-          )
-          .map(async (chat: Record<string, unknown>) => {
-            const remoteJid = chat.id as string
-            let pushName = ((chat.pushName || chat.name || '') as string).trim()
-            let lastMessageContent = ''
-            let lastMessageTs: number | undefined
+      const result: EvoChat[] = chats
+        // Excluir grupos (@g.us) e broadcasts — incluir @s.whatsapp.net e @lid
+        .filter((c: Record<string, unknown>) => {
+          const jid = c.remoteJid as string
+          return jid && !jid.endsWith('@g.us') && !jid.includes('@broadcast') && !jid.includes('status')
+        })
+        .map((chat: Record<string, unknown>) => {
+          const lastMsg = chat.lastMessage as Record<string, unknown> | undefined
+          const key = lastMsg?.key as Record<string, unknown> | undefined
+          const remoteJid = chat.remoteJid as string
+          const remoteJidAlt = key?.remoteJidAlt as string | undefined
 
-            try {
-              const msgsRes = await evolutionApi.findMessages(instanceName, remoteJid, 1)
-              const records: Record<string, unknown>[] =
-                msgsRes?.messages?.records ?? msgsRes?.records ?? []
-              const lastMsg = records[0] as Record<string, unknown> | undefined
-              if (lastMsg) {
-                if (!pushName) pushName = (lastMsg.pushName as string | undefined) ?? ''
-                const msgContent = lastMsg.message as Record<string, unknown> | undefined
-                lastMessageContent =
-                  (msgContent?.conversation as string) ||
-                  ((msgContent?.extendedTextMessage as Record<string, unknown>)?.text as string) ||
-                  ((msgContent?.imageMessage as Record<string, unknown>)?.caption as string) ||
-                  ''
-                lastMessageTs = lastMsg.messageTimestamp as number | undefined
-              }
-            } catch {
-              // ignora erros por chat individual
-            }
+          const pushName = ((chat.pushName as string | undefined) || '').trim() ||
+            ((lastMsg?.pushName as string | undefined) || '').trim() ||
+            extractPhone(remoteJid, remoteJidAlt)
 
-            // Não bloqueia — conta não-lidas do Supabase
-            const { count: unread } = await supabase
-              .from('whatsapp_messages')
-              .select('id', { count: 'exact' })
-              .eq('store_id', store!.id)
-              .eq('remote_jid', remoteJid)
-              .eq('direction', 'inbound')
-              .is('read_at', null)
+          return {
+            remoteJid,
+            phoneNumber: extractPhone(remoteJid, remoteJidAlt),
+            pushName,
+            profilePicUrl: chat.profilePicUrl as string | undefined,
+            lastMessageContent: extractContent(lastMsg ?? {}),
+            lastMessageTs: lastMsg?.messageTimestamp as number | undefined,
+            lastFromMe: key?.fromMe as boolean | undefined,
+            unreadCount: (chat.unreadCount as number) ?? 0,
+          }
+        })
+        .sort((a, b) => (b.lastMessageTs ?? 0) - (a.lastMessageTs ?? 0))
 
-            return {
-              remoteJid,
-              pushName: pushName || remoteJid.replace('@s.whatsapp.net', ''),
-              profilePicUrl: (chat.profilePicUrl as string | undefined) || undefined,
-              lastMessageContent,
-              lastMessageTs,
-              unreadCount: unread ?? 0,
-            }
-          })
-      )
-
-      return evoChats.sort((a, b) => (b.lastMessageTs ?? 0) - (a.lastMessageTs ?? 0))
+      return result
     },
     enabled: !!instanceName,
-    refetchInterval: 10000,
+    refetchInterval: 8000,
   })
 
-  // Messages for selected chat
-  const { data: messages } = useQuery({
-    queryKey: ['whatsapp-messages', selectedChat?.remoteJid],
+  // ---- mensagens do chat selecionado (via Evolution API) ----
+  const { data: messages, isLoading: loadingMsgs } = useQuery({
+    queryKey: ['whatsapp-messages', instanceName, selectedChat?.remoteJid],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('whatsapp_messages')
-        .select('*')
-        .eq('store_id', store!.id)
-        .eq('remote_jid', selectedChat!.remoteJid)
-        .order('created_at', { ascending: true })
-      return (data ?? []) as WhatsAppMessage[]
+      const res = await evolutionApi.findMessages(instanceName, selectedChat!.remoteJid, 50)
+      const records: Record<string, unknown>[] =
+        res?.messages?.records ?? res?.records ?? []
+
+      return records
+        .map((msg): EvoMessage => {
+          const key = msg.key as Record<string, unknown>
+          const updates = (msg.MessageUpdate as Record<string, unknown>[] | undefined) ?? []
+          const lastUpdate = updates[updates.length - 1]
+          return {
+            id: msg.id as string,
+            fromMe: key?.fromMe as boolean ?? false,
+            content: extractContent(msg),
+            type: msg.messageType as string ?? 'unknown',
+            timestamp: msg.messageTimestamp as number ?? 0,
+            status: (lastUpdate?.status as string) ?? (msg.status as string),
+          }
+        })
+        .sort((a, b) => a.timestamp - b.timestamp) // crescente para exibição
     },
-    enabled: !!selectedChat?.remoteJid,
+    enabled: !!selectedChat?.remoteJid && !!instanceName,
     refetchInterval: 5000,
   })
 
-  // Scroll to bottom
+  // Scroll para o fim ao carregar/atualizar mensagens
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Send message
+  // ---- envio de mensagem ----
   const sendMutation = useMutation({
     mutationFn: async (text: string) => {
-      if (!selectedChat?.remoteJid) throw new Error('Nenhum chat selecionado')
-      if (!instanceName) throw new Error('WhatsApp não configurado')
+      if (!selectedChat) throw new Error('Nenhum chat selecionado')
+      if (!instanceName) throw new Error('WhatsApp não configurado. Vá em Configurações.')
 
-      const phoneNumber = selectedChat.remoteJid.replace('@s.whatsapp.net', '')
+      // Evolution API recebe o número sem @
+      await evolutionApi.sendText(instanceName, selectedChat.phoneNumber, text)
 
-      // Send via Evolution API
-      await evolutionApi.sendText(instanceName, phoneNumber, text)
-
-      // Save to DB
+      // Salva no Supabase para histórico
       await supabase.from('whatsapp_messages').insert({
         store_id: store!.id,
         instance_name: instanceName,
@@ -167,11 +194,11 @@ export default function WhatsApp() {
         type: 'text',
         content: text,
         status: 'sent',
-      })
+      }).throwOnError()
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['whatsapp-messages', selectedChat?.remoteJid] })
-      queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] })
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-messages', instanceName, selectedChat?.remoteJid] })
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations', instanceName] })
       setMessage('')
     },
     onError: (err: Error) => toast.error('Erro ao enviar', err.message),
@@ -184,16 +211,20 @@ export default function WhatsApp() {
 
   const filteredConvs = conversations?.filter(c =>
     c.pushName.toLowerCase().includes(search.toLowerCase()) ||
-    c.remoteJid.includes(search)
+    c.phoneNumber.includes(search)
   )
 
+  // ---- render ----
   return (
     <div className="flex h-[calc(100vh-7rem)] rounded-xl overflow-hidden border border-[#222] bg-[#0D0D0D]">
-      {/* Sidebar - conversations */}
+
+      {/* Sidebar */}
       <div className="w-80 shrink-0 border-r border-[#222] flex flex-col">
-        {/* Header */}
         <div className="p-4 border-b border-[#222]">
           <h2 className="font-semibold text-white mb-3">WhatsApp</h2>
+          {!instanceName && (
+            <p className="text-xs text-yellow-400 mb-2">⚠ Configure a instância em Configurações</p>
+          )}
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555]" />
             <input
@@ -206,7 +237,6 @@ export default function WhatsApp() {
           </div>
         </div>
 
-        {/* Conversation list */}
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
             <div className="p-4 space-y-3">
@@ -220,8 +250,15 @@ export default function WhatsApp() {
                 </div>
               ))}
             </div>
+          ) : !filteredConvs?.length ? (
+            <div className="flex flex-col items-center justify-center h-full gap-2 text-[#555] p-6">
+              <MessageCircleOff size={32} />
+              <p className="text-sm text-center">
+                {instanceName ? 'Nenhuma conversa encontrada' : 'Configure a instância primeiro'}
+              </p>
+            </div>
           ) : (
-            filteredConvs?.map((chat) => (
+            filteredConvs.map((chat) => (
               <button
                 key={chat.remoteJid}
                 onClick={() => setSelectedChat(chat)}
@@ -230,10 +267,9 @@ export default function WhatsApp() {
                 }`}
               >
                 {chat.profilePicUrl ? (
-                  <img
-                    src={chat.profilePicUrl}
-                    alt={chat.pushName}
+                  <img src={chat.profilePicUrl} alt={chat.pushName}
                     className="w-10 h-10 rounded-full object-cover shrink-0"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
                   />
                 ) : (
                   <div className="w-10 h-10 rounded-full bg-[#39FF14]/10 border border-[#39FF14]/20 flex items-center justify-center text-sm font-bold text-[#39FF14] shrink-0">
@@ -251,11 +287,12 @@ export default function WhatsApp() {
                   </div>
                   <div className="flex items-center justify-between mt-0.5">
                     <p className="text-xs text-[#555] truncate">
-                      {chat.lastMessageContent || chat.remoteJid.replace('@s.whatsapp.net', '')}
+                      {chat.lastFromMe && <span className="text-[#39FF14]/60">Você: </span>}
+                      {chat.lastMessageContent || chat.phoneNumber}
                     </p>
                     {chat.unreadCount > 0 && (
                       <span className="bg-[#39FF14] text-black text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shrink-0 ml-1">
-                        {chat.unreadCount}
+                        {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
                       </span>
                     )}
                   </div>
@@ -268,15 +305,14 @@ export default function WhatsApp() {
 
       {/* Chat area */}
       {selectedChat ? (
-        <div className="flex-1 flex flex-col">
-          {/* Chat header */}
-          <div className="h-16 px-4 border-b border-[#222] flex items-center justify-between bg-[#111]">
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Header */}
+          <div className="h-16 px-4 border-b border-[#222] flex items-center justify-between bg-[#111] shrink-0">
             <div className="flex items-center gap-3">
               {selectedChat.profilePicUrl ? (
-                <img
-                  src={selectedChat.profilePicUrl}
-                  alt={selectedChat.pushName}
+                <img src={selectedChat.profilePicUrl} alt={selectedChat.pushName}
                   className="w-9 h-9 rounded-full object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
                 />
               ) : (
                 <div className="w-9 h-9 rounded-full bg-[#39FF14]/10 border border-[#39FF14]/20 flex items-center justify-center text-sm font-bold text-[#39FF14]">
@@ -285,7 +321,7 @@ export default function WhatsApp() {
               )}
               <div>
                 <p className="text-sm font-semibold text-white">{selectedChat.pushName}</p>
-                <p className="text-xs text-[#555]">{selectedChat.remoteJid.replace('@s.whatsapp.net', '')}</p>
+                <p className="text-xs text-[#555]">+{selectedChat.phoneNumber}</p>
               </div>
             </div>
             <div className="flex items-center gap-1">
@@ -294,9 +330,14 @@ export default function WhatsApp() {
             </div>
           </div>
 
-          {/* Messages */}
+          {/* Mensagens */}
           <div className="flex-1 overflow-y-auto p-4 space-y-1">
-            {messages?.length === 0 && (
+            {loadingMsgs && (
+              <div className="flex justify-center py-8">
+                <div className="w-6 h-6 border-2 border-[#39FF14] border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+            {!loadingMsgs && messages?.length === 0 && (
               <div className="flex items-center justify-center h-full text-[#555] text-sm">
                 Nenhuma mensagem ainda. Inicie a conversa!
               </div>
@@ -306,7 +347,7 @@ export default function WhatsApp() {
           </div>
 
           {/* Input */}
-          <div className="p-4 border-t border-[#222] bg-[#111]">
+          <div className="p-4 border-t border-[#222] bg-[#111] shrink-0">
             <div className="flex items-center gap-2">
               <button className="text-[#555] hover:text-[#A0A0A0] p-2"><Paperclip size={18} /></button>
               <button className="text-[#555] hover:text-[#A0A0A0] p-2"><Smile size={18} /></button>
@@ -318,13 +359,8 @@ export default function WhatsApp() {
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
                 className="flex-1 h-10 px-4 rounded-xl bg-[#1A1A1A] border border-[#222] text-white text-sm placeholder:text-[#555] focus:outline-none focus:border-[#39FF14]"
               />
-              <Button
-                onClick={handleSend}
-                loading={sendMutation.isPending}
-                disabled={!message.trim()}
-                size="icon"
-                className="rounded-xl"
-              >
+              <Button onClick={handleSend} loading={sendMutation.isPending}
+                disabled={!message.trim()} size="icon" className="rounded-xl">
                 <Send size={16} />
               </Button>
             </div>
