@@ -1,15 +1,20 @@
-// Todas as chamadas passam pelo proxy Vercel /api/evolution/* para evitar CORS
-const BASE = '/api/evolution'
-const headers = { 'Content-Type': 'application/json' }
+// Chama a Evolution API diretamente — CORS está configurado no servidor
+// Access-Control-Allow-Origin: https://app.crmautomotivopro.com
+const BASE = import.meta.env.VITE_EVOLUTION_API_URL?.replace(/\/$/, '') ?? ''
+const API_KEY = import.meta.env.VITE_EVOLUTION_API_KEY ?? ''
+
+const headers = {
+  'Content-Type': 'application/json',
+  apikey: API_KEY,
+}
 
 /** Parseia uma Response de forma segura. Retorna null se não for JSON válido. */
 async function safeJson(res: Response): Promise<Record<string, unknown> | null> {
   const text = await res.text()
   try {
-    const parsed = JSON.parse(text)
-    return parsed as Record<string, unknown>
+    return JSON.parse(text) as Record<string, unknown>
   } catch {
-    console.error('[whatsapp.ts] Response is not JSON:', text.slice(0, 200))
+    console.error('[whatsapp.ts] Response is not JSON:', res.url, res.status, text.slice(0, 200))
     return null
   }
 }
@@ -28,14 +33,14 @@ export const evolutionApi = {
       if (!res.ok) return 'not_found'
       const data = await safeJson(res)
       if (!data) return 'not_found'
-      const state = (data?.instance as Record<string,string>)?.state ?? (data?.state as string) ?? 'close'
+      const state = (data?.instance as Record<string, string>)?.state ?? (data?.state as string) ?? 'close'
       return state
     } catch {
       return 'not_found'
     }
   },
 
-  // Retorna { base64: string } se QR disponível, { connected: true } se já conectado
+  // Retorna { base64 } se QR disponível, { connected: true } se já conectado
   // Cria a instância automaticamente se não existir
   getQrCode: async (instanceName: string): Promise<{ base64?: string; connected?: boolean; error?: string }> => {
     try {
@@ -44,24 +49,23 @@ export const evolutionApi = {
       const data = await safeJson(connectRes)
 
       if (!data) {
-        return { error: 'Proxy não respondeu com JSON válido. Verifique os logs do Vercel.' }
+        return { error: 'API não retornou JSON válido. Verifique os logs do browser.' }
       }
 
       if (connectRes.ok) {
-        // Já conectado
-        const state = (data?.instance as Record<string,string>)?.state
+        const state = (data?.instance as Record<string, string>)?.state
         if (state === 'open') return { connected: true }
 
-        // QR disponível — strip do prefixo data URI se existir
-        const raw = (data?.base64 ?? (data?.qrcode as Record<string,string>)?.base64 ?? '') as string
+        // QR disponível — strip do prefixo data URI se presente
+        const raw = (data?.base64 ?? (data?.qrcode as Record<string, string>)?.base64 ?? '') as string
         if (raw) {
           const base64 = raw.startsWith('data:') ? raw.split(',')[1] : raw
           return { base64 }
         }
       }
 
-      // 2. Se 404 ou instância inexistente → cria
-      const errMsg = ((data?.response as Record<string,unknown>)?.message as string[])?.join(' ') ?? ''
+      // 2. Instância não existe → cria
+      const errMsg = ((data?.response as Record<string, unknown>)?.message as string[])?.join(' ') ?? ''
       const notFound = connectRes.status === 404 || errMsg.includes('does not exist')
 
       if (notFound || !connectRes.ok) {
@@ -73,7 +77,7 @@ export const evolutionApi = {
         const created = await safeJson(createRes)
         if (!createRes.ok || !created) return { error: 'Falha ao criar instância' }
 
-        const raw = ((created?.qrcode as Record<string,string>)?.base64 ?? '') as string
+        const raw = ((created?.qrcode as Record<string, string>)?.base64 ?? '') as string
         if (raw) {
           const base64 = raw.startsWith('data:') ? raw.split(',')[1] : raw
           return { base64 }
@@ -84,7 +88,7 @@ export const evolutionApi = {
       return { error: 'Resposta inesperada da API' }
     } catch (err) {
       console.error('[whatsapp.ts] getQrCode error:', err)
-      return { error: `Erro interno: ${String(err)}` }
+      return { error: `Erro de rede: ${String(err)}` }
     }
   },
 
