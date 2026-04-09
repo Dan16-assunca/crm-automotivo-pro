@@ -1,14 +1,11 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
-
 const EVOLUTION_API_URL = (process.env.VITE_EVOLUTION_API_URL ?? '').replace(/\/$/, '')
 const EVOLUTION_API_KEY = process.env.VITE_EVOLUTION_API_KEY ?? ''
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Reconstrói o path a partir do slug capturado
+export default async function handler(req, res) {
   const segments = req.query.path
   const path = Array.isArray(segments) ? segments.join('/') : (segments ?? '')
 
-  // Repassa query strings (ex: ?limit=50)
+  // Repassa query strings (exceto o param 'path' interno do Vercel)
   const qs = new URLSearchParams()
   for (const [key, value] of Object.entries(req.query)) {
     if (key === 'path') continue
@@ -17,14 +14,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const qsStr = qs.toString()
   const targetUrl = `${EVOLUTION_API_URL}/${path}${qsStr ? `?${qsStr}` : ''}`
 
-  const headers: Record<string, string> = {
+  const fetchHeaders = {
     'Content-Type': 'application/json',
     apikey: EVOLUTION_API_KEY,
   }
 
-  const fetchOptions: RequestInit = {
+  const fetchOptions = {
     method: req.method ?? 'GET',
-    headers,
+    headers: fetchHeaders,
   }
 
   if (req.method !== 'GET' && req.method !== 'HEAD' && req.body) {
@@ -34,7 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const response = await fetch(targetUrl, fetchOptions)
     const text = await response.text()
-    let data: unknown
+    let data
     try { data = JSON.parse(text) } catch { data = text }
 
     res.setHeader('Access-Control-Allow-Origin', '*')
