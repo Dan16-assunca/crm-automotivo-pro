@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   DndContext, DragOverlay, closestCorners,
@@ -821,6 +821,22 @@ export default function Pipeline() {
     },
     enabled: !!storeId,
   })
+
+  // ── Realtime: atualiza Pipeline automaticamente quando leads são criados/atualizados
+  useEffect(() => {
+    if (!storeId) return
+    const channel = supabase
+      .channel(`pipeline-leads-${storeId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'leads', filter: `store_id=eq.${storeId}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['pipeline-leads', storeId] })
+        }
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [storeId, queryClient])
 
   const filteredLeads = useMemo(() => {
     if (!leads) return []

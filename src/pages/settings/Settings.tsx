@@ -38,7 +38,10 @@ export default function Settings() {
     setQrBase64(null)
     setStatus('connected')
     toast.success('WhatsApp conectado!', 'Instância ativa e pronta para uso')
-  }, [stopPolling])
+    // Garante que o webhook está registrado ao conectar
+    if (instanceName.trim()) registerWebhook(instanceName.trim())
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopPolling, instanceName])
 
   // Polling: verifica a cada 4s se o QR foi escaneado
   const startPolling = useCallback((name: string) => {
@@ -137,6 +140,27 @@ export default function Settings() {
     }
   }
 
+  // Registra webhook na Evolution API
+  const registerWebhook = async (instance: string) => {
+    try {
+      await fetch(`${import.meta.env.VITE_EVOLUTION_API_URL}/webhook/set/${instance}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: import.meta.env.VITE_EVOLUTION_API_KEY },
+        body: JSON.stringify({
+          webhook: {
+            url: 'https://eakdywmuewvuzyqfpcpl.supabase.co/functions/v1/whatsapp-webhook',
+            webhook_by_events: true,
+            webhook_base64: false,
+            enabled: true,
+            events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE'],
+          },
+        }),
+      })
+    } catch (err) {
+      console.warn('[Settings] Failed to register webhook:', err)
+    }
+  }
+
   // Salva configurações
   const saveSettings = async () => {
     if (!store) return
@@ -156,7 +180,7 @@ export default function Settings() {
     } else {
       setStore(data as Parameters<typeof setStore>[0])
       toast.success('Configurações salvas!')
-      // Verifica status após salvar com nova instância
+      if (instanceName.trim()) await registerWebhook(instanceName.trim())
       checkStatus(instanceName)
     }
   }

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState, useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Search, Filter, Users } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
@@ -18,9 +18,26 @@ const TEMP_LABELS: Record<string, string> = {
 
 export default function Leads() {
   const { store } = useAuthStore()
+  const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [filterTemp, setFilterTemp] = useState('')
   const [filterSource, setFilterSource] = useState('')
+
+  // ── Realtime: atualiza lista de leads automaticamente
+  useEffect(() => {
+    if (!store?.id) return
+    const channel = supabase
+      .channel(`leads-list-${store.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'leads', filter: `store_id=eq.${store.id}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['leads-list', store.id] })
+        }
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [store?.id, queryClient])
 
   const { data: leads, isLoading } = useQuery({
     queryKey: ['leads-list', store?.id, search, filterTemp, filterSource],
