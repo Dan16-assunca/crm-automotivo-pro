@@ -15,7 +15,7 @@ import { useAuthStore } from '@/store/authStore'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { formatCurrency, timeAgo } from '@/utils/format'
+import { formatCurrency, timeAgo, computeDaysInStock } from '@/utils/format'
 import type { Lead } from '@/types'
 
 // ─── Period filter ─────────────────────────────────────────────────────────────
@@ -199,11 +199,11 @@ export default function Dashboard() {
   const { data: stockGiro } = useQuery({
     queryKey: ['stock-giro', storeId],
     queryFn: async () => {
-      const { data } = await supabase.from('vehicles').select('brand, days_in_stock').eq('store_id', storeId)
+      const { data } = await supabase.from('vehicles').select('brand, purchase_date').eq('store_id', storeId)
       const grouped: Record<string, number[]> = {}
       data?.forEach(v => {
         if (!grouped[v.brand]) grouped[v.brand] = []
-        grouped[v.brand].push(v.days_in_stock ?? 0)
+        grouped[v.brand].push(computeDaysInStock(v.purchase_date))
       })
       return Object.entries(grouped).map(([brand, days]) => ({
         name: brand,

@@ -56,6 +56,16 @@ export const daysInStage = (date: string): number => {
   return Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
 }
 
+/** Calculate days a vehicle has been in stock from its purchase_date.
+ *  Uses midnight-to-midnight comparison to avoid timezone drift. */
+export function computeDaysInStock(purchaseDate: string | null | undefined): number {
+  if (!purchaseDate) return 0
+  const entry = new Date(purchaseDate + 'T12:00:00') // noon avoids DST edge cases
+  const today = new Date()
+  today.setHours(12, 0, 0, 0)
+  return Math.max(0, Math.floor((today.getTime() - entry.getTime()) / (1000 * 60 * 60 * 24)))
+}
+
 export const temperatureLabel = (temp: string): string => {
   const map: Record<string, string> = { hot: 'Quente', warm: 'Morno', cold: 'Frio' }
   return map[temp] ?? temp

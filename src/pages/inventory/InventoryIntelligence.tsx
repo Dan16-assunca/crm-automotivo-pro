@@ -8,7 +8,7 @@ import { AlertTriangle, TrendingDown, Clock, DollarSign, Package, Zap, Activity,
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { Card } from '@/components/ui/Card'
-import { formatCurrency } from '@/utils/format'
+import { formatCurrency, computeDaysInStock } from '@/utils/format'
 import type { Vehicle } from '@/types'
 // ── Intelligence engines ──────────────────────────────────────────────────────
 import { calculateDepreciationBatch } from '@/modules/inventory-intelligence/engines/DepreciationEngine'
@@ -66,7 +66,10 @@ export default function InventoryIntelligence() {
         .eq('store_id', storeId)
         .order('created_at', { ascending: false })
       if (error) throw error
-      return (data ?? []) as Vehicle[]
+      return (data ?? []).map(v => ({
+        ...v,
+        days_in_stock: computeDaysInStock(v.purchase_date),
+      })) as Vehicle[]
     },
     enabled: !!storeId,
   })

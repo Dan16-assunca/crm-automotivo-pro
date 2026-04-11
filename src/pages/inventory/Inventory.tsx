@@ -10,7 +10,7 @@ import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { formatCurrency } from '@/utils/format'
+import { formatCurrency, computeDaysInStock } from '@/utils/format'
 import { toast } from '@/components/ui/Toast'
 import type { Vehicle } from '@/types'
 
@@ -627,7 +627,10 @@ export default function Inventory() {
       if (filterBrand)  query = query.eq('brand', filterBrand)
       if (filterStatus) query = query.eq('status', filterStatus)
       const { data } = await query
-      return (data ?? []) as Vehicle[]
+      return (data ?? []).map(v => ({
+        ...v,
+        days_in_stock: computeDaysInStock(v.purchase_date),
+      })) as Vehicle[]
     },
     enabled: !!store?.id,
   })
