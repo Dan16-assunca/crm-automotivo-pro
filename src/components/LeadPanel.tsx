@@ -17,8 +17,8 @@ import type { Lead, Activity, WhatsAppMessage, PipelineStage, User as TUser } fr
 const S = {
   panel: {
     position: 'fixed' as const,
-    width: 370,
-    maxHeight: 'calc(100vh - 40px)',
+    width: 440,
+    maxHeight: 'calc(100vh - 20px)',
     background: '#111',
     border: '1px solid #222',
     borderRadius: 12,
@@ -371,17 +371,65 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
     enabled: !!leadId && mode === 'view',
   })
 
-  const { data: messages, refetch: refetchMsgs } = useQuery({
-    queryKey: ['wa-messages', leadId],
+  const { data: messages, refetch: refetchMsgs, isFetching: loadingMsgs } = useQuery({
+    queryKey: ['wa-messages', leadId, instanceName],
     queryFn: async () => {
+      const phone = lead?.client_phone?.replace(/\D/g, '') ?? ''
+
+      // Try Evolution API first — returns full history (inbound + outbound)
+      if (phone && instanceName) {
+        try {
+          const remoteJid = `${phone}@s.whatsapp.net`
+          const apiResult = await evolutionApi.findMessages(instanceName, remoteJid, 100)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const records: any[] = (apiResult as any)?.messages?.records
+            ?? (Array.isArray(apiResult) ? apiResult : [])
+
+          if (records.length > 0) {
+            return records
+              .map((r): WhatsAppMessage => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const msg = r.message as Record<string, any> ?? {}
+                const content: string =
+                  msg.conversation
+                  ?? msg.extendedTextMessage?.text
+                  ?? msg.imageMessage?.caption
+                  ?? msg.videoMessage?.caption
+                  ?? msg.audioMessage ? '[Áudio]'
+                  : msg.documentMessage?.fileName ?? '[Mídia]'
+                return {
+                  id: r.key?.id ?? r.id ?? String(Math.random()),
+                  store_id: storeId,
+                  lead_id: leadId ?? undefined,
+                  instance_name: instanceName,
+                  remote_jid: r.key?.remoteJid ?? remoteJid,
+                  direction: r.key?.fromMe ? 'outbound' : 'inbound',
+                  type: 'text',
+                  content,
+                  status: 'delivered',
+                  created_at: r.messageTimestamp
+                    ? new Date(r.messageTimestamp * 1000).toISOString()
+                    : new Date().toISOString(),
+                }
+              })
+              .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+          }
+        } catch (e) {
+          console.warn('[LeadPanel] Evolution API findMessages failed, falling back to DB', e)
+        }
+      }
+
+      // Fallback: DB messages only
       const { data } = await supabase.from('whatsapp_messages')
         .select('*')
-        .eq('lead_id', leadId)
+        .eq('lead_id', leadId!)
         .order('created_at', { ascending: true })
-        .limit(80)
+        .limit(100)
       return (data ?? []) as WhatsAppMessage[]
     },
-    enabled: !!leadId && tab === 'chat' && mode === 'view',
+    enabled: !!leadId && tab === 'chat' && mode === 'view' && !!lead,
+    staleTime: 15_000,
+    refetchInterval: tab === 'chat' ? 20_000 : false, // poll every 20s while chat is open
   })
 
   // ── Update lead ────────────────────────────────────────────────────────────
@@ -428,8 +476,34 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
     toast.success('Etapa atualizada!', newStage?.name)
   }, [stages, lead, leadId, storeId, user?.id, updateLead, queryClient])
 
-  // ── Send WhatsApp ──────────────────────────────────────────────────────────
+  // ── Send WhatsApp (optimistic) ────────────────────────────────────────────
   const sendMsg = useMutation({
+    onMutate: async (text: string) => {
+      // Cancel in-flight refetches so they don't overwrite optimistic state
+      await queryClient.cancelQueries({ queryKey: ['wa-messages', leadId, instanceName] })
+      const previous = queryClient.getQueryData<WhatsAppMessage[]>(['wa-messages', leadId, instanceName])
+
+      const tempMsg: WhatsAppMessage = {
+        id: `opt-${Date.now()}`,
+        store_id: storeId,
+        lead_id: leadId ?? undefined,
+        instance_name: instanceName ?? undefined,
+        remote_jid: `${lead?.client_phone?.replace(/\D/g, '')}@s.whatsapp.net`,
+        direction: 'outbound',
+        type: 'text',
+        content: text,
+        status: 'sent',
+        created_at: new Date().toISOString(),
+      }
+
+      queryClient.setQueryData<WhatsAppMessage[]>(
+        ['wa-messages', leadId, instanceName],
+        old => [...(old ?? []), tempMsg],
+      )
+      setChatMsg('')
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+      return { previous }
+    },
     mutationFn: async (text: string) => {
       const phone = lead?.client_phone ?? ''
       if (!phone) throw new Error('Lead sem telefone')
@@ -439,7 +513,7 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
         store_id: storeId,
         lead_id: leadId,
         instance_name: instanceName,
-        remote_jid: `${phone}@s.whatsapp.net`,
+        remote_jid: `${phone.replace(/\D/g, '')}@s.whatsapp.net`,
         direction: 'outbound',
         type: 'text',
         content: text,
@@ -447,11 +521,16 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
       })
     },
     onSuccess: () => {
-      setChatMsg('')
-      refetchMsgs()
-      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
+      setTimeout(() => refetchMsgs(), 600)
     },
-    onError: (e) => toast.error('Erro ao enviar', (e as Error).message),
+    onError: (e, text, context) => {
+      // Rollback optimistic update
+      if (context?.previous) {
+        queryClient.setQueryData(['wa-messages', leadId, instanceName], context.previous)
+      }
+      setChatMsg(text)
+      toast.error('Erro ao enviar', (e as Error).message)
+    },
   })
 
   const handleSend = () => {
@@ -860,33 +939,64 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
         </div>
       ) : (
         /* ── Chat ──────────────────────────────────────────────────────────── */
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
           {/* Messages */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6, scrollbarWidth: 'thin', scrollbarColor: '#222 transparent' }}>
-            {!messages?.length && (
-              <div style={{ textAlign: 'center', padding: '20px 0', color: '#505050', fontSize: 12 }}>
-                <MessageSquare size={24} style={{ margin: '0 auto 8px', opacity: 0.3, display: 'block' }} />
-                Nenhuma mensagem ainda
+          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 4, scrollbarWidth: 'thin', scrollbarColor: '#2a2a2a transparent' }}>
+            {loadingMsgs && !messages?.length && (
+              <div style={{ textAlign: 'center', padding: '30px 0', color: '#505050', fontSize: 12 }}>
+                <RefreshCw size={18} style={{ margin: '0 auto 8px', opacity: 0.4, display: 'block', animation: 'spin 1s linear infinite' }} />
+                Carregando mensagens...
               </div>
             )}
-            {messages?.map(m => (
-              <div key={m.id} style={{
-                display: 'flex',
-                justifyContent: m.direction === 'outbound' ? 'flex-end' : 'flex-start',
-              }}>
-                <div style={{
-                  maxWidth: '78%', padding: '7px 10px', borderRadius: 10,
-                  background: m.direction === 'outbound' ? '#1a3a1a' : '#1a1a1a',
-                  border: `1px solid ${m.direction === 'outbound' ? '#2a4a2a' : '#252525'}`,
-                }}>
-                  <p style={{ fontSize: 12, color: '#f5f5f5', lineHeight: 1.45 }}>{m.content}</p>
-                  <p style={{ fontSize: 9, color: '#505050', marginTop: 3, textAlign: 'right' }}>
-                    {new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                    {m.direction === 'outbound' && <span style={{ color: '#3df710', marginLeft: 4 }}>✓✓</span>}
-                  </p>
-                </div>
+            {!loadingMsgs && !messages?.length && (
+              <div style={{ textAlign: 'center', padding: '30px 0', color: '#505050', fontSize: 12 }}>
+                <MessageSquare size={28} style={{ margin: '0 auto 10px', opacity: 0.2, display: 'block' }} />
+                Nenhuma mensagem ainda
+                <p style={{ fontSize: 10, marginTop: 4, color: '#383838' }}>Use os atalhos abaixo para iniciar</p>
               </div>
-            ))}
+            )}
+            {messages?.map((m, idx) => {
+              // Date separator
+              const msgDate = new Date(m.created_at)
+              const prevDate = idx > 0 ? new Date(messages[idx - 1].created_at) : null
+              const showDateSep = !prevDate || msgDate.toDateString() !== prevDate.toDateString()
+              const isOptimistic = m.id.startsWith('opt-')
+
+              return (
+                <div key={m.id}>
+                  {showDateSep && (
+                    <div style={{ textAlign: 'center', margin: '8px 0 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ flex: 1, height: 1, background: '#1e1e1e' }} />
+                      <span style={{ fontSize: 9, color: '#404040', padding: '2px 8px', background: '#141414', borderRadius: 10 }}>
+                        {msgDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: msgDate.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined })}
+                      </span>
+                      <div style={{ flex: 1, height: 1, background: '#1e1e1e' }} />
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: m.direction === 'outbound' ? 'flex-end' : 'flex-start', marginBottom: 2 }}>
+                    <div style={{
+                      maxWidth: '82%', padding: '8px 11px', borderRadius: m.direction === 'outbound' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+                      background: m.direction === 'outbound' ? '#1c3d1c' : '#1e1e1e',
+                      border: `1px solid ${m.direction === 'outbound' ? '#2d5c2d' : '#2a2a2a'}`,
+                      opacity: isOptimistic ? 0.75 : 1,
+                      transition: 'opacity .3s',
+                    }}>
+                      <p style={{ fontSize: 13, color: '#f0f0f0', lineHeight: 1.5, wordBreak: 'break-word', whiteSpace: 'pre-wrap', margin: 0 }}>{m.content}</p>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 4 }}>
+                        <span style={{ fontSize: 9, color: '#484848' }}>
+                          {msgDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        {m.direction === 'outbound' && (
+                          <span style={{ fontSize: 10, color: isOptimistic ? '#484848' : '#3df710' }}>
+                            {isOptimistic ? '🕐' : '✓✓'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
             <div ref={chatEndRef} />
           </div>
 
@@ -906,13 +1016,14 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
           </div>
 
           {/* Input */}
-          <div style={{ padding: '8px 10px', borderTop: '1px solid #1a1a1a', display: 'flex', gap: 6 }}>
-            <input
+          <div style={{ padding: '8px 10px', borderTop: '1px solid #1a1a1a', display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+            <textarea
               value={chatMsg}
               onChange={e => setChatMsg(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
-              placeholder="Digite uma mensagem..."
-              style={{ ...S.input, flex: 1 }}
+              placeholder="Digite uma mensagem... (Enter para enviar)"
+              rows={2}
+              style={{ ...S.input, flex: 1, resize: 'none', padding: '7px 10px', lineHeight: 1.4, fontFamily: 'inherit', fontSize: 12 }}
               disabled={sendMsg.isPending}
             />
             <button
@@ -921,10 +1032,10 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
               style={{
                 ...S.btnNeon,
                 opacity: (!chatMsg.trim() || sendMsg.isPending) ? 0.5 : 1,
-                padding: '5px 10px',
+                padding: '8px 12px', flexShrink: 0,
               }}
             >
-              <Send size={12} />
+              {sendMsg.isPending ? <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={12} />}
             </button>
           </div>
         </div>

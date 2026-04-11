@@ -163,7 +163,7 @@ export default function Leads() {
                       <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--t)' }}>{lead.client_name}</span>
                     </div>
                   </td>
-                  <td style={{ padding: '8px 12px', fontSize: 9, color: 'var(--t3)', fontFamily: 'var(--fm)' }}>
+                  <td style={{ padding: '8px 12px', fontSize: 11, color: 'var(--t)', fontFamily: 'var(--fm)', fontWeight: 500 }}>
                     {lead.client_phone ?? '—'}
                   </td>
                   <td style={{ padding: '8px 12px', fontSize: 11, color: 'var(--t2)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
