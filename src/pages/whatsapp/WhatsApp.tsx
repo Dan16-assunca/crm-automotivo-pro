@@ -130,6 +130,7 @@ export default function WhatsApp() {
   const [search, setSearch] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const bulkUpsertedRef = useRef(false) // evita rodar múltiplas vezes
+  const sendingRef = useRef(false) // pausa refetchInterval durante envio
 
   const instanceName = (store?.settings as Record<string, string>)?.whatsapp_instance ?? ''
 
@@ -218,7 +219,7 @@ export default function WhatsApp() {
       const chats = await evolutionApi.findChats(instanceName)
       if (!Array.isArray(chats)) return []
 
-      return chats
+      const mapped = chats
         .filter((c: Record<string, unknown>) => {
           const jid = c.remoteJid as string
           return jid && !jid.endsWith('@g.us') && !jid.includes('@broadcast') && !jid.includes('status')
@@ -244,6 +245,21 @@ export default function WhatsApp() {
           }
         })
         .sort((a, b) => (b.lastMessageTs ?? 0) - (a.lastMessageTs ?? 0))
+
+      // Batch-fetch profile pics for contacts without one (max 20 at a time)
+      const withoutPic = mapped.filter(c => !c.profilePicUrl).slice(0, 20)
+      if (withoutPic.length > 0) {
+        const results = await Promise.allSettled(
+          withoutPic.map(c => evolutionApi.fetchProfilePicture(instanceName, c.phoneNumber))
+        )
+        results.forEach((r, i) => {
+          if (r.status === 'fulfilled' && r.value) {
+            withoutPic[i].profilePicUrl = r.value
+          }
+        })
+      }
+
+      return mapped
     },
     enabled: !!instanceName,
     refetchInterval: 8000,
@@ -328,7 +344,7 @@ export default function WhatsApp() {
         .sort((a, b) => a.timestamp - b.timestamp)
     },
     enabled: !!selectedChat?.remoteJid && !!instanceName,
-    refetchInterval: 5000,
+    refetchInterval: sendingRef.current ? false : 5000,
   })
 
   useEffect(() => {
@@ -354,6 +370,7 @@ export default function WhatsApp() {
       })
     },
     onMutate: async (text) => {
+      sendingRef.current = true
       const qKey = ['whatsapp-messages', instanceName, selectedChat?.remoteJid]
       await queryClient.cancelQueries({ queryKey: qKey })
       const previous = queryClient.getQueryData<EvoMessage[]>(qKey)
@@ -371,11 +388,25 @@ export default function WhatsApp() {
     },
     onSuccess: () => {
       const qKey = ['whatsapp-messages', instanceName, selectedChat?.remoteJid]
-      // Pequeno delay para a Evolution API indexar a mensagem enviada
-      setTimeout(() => queryClient.invalidateQueries({ queryKey: qKey }), 1500)
+      // Aguarda 3s para a Evolution API indexar a mensagem antes de refazer fetch
+      setTimeout(async () => {
+        const before = queryClient.getQueryData<EvoMessage[]>(qKey) ?? []
+        const pending = before.filter(m => m.pending)
+        await queryClient.refetchQueries({ queryKey: qKey })
+        // Se o refetch não trouxe as mensagens pendentes de volta, reinsere-as
+        if (pending.length > 0) {
+          const after = queryClient.getQueryData<EvoMessage[]>(qKey) ?? []
+          const stillMissing = pending.filter(p => !after.some(m => m.id === p.id))
+          if (stillMissing.length > 0) {
+            queryClient.setQueryData<EvoMessage[]>(qKey, [...after, ...stillMissing])
+          }
+        }
+        sendingRef.current = false
+      }, 3000)
       queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations', instanceName] })
     },
     onError: (err: Error, _text, context) => {
+      sendingRef.current = false
       const qKey = ['whatsapp-messages', instanceName, selectedChat?.remoteJid]
       if (context?.previous) queryClient.setQueryData(qKey, context.previous)
       setMessage(_text) // restaura o texto no input
