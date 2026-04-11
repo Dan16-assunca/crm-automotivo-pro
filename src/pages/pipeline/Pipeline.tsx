@@ -1,18 +1,19 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  DndContext, DragOverlay, closestCorners,
-  type DragStartEvent, type DragEndEvent,
+  DndContext, DragOverlay, closestCorners, useDroppable,
+  useSensor, useSensors, PointerSensor, TouchSensor,
+  type DragStartEvent, type DragEndEvent, type DragOverEvent,
 } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { motion, AnimatePresence } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import {
   Plus, Search, Phone, MessageSquare, Clock, X,
-  User, Car, DollarSign, MapPin, ChevronRight,
-  Calendar, CheckCircle, BarChart2, Download,
-  SlidersHorizontal, Zap,
+  Car, BarChart2, Download, SlidersHorizontal,
+  User, MapPin, DollarSign,
 } from 'lucide-react'
+import { useLeadPanelStore } from '@/store/leadPanelStore'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -22,7 +23,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { toast } from '@/components/ui/Toast'
-import { formatCurrency, daysInStage, timeAgo } from '@/utils/format'
+import { formatCurrency, daysInStage } from '@/utils/format'
 import type { Lead, PipelineStage } from '@/types'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -445,19 +446,23 @@ function LeadCard({ lead, onClick, isSelected }: { lead: Lead; onClick: () => vo
 }
 
 // ─── Kanban Column ─────────────────────────────────────────────────────────────
-function KanbanColumn({ stage, leads, onLeadClick, onAddLead, selectedLeadId }: {
+function KanbanColumn({ stage, leads, onLeadClick, onAddLead, selectedLeadId, isOver }: {
   stage: PipelineStage; leads: Lead[]; onLeadClick: (l: Lead) => void
-  onAddLead: (id: string) => void; selectedLeadId: string | null
+  onAddLead: (id: string) => void; selectedLeadId: string | null; isOver: boolean
 }) {
   const totalValue = leads.reduce((s, l) => s + (l.budget_max ?? 0), 0)
+  // Make the column itself droppable (for empty columns)
+  const { setNodeRef: setDropRef } = useDroppable({ id: `col-${stage.id}` })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: 210, flexShrink: 0 }}>
       {/* Header */}
       <div style={{
         background: 'var(--bg2)', borderRadius: 9, padding: '9px 10px', marginBottom: 6,
-        borderTop: `2px solid ${stage.color}`,
-        border: `1px solid var(--border)`, borderTopColor: stage.color,
+        border: `1px solid ${isOver ? stage.color : 'var(--border)'}`,
+        borderTopColor: stage.color, borderTopWidth: 2,
+        transition: 'border-color .15s',
+        boxShadow: isOver ? `0 0 12px ${stage.color}30` : 'none',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -490,12 +495,18 @@ function KanbanColumn({ stage, leads, onLeadClick, onAddLead, selectedLeadId }: 
 
       {/* Cards */}
       <SortableContext items={leads.map(l => l.id)} strategy={verticalListSortingStrategy}>
-        <div style={{
-          flex: 1, display: 'flex', flexDirection: 'column',
-          minHeight: 80, borderRadius: 9, background: 'var(--bg)',
-          border: '1px solid var(--border)', padding: '6px 6px',
-          overflowY: 'auto', maxHeight: 'calc(100vh - 320px)',
-        }}>
+        <div
+          ref={setDropRef}
+          style={{
+            flex: 1, display: 'flex', flexDirection: 'column',
+            minHeight: 80, borderRadius: 9,
+            background: isOver ? stage.color + '08' : 'var(--bg)',
+            border: `1px solid ${isOver ? stage.color + '60' : 'var(--border)'}`,
+            padding: '6px 6px',
+            overflowY: 'auto', maxHeight: 'calc(100vh - 320px)',
+            transition: 'all .15s',
+          }}
+        >
           {leads.map(l => (
             <LeadCard
               key={l.id} lead={l}
@@ -504,11 +515,20 @@ function KanbanColumn({ stage, leads, onLeadClick, onAddLead, selectedLeadId }: 
             />
           ))}
           {leads.length === 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 64, fontSize: 10, color: 'var(--text4)', flexDirection: 'column', gap: 4 }}>
-              <div style={{ width: 20, height: 20, borderRadius: '50%', border: `1.5px dashed ${stage.color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Plus size={9} style={{ color: stage.color, opacity: 0.4 }} />
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              height: 64, fontSize: 10, color: isOver ? stage.color : 'var(--text4)',
+              flexDirection: 'column', gap: 4, transition: 'color .15s',
+            }}>
+              <div style={{
+                width: 20, height: 20, borderRadius: '50%',
+                border: `1.5px dashed ${isOver ? stage.color : stage.color + '40'}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'border-color .15s',
+              }}>
+                <Plus size={9} style={{ color: stage.color, opacity: isOver ? 1 : 0.4 }} />
               </div>
-              Arraste aqui
+              {isOver ? 'Solte aqui' : 'Arraste aqui'}
             </div>
           )}
         </div>
@@ -551,186 +571,6 @@ function ScoreBar({ label, value, color = 'var(--neon)' }: { label: string; valu
 }
 
 // ─── Inline Lead Panel ─────────────────────────────────────────────────────────
-function LeadPanel({ lead, stages, onClose, onAdvance }: {
-  lead: Lead; stages: PipelineStage[]; onClose: () => void; onAdvance: (leadId: string, stageId: string) => void
-}) {
-  const scores = qualScore(lead)
-  const avgScore = lead.score || Math.round((scores.intent + scores.capacity + scores.urgency) / 3)
-  const currentStage = stages.find(s => s.id === lead.stage_id)
-  const nextStage = stages.find(s => s.position === (currentStage?.position ?? 0) + 1 && !s.is_final)
-  const initials = lead.client_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
-  const tempColor = lead.temperature === 'hot' ? 'var(--red)' : lead.temperature === 'warm' ? 'var(--amber)' : 'var(--blue)'
-  const tempBg = lead.temperature === 'hot' ? 'rgba(255,68,68,0.12)' : lead.temperature === 'warm' ? 'rgba(245,166,35,0.12)' : 'rgba(74,158,255,0.12)'
-  const tempLabel = lead.temperature === 'hot' ? 'Quente' : lead.temperature === 'warm' ? 'Morno' : 'Frio'
-  const cf = lead.custom_fields as Record<string, any> ?? {}
-  const budgetRange = lead.budget_min && lead.budget_max
-    ? `R$ ${Math.round(lead.budget_min / 1000)}k – R$ ${Math.round(lead.budget_max / 1000)}k`
-    : lead.budget_max ? formatCurrency(lead.budget_max) : '—'
-  const prazoLabel = lead.priority === 'high' ? 'Essa semana' : lead.priority === 'medium' ? 'Este mês' : 'Sem prazo'
-
-  const Row = ({ label, value }: { label: string; value: string | null | undefined }) => (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
-      <span style={{ fontSize: 11, color: 'var(--text4)', flexShrink: 0, marginRight: 8 }}>{label}</span>
-      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text2)', textAlign: 'right' }}>{value || '—'}</span>
-    </div>
-  )
-
-  const SectionTitle = ({ children }: { children: React.ReactNode }) => (
-    <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--text4)', marginBottom: 8, marginTop: 14 }}>
-      {children}
-    </p>
-  )
-
-  return (
-    <motion.div
-      key={lead.id}
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.2 }}
-      style={{
-        width: 300, flexShrink: 0,
-        background: 'var(--bg2)', border: '1px solid var(--border2)',
-        borderRadius: 12, display: 'flex', flexDirection: 'column',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Header */}
-      <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid var(--border)', background: 'linear-gradient(180deg, var(--bg3) 0%, var(--bg2) 100%)', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-            <div style={{
-              width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
-              background: tempBg, border: `2px solid ${tempColor}`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, fontWeight: 700, color: tempColor,
-            }}>{initials}</div>
-            <div>
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 2 }}>{lead.client_name}</h3>
-              <p style={{ fontSize: 10, color: 'var(--text4)' }}>
-                {currentStage?.name ?? 'Lead'}
-                {lead.source ? ` · ${SOURCE_LABEL[lead.source] ?? lead.source}` : ''}
-              </p>
-            </div>
-          </div>
-          <button onClick={onClose} style={{ padding: 4, border: 'none', background: 'transparent', color: 'var(--text4)', cursor: 'pointer', borderRadius: 5, flexShrink: 0 }}
-            onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)' }}
-            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text4)' }}
-          ><X size={14} /></button>
-        </div>
-        {/* Badges */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 8, background: tempBg, color: tempColor }}>
-            {tempLabel}
-          </span>
-          <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 8, background: 'var(--bg4)', color: 'var(--text3)', border: '1px solid var(--border)' }}>
-            Score {avgScore}/100
-          </span>
-          {lead.payment_type && (
-            <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 8, background: 'rgba(74,158,255,0.12)', color: 'var(--blue)' }}>
-              {PAYMENT_LABEL[lead.payment_type] ?? lead.payment_type}
-            </span>
-          )}
-          {lead.trade_in && (
-            <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 8, background: 'rgba(168,85,247,0.12)', color: 'var(--purple)' }}>
-              Troca
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Scrollable content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 14px' }}>
-        {/* Qualificação */}
-        <SectionTitle>Qualificação</SectionTitle>
-        <ScoreBar label="Intenção de compra" value={scores.intent} color="var(--neon)" />
-        <ScoreBar label="Capacidade financeira" value={scores.capacity} color="var(--blue)" />
-        <ScoreBar label="Urgência de compra" value={scores.urgency} color={scores.urgency >= 70 ? 'var(--amber)' : 'var(--text4)'} />
-
-        {/* Veículo */}
-        <SectionTitle>Veículo & Negócio</SectionTitle>
-        <Row label="Modelo" value={lead.vehicle_interest} />
-        <Row label="Orçamento" value={budgetRange} />
-        <Row label="Pagamento" value={lead.payment_type ? (PAYMENT_LABEL[lead.payment_type] ?? lead.payment_type) : null} />
-        <Row label="Troca" value={lead.trade_in ? (lead.trade_in_vehicle ?? 'Sim') : 'Não'} />
-        <Row label="Prazo" value={prazoLabel} />
-
-        {/* Comprador */}
-        <SectionTitle>Dados do Comprador</SectionTitle>
-        <Row label="Telefone" value={lead.client_phone} />
-        <Row label="E-mail" value={lead.client_email} />
-        <Row label="Cidade" value={lead.client_city} />
-        <Row label="Profissão" value={cf.profissao} />
-        <Row label="Renda" value={cf.renda ? `R$ ${Number(cf.renda).toLocaleString('pt-BR')}` : null} />
-        <Row label="CNH" value={cf.cnh ? 'Sim' : cf.cnh === false ? 'Não' : null} />
-
-        {lead.notes && (
-          <div style={{ margin: '12px 0', padding: '9px 10px', background: 'var(--bg3)', borderRadius: 7, border: '1px solid var(--border)' }}>
-            <p style={{ fontSize: 9, color: 'var(--text4)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Observações</p>
-            <p style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.5 }}>{lead.notes}</p>
-          </div>
-        )}
-
-        <p style={{ fontSize: 9, color: 'var(--text4)', padding: '10px 0 14px' }}>
-          Criado {timeAgo(lead.created_at)} · Atualizado {timeAgo(lead.updated_at)}
-        </p>
-      </div>
-
-      {/* Actions footer */}
-      <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button style={{
-            flex: 1, padding: '7px 0', borderRadius: 7, border: '1px solid var(--border)',
-            background: 'var(--bg3)', color: 'var(--text3)', fontSize: 11, fontWeight: 600,
-            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, transition: 'all .15s',
-          }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = '#25D366'; e.currentTarget.style.color = '#25D366' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text3)' }}
-          ><MessageSquare size={12} /> WhatsApp</button>
-          <button style={{
-            flex: 1, padding: '7px 0', borderRadius: 7, border: '1px solid var(--border)',
-            background: 'var(--bg3)', color: 'var(--text3)', fontSize: 11, fontWeight: 600,
-            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, transition: 'all .15s',
-          }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--blue)'; e.currentTarget.style.color = 'var(--blue)' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text3)' }}
-          ><Calendar size={12} /> Agendar</button>
-        </div>
-
-        {nextStage && (
-          <button
-            onClick={() => onAdvance(lead.id, nextStage.id)}
-            style={{
-              width: '100%', padding: '9px 0', borderRadius: 7, border: 'none',
-              background: 'var(--neon)', color: '#000',
-              fontSize: 12, fontWeight: 700, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-            }}
-          >
-            Avançar: {nextStage.name} <ChevronRight size={13} />
-          </button>
-        )}
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-          <button style={{
-            padding: '7px 0', borderRadius: 7, border: '1px solid rgba(57,255,20,0.25)',
-            background: 'rgba(57,255,20,0.08)', color: 'var(--neon)', fontSize: 11, fontWeight: 600,
-            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-          }}>
-            <CheckCircle size={11} /> Ganho
-          </button>
-          <button style={{
-            padding: '7px 0', borderRadius: 7, border: '1px solid rgba(255,68,68,0.25)',
-            background: 'rgba(255,68,68,0.08)', color: 'var(--red)', fontSize: 11, fontWeight: 600,
-            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-          }}>
-            <X size={11} /> Perdido
-          </button>
-        </div>
-      </div>
-    </motion.div>
-  )
-}
-
 // ─── KPI Bar (6 metrics) ───────────────────────────────────────────────────────
 function PipelineKPIs({ leads }: { leads: Lead[] }) {
   const active = leads.filter(l => l.status === 'active')
@@ -770,23 +610,27 @@ function PipelineKPIs({ leads }: { leads: Lead[] }) {
 const CHIPS = [
   { id: 'all', label: 'Todos' },
   { id: 'hot', label: '🔥 Quentes' },
-  { id: 'financiamento', label: 'Financiamento' },
-  { id: 'troca', label: 'Troca' },
-  { id: 'avista', label: 'À vista' },
-  { id: 'meta_ads', label: 'Meta Ads' },
-  { id: 'google_ads', label: 'Google Ads' },
-  { id: 'whatsapp', label: 'WhatsApp' },
-  { id: 'indicacao', label: 'Indicação' },
+  { id: 'week', label: 'Esta semana' },
+  { id: 'month', label: 'Este mês' },
+  { id: 'year', label: 'Este ano' },
 ]
 
 // ─── Pipeline Page ─────────────────────────────────────────────────────────────
 export default function Pipeline() {
   const { store, user } = useAuthStore()
   const queryClient = useQueryClient()
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
+  const { openLeadPanel } = useLeadPanelStore()
   const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [overStageId, setOverStageId] = useState<string | null>(null)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
+  )
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [showNewLead, setShowNewLead] = useState(false)
   const [newLeadStageId, setNewLeadStageId] = useState('')
 
@@ -795,12 +639,9 @@ export default function Pipeline() {
   const { data: stages, isLoading: stagesLoading, isError: stagesError, error: stagesErr } = useQuery({
     queryKey: ['pipeline-stages', storeId],
     staleTime: 5 * 60 * 1000,
-    retry: 2,
     queryFn: async () => {
-      const { data, error } = await withTimeout(
-        supabase.from('pipeline_stages').select('*').eq('store_id', storeId).order('position'),
-        20000, 'stages'
-      )
+      const { data, error } = await supabase
+        .from('pipeline_stages').select('*').eq('store_id', storeId).order('position')
       if (error) throw error
       return (data ?? []) as PipelineStage[]
     },
@@ -809,13 +650,13 @@ export default function Pipeline() {
 
   const { data: leads } = useQuery({
     queryKey: ['pipeline-leads', storeId],
-    staleTime: 30 * 1000,
-    retry: 2,
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const { data, error } = await withTimeout(
-        supabase.from('leads').select('*').eq('store_id', storeId).eq('status', 'active').order('created_at', { ascending: false }),
-        20000, 'leads'
-      )
+      const { data, error } = await supabase
+        .from('leads')
+        .select('id,client_name,client_phone,client_city,stage_id,temperature,priority,status,vehicle_interest,budget_max,payment_type,source,created_at,updated_at,won_value,trade_in,salesperson_id,next_followup_at')
+        .eq('store_id', storeId).eq('status', 'active')
+        .order('created_at', { ascending: false })
       if (error) throw error
       return (data ?? []) as Lead[]
     },
@@ -847,57 +688,99 @@ export default function Pipeline() {
       l.vehicle_interest?.toLowerCase().includes(search.toLowerCase())
     )
     if (filter === 'hot') r = r.filter(l => l.temperature === 'hot')
-    else if (filter === 'financiamento') r = r.filter(l => l.payment_type === 'financiamento')
-    else if (filter === 'troca') r = r.filter(l => l.trade_in)
-    else if (filter === 'avista') r = r.filter(l => l.payment_type === 'avista')
-    else if (filter !== 'all') r = r.filter(l => l.source === filter)
+    else if (filter === 'week') {
+      const wk = new Date(); wk.setDate(wk.getDate() - 7)
+      r = r.filter(l => new Date(l.created_at) >= wk)
+    }
+    else if (filter === 'month') {
+      const now = new Date()
+      r = r.filter(l => {
+        const d = new Date(l.created_at)
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+      })
+    }
+    else if (filter === 'year') {
+      r = r.filter(l => new Date(l.created_at).getFullYear() === new Date().getFullYear())
+    }
+    if (dateFrom) r = r.filter(l => new Date(l.created_at) >= new Date(dateFrom))
+    if (dateTo) r = r.filter(l => new Date(l.created_at) <= new Date(dateTo + 'T23:59:59'))
     return r
-  }, [leads, search, filter])
+  }, [leads, search, filter, dateFrom, dateTo])
 
   const moveMutation = useMutation({
-    mutationFn: async ({ leadId, stageId }: { leadId: string; stageId: string }) => {
+    mutationFn: async ({ leadId, stageId, prevStageName, nextStageName }: {
+      leadId: string; stageId: string; prevStageName: string; nextStageName: string
+    }) => {
       const { error } = await supabase.from('leads')
         .update({ stage_id: stageId, updated_at: new Date().toISOString() })
         .eq('id', leadId)
       if (error) throw error
+      // Record stage change activity
+      await supabase.from('activities').insert({
+        lead_id: leadId,
+        store_id: storeId,
+        user_id: user?.id,
+        type: 'stage_change',
+        title: 'Etapa alterada (drag)',
+        description: `"${prevStageName}" → "${nextStageName}"`,
+        completed_at: new Date().toISOString(),
+      })
+      return nextStageName
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pipeline-leads'] }),
+    onSuccess: (stageName) => {
+      queryClient.invalidateQueries({ queryKey: ['pipeline-leads'] })
+      toast.success(`Lead movido para "${stageName}"`)
+    },
     onError: () => toast.error('Erro ao mover lead'),
   })
 
   const handleDragStart = (e: DragStartEvent) => setDraggingId(e.active.id as string)
+
+  const handleDragOver = useCallback((event: DragOverEvent) => {
+    const { over } = event
+    if (!over) { setOverStageId(null); return }
+    // Check if over a col-* droppable
+    const overId = String(over.id)
+    if (overId.startsWith('col-')) {
+      setOverStageId(overId.replace('col-', ''))
+      return
+    }
+    // Otherwise find the stage that owns the lead being hovered
+    const stage = stages?.find(s => (leads ?? []).filter(l => l.stage_id === s.id).some(l => l.id === overId))
+    setOverStageId(stage?.id ?? null)
+  }, [stages, leads])
+
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     setDraggingId(null)
+    setOverStageId(null)
     const { active, over } = event
     if (!over || active.id === over.id) return
-    const targetStage = stages?.find(s => {
-      const sl = leads?.filter(l => l.stage_id === s.id) ?? []
-      return sl.some(l => l.id === over.id) || s.id === over.id
-    })
+    const overId = String(over.id)
+    // Find target stage
+    let targetStage: PipelineStage | undefined
+    if (overId.startsWith('col-')) {
+      targetStage = stages?.find(s => s.id === overId.replace('col-', ''))
+    } else {
+      targetStage = stages?.find(s => (leads ?? []).filter(l => l.stage_id === s.id).some(l => l.id === overId))
+    }
     if (targetStage) {
       const lead = leads?.find(l => l.id === active.id)
       if (lead && lead.stage_id !== targetStage.id) {
-        moveMutation.mutate({ leadId: lead.id, stageId: targetStage.id })
+        const prevStageName = stages?.find(s => s.id === lead.stage_id)?.name ?? '—'
+        moveMutation.mutate({ leadId: lead.id, stageId: targetStage.id, prevStageName, nextStageName: targetStage.name })
       }
     }
   }, [stages, leads, moveMutation])
 
   const handleAddLead = (stageId: string) => { setNewLeadStageId(stageId); setShowNewLead(true) }
-  const handleAdvance = (leadId: string, stageId: string) => {
-    moveMutation.mutate({ leadId, stageId })
-    setSelectedLead(prev => prev ? { ...prev, stage_id: stageId } : prev)
-    toast.success('Lead avançado!', 'Etapa atualizada com sucesso')
-  }
-  const handleLeadClick = (lead: Lead) => {
-    setSelectedLead(prev => prev?.id === lead.id ? null : lead)
-  }
+  const handleLeadClick = (lead: Lead) => openLeadPanel(lead.id)
 
   const draggingLead = draggingId ? leads?.find(l => l.id === draggingId) : null
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
-    localStorage.clear()
-    window.location.href = '/login'
+    try { await supabase.auth.signOut() } catch (_) {}
+    localStorage.removeItem('crm-auth')
+    window.location.replace('/login')
   }
 
   if (!storeId) {
@@ -956,56 +839,104 @@ export default function Pipeline() {
             <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text4)' }}>— {store?.name}</span>
           </h1>
         </div>
-        <div style={{ display: 'flex', gap: 7 }}>
-          <button style={{
-            height: 34, padding: '0 12px', borderRadius: 7, border: '1px solid var(--border)',
-            background: 'transparent', color: 'var(--text3)', fontSize: 12, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 5, transition: 'all .15s',
-          }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border2)'; e.currentTarget.style.color = 'var(--text2)' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text3)' }}
-          >
-            <Download size={13} /> Exportar
-          </button>
-          <div style={{ position: 'relative' }}>
-            <Search size={12} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text4)', pointerEvents: 'none' }} />
-            <input
-              placeholder="Buscar lead, veículo..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{ height: 34, paddingLeft: 30, paddingRight: 12, borderRadius: 7, background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 12, outline: 'none', width: 200, fontFamily: 'inherit' }}
-            />
-          </div>
-          <Button variant="secondary" size="sm"><SlidersHorizontal size={13} /> Filtros</Button>
-          <Button size="sm" onClick={() => handleAddLead(stages?.find(s => !s.is_final)?.id ?? '')}>
-            <Plus size={13} /> Novo Lead
-          </Button>
+        <div style={{ position: 'relative' }}>
+          <Search size={12} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text4)', pointerEvents: 'none' }} />
+          <input
+            placeholder="Buscar lead, veículo..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ height: 34, paddingLeft: 30, paddingRight: 12, borderRadius: 7, background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 12, outline: 'none', width: 220, fontFamily: 'inherit' }}
+          />
         </div>
       </div>
 
       {/* KPI bar */}
       {leads && <PipelineKPIs leads={leads} />}
 
-      {/* Filter chips */}
-      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 12 }}>
-        {CHIPS.map(c => (
-          <button key={c.id} onClick={() => setFilter(c.id)} style={{
-            padding: '4px 11px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-            border: filter === c.id ? '1.5px solid var(--neon)' : '1px solid var(--border)',
-            background: filter === c.id ? 'var(--neon-dim)' : 'var(--bg3)',
-            color: filter === c.id ? 'var(--neon)' : 'var(--text3)',
-            transition: 'all .15s',
-          }}>
-            {c.label}
-          </button>
-        ))}
+      {/* Filter bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+        {/* Chips */}
+        <div style={{ display: 'flex', gap: 4 }}>
+          {CHIPS.map(c => (
+            <button key={c.id} onClick={() => setFilter(c.id)} style={{
+              padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+              border: filter === c.id ? '1.5px solid var(--neon)' : '1px solid var(--border)',
+              background: filter === c.id ? 'var(--neon-dim)' : 'var(--bg3)',
+              color: filter === c.id ? 'var(--neon)' : 'var(--text3)',
+              transition: 'all .15s',
+            }}>
+              {c.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Date range */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 4 }}>
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{
+            height: 30, padding: '0 8px', borderRadius: 7, background: 'var(--bg3)', border: '1px solid var(--border)',
+            color: 'var(--text3)', fontSize: 11, outline: 'none', fontFamily: 'inherit', colorScheme: 'dark',
+          }} />
+          <span style={{ fontSize: 11, color: 'var(--text4)' }}>–</span>
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{
+            height: 30, padding: '0 8px', borderRadius: 7, background: 'var(--bg3)', border: '1px solid var(--border)',
+            color: 'var(--text3)', fontSize: 11, outline: 'none', fontFamily: 'inherit', colorScheme: 'dark',
+          }} />
+          {(dateFrom || dateTo) && (
+            <button onClick={() => { setDateFrom(''); setDateTo('') }} style={{
+              width: 22, height: 22, borderRadius: 5, border: 'none', background: 'var(--bg3)',
+              color: 'var(--text4)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}><X size={10} /></button>
+          )}
+        </div>
+
+        {/* Spacer */}
+        <div style={{ flex: 1 }} />
+
+        {/* Action buttons */}
+        <button style={{
+          height: 30, padding: '0 11px', borderRadius: 7, border: '1px solid var(--border)',
+          background: 'transparent', color: 'var(--text3)', fontSize: 11, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'inherit',
+        }}>
+          <Download size={11} /> Exportar
+        </button>
+        <button style={{
+          height: 30, padding: '0 11px', borderRadius: 7, border: '1px solid var(--border)',
+          background: 'transparent', color: 'var(--text3)', fontSize: 11, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'inherit',
+        }}>
+          <SlidersHorizontal size={11} /> Campos do card
+        </button>
+        <button style={{
+          height: 30, padding: '0 11px', borderRadius: 7, border: '1px solid var(--border)',
+          background: 'transparent', color: 'var(--text3)', fontSize: 11, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'inherit',
+        }}>
+          <BarChart2 size={11} /> Etapas
+        </button>
+        <button
+          onClick={() => handleAddLead(stages?.find(s => !s.is_final)?.id ?? '')}
+          style={{
+            height: 30, padding: '0 14px', borderRadius: 7, border: 'none',
+            background: 'var(--neon)', color: '#000', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'inherit',
+            boxShadow: '0 0 12px rgba(61,247,16,.3)',
+          }}
+        >
+          <Plus size={12} /> Novo Lead
+        </button>
       </div>
 
-      {/* Main board area: kanban + optional inline panel */}
-      <div style={{ display: 'flex', gap: 12, flex: 1, overflow: 'hidden' }}>
-        {/* Kanban */}
-        <DndContext collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 12, flex: 1 }}>
+      {/* Kanban board */}
+      <div style={{ flex: 1, overflow: 'hidden' }}>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+        >
+          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 12, height: '100%' }}>
             {stages?.map(stage => (
               <KanbanColumn
                 key={stage.id}
@@ -1013,7 +944,8 @@ export default function Pipeline() {
                 leads={filteredLeads.filter(l => l.stage_id === stage.id)}
                 onLeadClick={handleLeadClick}
                 onAddLead={handleAddLead}
-                selectedLeadId={selectedLead?.id ?? null}
+                selectedLeadId={null}
+                isOver={overStageId === stage.id}
               />
             ))}
           </div>
@@ -1022,7 +954,7 @@ export default function Pipeline() {
             {draggingLead && (
               <div style={{
                 background: 'var(--bg2)', border: '1.5px solid var(--neon-border)', borderRadius: 9, padding: '10px 10px',
-                width: 210, boxShadow: 'var(--neon-glow)', transform: 'rotate(1.5deg)', opacity: 0.9,
+                width: 210, boxShadow: 'var(--neon-glow)', transform: 'rotate(1.5deg)', opacity: 0.85,
               }}>
                 <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{draggingLead.client_name}</p>
                 <p style={{ fontSize: 10, color: 'var(--text4)', marginTop: 3 }}>{draggingLead.vehicle_interest}</p>
@@ -1030,18 +962,6 @@ export default function Pipeline() {
             )}
           </DragOverlay>
         </DndContext>
-
-        {/* Inline detail panel */}
-        <AnimatePresence>
-          {selectedLead && (
-            <LeadPanel
-              lead={selectedLead}
-              stages={stages ?? []}
-              onClose={() => setSelectedLead(null)}
-              onAdvance={handleAdvance}
-            />
-          )}
-        </AnimatePresence>
       </div>
 
       {/* New lead modal */}

@@ -15,12 +15,10 @@ export default function ResetPassword() {
   const [done, setDone] = useState(false)
   const [ready, setReady] = useState(false)
 
-  // Supabase popula a sessão a partir do hash da URL automaticamente
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') setReady(true)
     })
-    // Verifica se já tem sessão ativa (token já processado)
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) setReady(true)
     })
@@ -29,14 +27,8 @@ export default function ResetPassword() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (password.length < 6) {
-      toast.error('Senha muito curta', 'Mínimo de 6 caracteres')
-      return
-    }
-    if (password !== confirm) {
-      toast.error('Senhas não coincidem', 'Verifique e tente novamente')
-      return
-    }
+    if (password.length < 6) { toast.error('Senha muito curta', 'Mínimo de 6 caracteres'); return }
+    if (password !== confirm) { toast.error('Senhas não coincidem', 'Verifique e tente novamente'); return }
     setIsSubmitting(true)
     try {
       const { error } = await supabase.auth.updateUser({ password })
@@ -51,93 +43,118 @@ export default function ResetPassword() {
     }
   }
 
+  const inputStyle: React.CSSProperties = {
+    width: '100%', height: 34, paddingLeft: 32, paddingRight: 36,
+    background: 'var(--el)', border: '1px solid var(--b)',
+    borderRadius: 7, color: 'var(--t)', fontSize: 12,
+    outline: 'none', fontFamily: 'var(--fn)', boxSizing: 'border-box',
+  }
+
   return (
-    <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center p-4">
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className="w-[600px] h-[600px] bg-[#39FF14]/3 rounded-full blur-[120px]" />
+    <div style={{
+      minHeight: '100vh', background: 'var(--bg)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 16, position: 'relative',
+    }}>
+      <div style={{
+        position: 'absolute', inset: 0, display: 'flex',
+        alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
+      }}>
+        <div style={{
+          width: 500, height: 500,
+          background: 'rgba(61,247,16,.04)',
+          borderRadius: '50%', filter: 'blur(100px)',
+        }} />
       </div>
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="w-full max-w-md relative z-10"
+        transition={{ duration: 0.5 }}
+        style={{ width: '100%', maxWidth: 380, position: 'relative', zIndex: 10 }}
       >
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-[#39FF14]/10 border border-[#39FF14]/30 mb-4">
-            <Car size={36} className="text-[#39FF14]" />
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 64, height: 64, borderRadius: 14,
+            background: 'var(--ng)', border: '1px solid var(--nb)',
+            marginBottom: 12, boxShadow: '0 0 24px rgba(61,247,16,.15)',
+          }}>
+            <Car size={28} style={{ color: 'var(--neon)' }} />
           </div>
-          <h1
-            className="text-5xl text-[#39FF14] neon-text-glow tracking-widest"
-            style={{ fontFamily: 'Bebas Neue, sans-serif' }}
-          >
-            CRM AUTO
-          </h1>
-          <p className="text-[#555] text-sm tracking-[0.3em] uppercase mt-1">Professional</p>
+          <h1 style={{
+            fontSize: 32, fontWeight: 800, color: 'var(--neon)',
+            letterSpacing: '.12em', textShadow: '0 0 20px rgba(61,247,16,.4)',
+          }}>CRM AUTO</h1>
+          <p style={{ fontSize: 10, color: 'var(--t3)', letterSpacing: '.25em', textTransform: 'uppercase', marginTop: 4 }}>
+            Professional
+          </p>
         </div>
 
-        <div className="glass rounded-2xl p-8 shadow-2xl">
+        <div style={{
+          background: 'rgba(13,13,13,.92)', backdropFilter: 'blur(20px)',
+          border: '1px solid var(--bs)', borderRadius: 14, padding: 24,
+          boxShadow: '0 24px 48px rgba(0,0,0,.6)',
+        }}>
           {done ? (
-            <div className="text-center space-y-4">
-              <CheckCircle size={48} className="text-[#39FF14] mx-auto" />
-              <h2 className="text-xl font-semibold text-white">Senha redefinida!</h2>
-              <p className="text-sm text-[#555]">Redirecionando para o login...</p>
+            <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <CheckCircle size={44} style={{ color: 'var(--neon)', margin: '0 auto' }} />
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--t)' }}>Senha redefinida!</h2>
+              <p style={{ fontSize: 12, color: 'var(--t3)' }}>Redirecionando para o login...</p>
             </div>
           ) : (
             <>
-              <h2 className="text-xl font-semibold text-white mb-1">Nova senha</h2>
-              <p className="text-sm text-[#555] mb-6">
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--t)', marginBottom: 4 }}>Nova senha</h2>
+              <p style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 18 }}>
                 {ready ? 'Crie uma nova senha para sua conta.' : 'Processando link de redefinição...'}
               </p>
 
               {ready && (
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-[#A0A0A0] uppercase tracking-wider">Nova Senha</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555]">
-                        <Lock size={14} />
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Nova Senha</label>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)', pointerEvents: 'none' }}>
+                        <Lock size={12} />
                       </span>
                       <input
                         type={showPassword ? 'text' : 'password'}
                         placeholder="••••••••"
                         value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full h-10 rounded-lg bg-[#1A1A1A] border border-[#222] text-white placeholder:text-[#555] pl-10 pr-10 text-sm transition-all duration-200 focus:outline-none focus:border-[#39FF14] focus:shadow-[0_0_0_3px_rgba(57,255,20,0.1)]"
+                        onChange={e => setPassword(e.target.value)}
+                        style={inputStyle}
+                        onFocus={e => (e.currentTarget.style.borderColor = 'var(--nb)')}
+                        onBlur={e => (e.currentTarget.style.borderColor = 'var(--b)')}
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#555] hover:text-[#A0A0A0]"
+                        style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}
                       >
-                        {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                        {showPassword ? <EyeOff size={12} /> : <Eye size={12} />}
                       </button>
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-[#A0A0A0] uppercase tracking-wider">Confirmar Senha</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555]">
-                        <Lock size={14} />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Confirmar Senha</label>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)', pointerEvents: 'none' }}>
+                        <Lock size={12} />
                       </span>
                       <input
                         type={showPassword ? 'text' : 'password'}
                         placeholder="••••••••"
                         value={confirm}
-                        onChange={(e) => setConfirm(e.target.value)}
-                        className="w-full h-10 rounded-lg bg-[#1A1A1A] border border-[#222] text-white placeholder:text-[#555] pl-10 pr-10 text-sm transition-all duration-200 focus:outline-none focus:border-[#39FF14] focus:shadow-[0_0_0_3px_rgba(57,255,20,0.1)]"
+                        onChange={e => setConfirm(e.target.value)}
+                        style={inputStyle}
+                        onFocus={e => (e.currentTarget.style.borderColor = 'var(--nb)')}
+                        onBlur={e => (e.currentTarget.style.borderColor = 'var(--b)')}
                       />
                     </div>
                   </div>
 
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    size="lg"
-                    className="w-full mt-2"
-                    loading={isSubmitting}
-                  >
+                  <Button type="submit" variant="primary" size="lg" className="w-full" loading={isSubmitting}>
                     Redefinir senha
                   </Button>
                 </form>

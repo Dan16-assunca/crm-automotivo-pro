@@ -1,39 +1,35 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, Filter, Users } from 'lucide-react'
+import { Plus, Search, Users } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import { useLeadPanelStore } from '@/store/leadPanelStore'
 import { Button } from '@/components/ui/Button'
-import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { formatCurrency, timeAgo } from '@/utils/format'
+import { timeAgo } from '@/utils/format'
 import type { Lead } from '@/types'
 
-const TEMP_VARIANTS: Record<string, 'hot' | 'warm' | 'cold'> = {
-  hot: 'hot', warm: 'warm', cold: 'cold',
-}
-const TEMP_LABELS: Record<string, string> = {
-  hot: '🔥 Quente', warm: '☀️ Morno', cold: '❄️ Frio',
+const TEMP_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  hot:  { label: '🔥 Quente', color: 'var(--red)',  bg: 'rgba(244,63,94,.1)',  border: 'rgba(244,63,94,.2)' },
+  warm: { label: '⚡ Morno',  color: 'var(--ora)',  bg: 'rgba(249,115,22,.1)', border: 'rgba(249,115,22,.2)' },
+  cold: { label: '❄️ Frio',   color: 'var(--blu)',  bg: 'rgba(59,130,246,.1)', border: 'rgba(59,130,246,.2)' },
 }
 
 export default function Leads() {
   const { store } = useAuthStore()
   const queryClient = useQueryClient()
+  const { openLeadPanel } = useLeadPanelStore()
   const [search, setSearch] = useState('')
   const [filterTemp, setFilterTemp] = useState('')
   const [filterSource, setFilterSource] = useState('')
 
-  // ── Realtime: atualiza lista de leads automaticamente
   useEffect(() => {
     if (!store?.id) return
     const channel = supabase
       .channel(`leads-list-${store.id}`)
-      .on(
-        'postgres_changes',
+      .on('postgres_changes',
         { event: '*', schema: 'public', table: 'leads', filter: `store_id=eq.${store.id}` },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['leads-list', store.id] })
-        }
+        () => { queryClient.invalidateQueries({ queryKey: ['leads-list', store.id] }) }
       )
       .subscribe()
     return () => { supabase.removeChannel(channel) }
@@ -59,43 +55,51 @@ export default function Leads() {
     enabled: !!store?.id,
   })
 
+  const selStyle = {
+    height: 32, padding: '0 28px 0 9px',
+    background: 'var(--el)', border: '1px solid var(--b)',
+    borderRadius: 6, color: 'var(--t)', fontSize: 12, outline: 'none',
+    fontFamily: 'var(--fn)', cursor: 'pointer',
+    appearance: 'none' as const,
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h1 className="text-2xl font-bold text-white">Leads</h1>
-          <p className="text-sm text-[#555]">{leads?.length ?? 0} leads encontrados</p>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--t)' }}>Leads</h1>
+          <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>{leads?.length ?? 0} leads encontrados</p>
         </div>
-        <Button size="sm"><Plus size={14} /> Novo Lead</Button>
+        <Button size="sm"><Plus size={13} /> Novo Lead</Button>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-48">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555]" />
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+          <Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)', pointerEvents: 'none' }} />
           <input
             type="text"
             placeholder="Buscar por nome, telefone ou email..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-9 pl-9 pr-3 rounded-lg bg-[#1A1A1A] border border-[#222] text-white text-sm placeholder:text-[#555] focus:outline-none focus:border-[#39FF14]"
+            onChange={e => setSearch(e.target.value)}
+            style={{
+              width: '100%', height: 32, paddingLeft: 28, paddingRight: 10,
+              background: 'var(--el)', border: '1px solid var(--b)',
+              borderRadius: 6, color: 'var(--t)', fontSize: 12,
+              outline: 'none', fontFamily: 'var(--fn)',
+            }}
+            onFocus={e => (e.currentTarget.style.borderColor = 'var(--nb)')}
+            onBlur={e => (e.currentTarget.style.borderColor = 'var(--b)')}
           />
         </div>
-        <select
-          value={filterTemp}
-          onChange={(e) => setFilterTemp(e.target.value)}
-          className="h-9 px-3 rounded-lg bg-[#1A1A1A] border border-[#222] text-sm text-white focus:outline-none"
-        >
+        <select value={filterTemp} onChange={e => setFilterTemp(e.target.value)} style={selStyle}>
           <option value="">Temperatura</option>
           <option value="hot">🔥 Quente</option>
-          <option value="warm">☀️ Morno</option>
+          <option value="warm">⚡ Morno</option>
           <option value="cold">❄️ Frio</option>
         </select>
-        <select
-          value={filterSource}
-          onChange={(e) => setFilterSource(e.target.value)}
-          className="h-9 px-3 rounded-lg bg-[#1A1A1A] border border-[#222] text-sm text-white focus:outline-none"
-        >
+        <select value={filterSource} onChange={e => setFilterSource(e.target.value)} style={selStyle}>
           <option value="">Origem</option>
           <option value="whatsapp">WhatsApp</option>
           <option value="instagram">Instagram</option>
@@ -107,66 +111,102 @@ export default function Leads() {
       </div>
 
       {/* Table */}
-      <div className="bg-[#111] border border-[#222] rounded-xl overflow-hidden">
-        <table className="w-full">
+      <div style={{ background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 9, overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr className="border-b border-[#222]">
+            <tr>
               {['Nome', 'Telefone', 'Interesse', 'Temperatura', 'Origem', 'Estágio', 'Último Contato'].map(h => (
-                <th key={h} className="px-4 py-3 text-left text-xs text-[#555] uppercase tracking-wider font-medium">{h}</th>
+                <th key={h} style={{
+                  padding: '8px 12px', textAlign: 'left',
+                  fontSize: 10, fontWeight: 600, color: 'var(--t2)',
+                  textTransform: 'uppercase', letterSpacing: '.06em',
+                  background: 'var(--el)', borderBottom: '1px solid var(--b)',
+                }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
               [...Array(8)].map((_, i) => (
-                <tr key={i} className="border-b border-[#1A1A1A]">
+                <tr key={i} style={{ borderBottom: '1px solid var(--bs)' }}>
                   {[...Array(7)].map((_, j) => (
-                    <td key={j} className="px-4 py-3"><Skeleton className="h-3 w-full" /></td>
+                    <td key={j} style={{ padding: '8px 12px' }}>
+                      <Skeleton style={{ height: 12, borderRadius: 4 }} />
+                    </td>
                   ))}
                 </tr>
               ))
-            ) : leads?.map((lead) => (
-              <tr
-                key={lead.id}
-                className="border-b border-[#1A1A1A] hover:bg-[#39FF14]/3 transition-colors cursor-pointer"
-              >
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-[#1A1A1A] border border-[#222] flex items-center justify-center text-[10px] font-bold text-[#39FF14]">
-                      {lead.client_name.slice(0,2).toUpperCase()}
+            ) : leads?.map(lead => {
+              const tc = TEMP_CONFIG[lead.temperature]
+              return (
+                <tr
+                  key={lead.id}
+                  onClick={() => openLeadPanel(lead.id)}
+                  style={{
+                    borderBottom: '1px solid var(--bs)', cursor: 'pointer',
+                    background: 'transparent',
+                    transition: 'background .12s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--el)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                >
+                  <td style={{ padding: '8px 12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{
+                        width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                        background: 'var(--ng)', border: '1px solid var(--nb)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 9, fontWeight: 700, color: 'var(--neon)',
+                      }}>
+                        {lead.client_name.slice(0, 2).toUpperCase()}
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--t)' }}>{lead.client_name}</span>
                     </div>
-                    <span className="text-sm text-white font-medium">{lead.client_name}</span>
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-sm text-[#A0A0A0]">{lead.client_phone ?? '—'}</td>
-                <td className="px-4 py-3 text-sm text-[#A0A0A0] max-w-[160px] truncate">{lead.vehicle_interest ?? '—'}</td>
-                <td className="px-4 py-3">
-                  <Badge variant={TEMP_VARIANTS[lead.temperature] ?? 'default'} dot>
-                    {TEMP_LABELS[lead.temperature] ?? lead.temperature}
-                  </Badge>
-                </td>
-                <td className="px-4 py-3 text-sm text-[#A0A0A0]">{lead.source ?? '—'}</td>
-                <td className="px-4 py-3">
-                  {lead.stage && (
-                    <Badge variant="default">
-                      {(lead.stage as { name: string }).name}
-                    </Badge>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-xs text-[#555]">
-                  {lead.last_contact_at ? timeAgo(lead.last_contact_at) : timeAgo(lead.created_at)}
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td style={{ padding: '8px 12px', fontSize: 9, color: 'var(--t3)', fontFamily: 'var(--fm)' }}>
+                    {lead.client_phone ?? '—'}
+                  </td>
+                  <td style={{ padding: '8px 12px', fontSize: 11, color: 'var(--t2)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {lead.vehicle_interest ?? '—'}
+                  </td>
+                  <td style={{ padding: '8px 12px' }}>
+                    {tc && (
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
+                        background: tc.bg, color: tc.color, border: `1px solid ${tc.border}`,
+                        textTransform: 'uppercase', letterSpacing: '.04em',
+                      }}>
+                        {tc.label}
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ padding: '8px 12px', fontSize: 11, color: 'var(--t2)' }}>{lead.source ?? '—'}</td>
+                  <td style={{ padding: '8px 12px' }}>
+                    {lead.stage && (
+                      <span style={{
+                        fontSize: 9, fontWeight: 600, padding: '2px 7px', borderRadius: 4,
+                        background: 'var(--el)', color: 'var(--t2)', border: '1px solid var(--b)',
+                      }}>
+                        {(lead.stage as { name: string }).name}
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ padding: '8px 12px', fontSize: 9, color: 'var(--t3)', fontFamily: 'var(--fm)' }}>
+                    {lead.last_contact_at ? timeAgo(lead.last_contact_at) : timeAgo(lead.created_at)}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
         {!isLoading && leads?.length === 0 && (
-          <div className="py-16 text-center text-[#555]">
-            <Users size={40} className="mx-auto mb-3 opacity-20" />
-            <p>Nenhum lead encontrado</p>
+          <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--t3)' }}>
+            <Users size={36} style={{ margin: '0 auto 10px', opacity: .18 }} />
+            <p style={{ fontSize: 12 }}>Nenhum lead encontrado</p>
           </div>
         )}
       </div>
+
     </div>
   )
 }

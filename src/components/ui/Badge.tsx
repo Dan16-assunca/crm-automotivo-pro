@@ -2,20 +2,20 @@ import { cn } from '@/lib/cn'
 import { cva, type VariantProps } from 'class-variance-authority'
 
 const badgeVariants = cva(
-  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-[0.03em] uppercase font-[Space_Grotesk,sans-serif]',
+  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-[.03em] uppercase',
   {
     variants: {
       variant: {
-        default:  'bg-[var(--bg-elevated)] text-[var(--text-muted)] border border-[var(--border-default)]',
-        neon:     'bg-[var(--neon-muted)] text-[var(--neon)] border border-[var(--border-neon)]',
-        hot:      'bg-[rgba(255,59,48,0.15)]  text-[#FF3B30] border border-[rgba(255,59,48,0.3)]',
-        warm:     'bg-[rgba(255,159,10,0.15)] text-[#FF9F0A] border border-[rgba(255,159,10,0.3)]',
-        cold:     'bg-[rgba(10,132,255,0.15)] text-[#0A84FF] border border-[rgba(10,132,255,0.3)]',
-        success:  'bg-[rgba(48,209,88,0.15)]  text-[#30D158] border border-[rgba(48,209,88,0.3)]',
-        danger:   'bg-[rgba(255,59,48,0.15)]  text-[#FF3B30] border border-[rgba(255,59,48,0.3)]',
-        warning:  'bg-[rgba(255,214,10,0.15)] text-[#FFD60A] border border-[rgba(255,214,10,0.3)]',
-        info:     'bg-[rgba(10,132,255,0.15)] text-[#0A84FF] border border-[rgba(10,132,255,0.3)]',
-        purple:   'bg-[rgba(191,90,242,0.15)] text-[#BF5AF2] border border-[rgba(191,90,242,0.3)]',
+        default:  'bg-[var(--el)] text-[var(--t2)] border border-[var(--b)]',
+        neon:     'bg-[var(--ng)] text-[var(--neon)] border border-[var(--nb)]',
+        hot:      'bg-[rgba(244,63,94,.12)]  text-[var(--red)] border border-[rgba(244,63,94,.2)]',
+        warm:     'bg-[rgba(249,115,22,.12)] text-[var(--ora)] border border-[rgba(249,115,22,.2)]',
+        cold:     'bg-[rgba(59,130,246,.12)] text-[var(--blu)] border border-[rgba(59,130,246,.2)]',
+        success:  'bg-[rgba(34,197,94,.12)]  text-[var(--grn)] border border-[rgba(34,197,94,.2)]',
+        danger:   'bg-[rgba(244,63,94,.12)]  text-[var(--red)] border border-[rgba(244,63,94,.2)]',
+        warning:  'bg-[rgba(234,179,8,.12)]  text-[var(--yel)] border border-[rgba(234,179,8,.2)]',
+        info:     'bg-[rgba(59,130,246,.12)] text-[var(--blu)] border border-[rgba(59,130,246,.2)]',
+        purple:   'bg-[rgba(168,85,247,.12)] text-[var(--pur)] border border-[rgba(168,85,247,.2)]',
       },
     },
     defaultVariants: { variant: 'default' },

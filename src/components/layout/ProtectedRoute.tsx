@@ -16,7 +16,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return (
       <div style={{
         minHeight: '100dvh',
-        background: 'var(--bg-base)',
+        background: 'var(--bg)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -26,12 +26,12 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
         <div style={{
           width: 44,
           height: 44,
-          border: '2px solid var(--border-strong)',
+          border: '2px solid var(--b)',
           borderTopColor: 'var(--neon)',
           borderRadius: '50%',
           animation: 'spin 0.8s linear infinite',
         }} />
-        <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Carregando...</p>
+        <p style={{ color: 'var(--t3)', fontSize: 12 }}>Carregando...</p>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     )

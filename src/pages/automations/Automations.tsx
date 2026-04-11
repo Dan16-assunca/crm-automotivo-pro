@@ -14,15 +14,24 @@ const TRIGGER_LABELS: Record<string, string> = {
 }
 
 const DEFAULT_AUTOMATIONS = [
-  { day: 1, action: 'WhatsApp de boas-vindas', type: 'whatsapp' },
-  { day: 2, action: 'Follow-up com portfólio', type: 'whatsapp' },
-  { day: 3, action: 'Oferta específica', type: 'whatsapp' },
-  { day: 5, action: 'Lembrete sem resposta', type: 'whatsapp' },
-  { day: 7, action: 'Reduzir temperatura: Quente → Morno', type: 'system' },
-  { day: 10, action: 'Template de reengajamento', type: 'whatsapp' },
-  { day: 14, action: 'Alerta interno para vendedor', type: 'task' },
-  { day: 21, action: 'Arquivar lead automaticamente', type: 'system' },
+  { day: 1,  action: 'WhatsApp de boas-vindas',            type: 'whatsapp' },
+  { day: 2,  action: 'Follow-up com portfólio',            type: 'whatsapp' },
+  { day: 3,  action: 'Oferta específica',                  type: 'whatsapp' },
+  { day: 5,  action: 'Lembrete sem resposta',              type: 'whatsapp' },
+  { day: 7,  action: 'Reduzir temperatura: Quente → Morno', type: 'system' },
+  { day: 10, action: 'Template de reengajamento',          type: 'whatsapp' },
+  { day: 14, action: 'Alerta interno para vendedor',       type: 'task' },
+  { day: 21, action: 'Arquivar lead automaticamente',      type: 'system' },
 ]
+
+const nodeStyle = (type: string): React.CSSProperties => ({
+  width: 36, height: 36, borderRadius: '50%',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  fontSize: 11, fontWeight: 700, flexShrink: 0, position: 'relative', zIndex: 1,
+  background: type === 'whatsapp' ? 'var(--ng)' : type === 'system' ? 'rgba(59,130,246,.12)' : 'rgba(234,179,8,.12)',
+  border: `2px solid ${type === 'whatsapp' ? 'var(--nb)' : type === 'system' ? 'rgba(59,130,246,.4)' : 'rgba(234,179,8,.4)'}`,
+  color: type === 'whatsapp' ? 'var(--neon)' : type === 'system' ? 'var(--blu)' : 'var(--yel)',
+})
 
 export default function Automations() {
   const { store } = useAuthStore()
@@ -41,42 +50,40 @@ export default function Automations() {
   })
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h1 className="text-2xl font-bold text-white">Automações</h1>
-          <p className="text-sm text-[#555]">Fluxos automáticos de follow-up</p>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--t)' }}>Automações</h1>
+          <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>Fluxos automáticos de follow-up</p>
         </div>
-        <Button size="sm"><Plus size={14} /> Nova Automação</Button>
+        <Button size="sm"><Plus size={13} /> Nova Automação</Button>
       </div>
 
-      {/* 21-day flow preview */}
-      <div className="bg-[#111] border border-[#222] rounded-xl p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Zap size={16} className="text-[#39FF14]" />
-          <h2 className="font-semibold text-white">Fluxo Padrão — 21 Dias</h2>
+      {/* 21-day flow */}
+      <div style={{ background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 9, padding: '16px 18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <Zap size={14} style={{ color: 'var(--neon)' }} />
+          <h2 style={{ fontSize: 13, fontWeight: 600, color: 'var(--t)' }}>Fluxo Padrão — 21 Dias</h2>
           <Badge variant="neon" dot>Recomendado</Badge>
         </div>
-        <div className="relative">
-          <div className="absolute left-[18px] top-0 bottom-0 w-px bg-[#222]" />
-          <div className="space-y-3">
+        <div style={{ position: 'relative' }}>
+          <div style={{
+            position: 'absolute', left: 17, top: 0, bottom: 0,
+            width: 1, background: 'var(--b)',
+          }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {DEFAULT_AUTOMATIONS.map((item, i) => (
-              <div key={i} className="flex items-start gap-4 relative">
-                <div className={`w-9 h-9 rounded-full border-2 flex items-center justify-center text-xs font-bold shrink-0 z-10 ${
-                  item.type === 'whatsapp' ? 'bg-[#39FF14]/10 border-[#39FF14]/40 text-[#39FF14]' :
-                  item.type === 'system' ? 'bg-blue-500/10 border-blue-500/40 text-blue-400' :
-                  'bg-yellow-500/10 border-yellow-500/40 text-yellow-400'
-                }`}>
-                  {item.day}
-                </div>
-                <div className="flex-1 bg-[#1A1A1A] border border-[#222] rounded-lg p-3 ml-1">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-white">{item.action}</p>
-                    <Badge variant={item.type === 'whatsapp' ? 'neon' : item.type === 'system' ? 'info' : 'warning'} className="text-[10px]">
-                      {item.type === 'whatsapp' ? 'WhatsApp' : item.type === 'system' ? 'Sistema' : 'Tarefa'}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-[#555] mt-0.5">Dia {item.day} após criação do lead</p>
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, position: 'relative' }}>
+                <div style={nodeStyle(item.type)}>{item.day}</div>
+                <div style={{
+                  flex: 1, background: 'var(--el)', border: '1px solid var(--b)',
+                  borderRadius: 7, padding: '8px 12px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                }}>
+                  <p style={{ fontSize: 12, color: 'var(--t)' }}>{item.action}</p>
+                  <Badge variant={item.type === 'whatsapp' ? 'neon' : item.type === 'system' ? 'info' : 'warning'}>
+                    {item.type === 'whatsapp' ? 'WhatsApp' : item.type === 'system' ? 'Sistema' : 'Tarefa'}
+                  </Badge>
                 </div>
               </div>
             ))}
@@ -86,24 +93,37 @@ export default function Automations() {
 
       {/* Custom automations */}
       {automations && automations.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="font-semibold text-white">Automações Personalizadas</h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <h2 style={{ fontSize: 13, fontWeight: 600, color: 'var(--t)' }}>Automações Personalizadas</h2>
           {automations.map((auto) => (
-            <div key={auto.id} className="bg-[#111] border border-[#222] rounded-xl p-4 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl bg-[#1A1A1A] flex items-center justify-center">
-                <Bot size={18} className="text-[#39FF14]" />
+            <div key={auto.id} style={{
+              background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 9,
+              padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12,
+            }}>
+              <div style={{
+                width: 38, height: 38, borderRadius: 9,
+                background: 'var(--ng)', border: '1px solid var(--nb)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Bot size={16} style={{ color: 'var(--neon)' }} />
               </div>
-              <div className="flex-1">
-                <p className="font-medium text-white">{auto.name}</p>
-                <p className="text-xs text-[#555]">
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--t)' }}>{auto.name}</p>
+                <p style={{ fontSize: 10, color: 'var(--t3)' }}>
                   Gatilho: {TRIGGER_LABELS[auto.trigger_type] ?? auto.trigger_type}
                 </p>
               </div>
               <Badge variant={auto.active ? 'neon' : 'default'} dot>
                 {auto.active ? 'Ativo' : 'Pausado'}
               </Badge>
-              <button className="text-[#555] hover:text-white p-1 rounded hover:bg-[#1A1A1A]">
-                {auto.active ? <Pause size={16} /> : <Play size={16} />}
+              <button style={{
+                color: 'var(--t3)', background: 'none', border: 'none',
+                cursor: 'pointer', padding: 4, borderRadius: 5, display: 'flex',
+              }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--t)'; e.currentTarget.style.background = 'var(--el)' }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--t3)'; e.currentTarget.style.background = 'none' }}
+              >
+                {auto.active ? <Pause size={14} /> : <Play size={14} />}
               </button>
             </div>
           ))}

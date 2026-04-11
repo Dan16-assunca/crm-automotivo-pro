@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Send, Search, Phone, MoreVertical, Paperclip, Smile, Check, CheckCheck, Clock, MessageCircleOff, UserPlus, ExternalLink } from 'lucide-react'
+import { Send, Search, Phone, MoreVertical, Paperclip, Smile, Check, CheckCheck, Clock, MessageCircleOff, UserPlus, ExternalLink, User } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import { useLeadPanelStore } from '@/store/leadPanelStore'
 import { evolutionApi } from '@/services/whatsapp'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -57,20 +58,24 @@ function extractContent(msg: Record<string, unknown>): string {
 
 // ─── Avatar com fallback ──────────────────────────────────────────────────────
 
-function Avatar({ src, name, size = 10 }: { src?: string; name: string; size?: number }) {
+function Avatar({ src, name, size = 32 }: { src?: string; name: string; size?: number }) {
   const [err, setErr] = useState(false)
-  const cls = `w-${size} h-${size} rounded-full shrink-0`
   if (src && !err) {
     return (
       <img
         src={src} alt={name}
-        className={`${cls} object-cover`}
+        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
         onError={() => setErr(true)}
       />
     )
   }
   return (
-    <div className={`${cls} bg-[#39FF14]/10 border border-[#39FF14]/20 flex items-center justify-center text-sm font-bold text-[#39FF14]`}>
+    <div style={{
+      width: size, height: size, borderRadius: '50%', flexShrink: 0,
+      background: 'var(--ng)', border: '1px solid var(--nb)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: Math.round(size * 0.35), fontWeight: 700, color: 'var(--neon)',
+    }}>
       {name.slice(0, 2).toUpperCase()}
     </div>
   )
@@ -84,26 +89,28 @@ function MessageBubble({ msg }: { msg: EvoMessage }) {
 
   const StatusIcon = () => {
     if (!msg.fromMe) return null
-    if (msg.pending) return <Clock size={12} className="text-[#555]" />
-    if (msg.status === 'READ') return <CheckCheck size={12} className="text-[#39FF14]" />
-    if (msg.status === 'DELIVERY_ACK' || msg.status === 'PLAYED') return <CheckCheck size={12} className="text-[#555]" />
-    if (msg.status === 'SERVER_ACK') return <Check size={12} className="text-[#555]" />
-    return <Check size={12} className="text-[#555]" />
+    if (msg.pending) return <Clock size={11} style={{ color: 'var(--t3)' }} />
+    if (msg.status === 'READ') return <CheckCheck size={11} style={{ color: 'var(--neon)' }} />
+    if (msg.status === 'DELIVERY_ACK' || msg.status === 'PLAYED') return <CheckCheck size={11} style={{ color: 'var(--t3)' }} />
+    return <Check size={11} style={{ color: 'var(--t3)' }} />
   }
 
   return (
-    <div className={`flex ${msg.fromMe ? 'justify-end' : 'justify-start'} mb-2`}>
-      <div className={`max-w-[70%] rounded-2xl px-4 py-2 ${
-        msg.fromMe
-          ? `bg-[#39FF14]/15 border border-[#39FF14]/20 rounded-tr-sm ${msg.pending ? 'opacity-60' : ''}`
-          : 'bg-[#1A1A1A] border border-[#222] rounded-tl-sm'
-      }`}>
+    <div style={{ display: 'flex', justifyContent: msg.fromMe ? 'flex-end' : 'flex-start', marginBottom: 6 }}>
+      <div style={{
+        maxWidth: '70%', padding: '7px 10px', borderRadius: 9,
+        fontSize: 11, lineHeight: 1.5,
+        opacity: msg.pending ? .6 : 1,
+        ...(msg.fromMe
+          ? { background: 'rgba(61,247,16,.1)', border: '1px solid rgba(61,247,16,.18)', borderTopRightRadius: 3 }
+          : { background: 'var(--el)', border: '1px solid var(--bs)', borderTopLeftRadius: 3 })
+      }}>
         {msg.content
-          ? <p className="text-sm text-white break-words whitespace-pre-wrap">{msg.content}</p>
-          : <p className="text-sm text-[#555] italic">{msg.type}</p>
+          ? <p style={{ color: 'var(--t)', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{msg.content}</p>
+          : <p style={{ color: 'var(--t3)', fontStyle: 'italic' }}>{msg.type}</p>
         }
-        <div className="flex items-center justify-end gap-1 mt-1">
-          <span className="text-[10px] text-[#555]">{time}</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3, marginTop: 3 }}>
+          <span style={{ fontSize: 8, color: 'var(--t3)', fontFamily: 'var(--fm)' }}>{time}</span>
           <StatusIcon />
         </div>
       </div>
@@ -116,6 +123,7 @@ function MessageBubble({ msg }: { msg: EvoMessage }) {
 export default function WhatsApp() {
   const { store, user } = useAuthStore()
   const navigate = useNavigate()
+  const { openLeadPanel, openLeadPanelCreate } = useLeadPanelStore()
   const queryClient = useQueryClient()
   const [selectedChat, setSelectedChat] = useState<EvoChat | null>(null)
   const [message, setMessage] = useState('')
@@ -388,161 +396,234 @@ export default function WhatsApp() {
   // ─── render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] rounded-xl overflow-hidden border border-[#222] bg-[#0D0D0D]">
+    <div style={{
+      display: 'flex', height: 'calc(100vh - 78px)',
+      borderRadius: 9, overflow: 'hidden',
+      border: '1px solid var(--bs)', background: 'var(--card)',
+    }}>
 
-      {/* ── Sidebar ── */}
-      <div className="w-80 shrink-0 border-r border-[#222] flex flex-col">
-        <div className="p-4 border-b border-[#222]">
-          <h2 className="font-semibold text-white mb-3">WhatsApp</h2>
+      {/* ── Lista de conversas ── */}
+      <div style={{ width: 260, flexShrink: 0, borderRight: '1px solid var(--bs)', display: 'flex', flexDirection: 'column', background: 'var(--surf)' }}>
+        {/* Search header */}
+        <div style={{ padding: '11px 12px', borderBottom: '1px solid var(--bs)' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--t)', marginBottom: 9 }}>WhatsApp</div>
           {!instanceName && (
-            <p className="text-xs text-yellow-400 mb-2">⚠ Configure a instância em Configurações</p>
+            <p style={{ fontSize: 10, color: 'var(--yel)', marginBottom: 7 }}>⚠ Configure a instância em Configurações</p>
           )}
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555]" />
+          <div style={{ position: 'relative' }}>
+            <Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)', pointerEvents: 'none' }} />
             <input type="text" placeholder="Buscar conversa..." value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full h-9 pl-9 pr-3 rounded-lg bg-[#1A1A1A] border border-[#222] text-white text-sm placeholder:text-[#555] focus:outline-none focus:border-[#39FF14]"
+              onChange={e => setSearch(e.target.value)}
+              style={{
+                width: '100%', height: 30, paddingLeft: 26, paddingRight: 9,
+                background: 'var(--card)', border: '1px solid var(--b)',
+                borderRadius: 6, color: 'var(--t)', fontSize: 11, outline: 'none', fontFamily: 'var(--fn)',
+              }}
+              onFocus={e => (e.currentTarget.style.borderColor = 'var(--nb)')}
+              onBlur={e => (e.currentTarget.style.borderColor = 'var(--b)')}
             />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        {/* Conv list */}
+        <div style={{ flex: 1, overflowY: 'auto' }}>
           {isLoading ? (
-            <div className="p-4 space-y-3">
+            <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
               {[...Array(6)].map((_, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <Skeleton className="w-10 h-10 rounded-full shrink-0" />
-                  <div className="flex-1 space-y-1.5">
-                    <Skeleton className="h-3 w-3/4" />
-                    <Skeleton className="h-2.5 w-1/2" />
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Skeleton style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0 }} />
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    <Skeleton style={{ height: 10, borderRadius: 4 }} />
+                    <Skeleton style={{ height: 8, width: '60%', borderRadius: 4 }} />
                   </div>
                 </div>
               ))}
             </div>
           ) : !filteredConvs?.length ? (
-            <div className="flex flex-col items-center justify-center h-full gap-2 text-[#555] p-6">
-              <MessageCircleOff size={32} />
-              <p className="text-sm text-center">
-                {instanceName ? 'Nenhuma conversa encontrada' : 'Configure a instância primeiro'}
-              </p>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 8, color: 'var(--t3)', padding: 20, textAlign: 'center' }}>
+              <MessageCircleOff size={28} />
+              <p style={{ fontSize: 11 }}>{instanceName ? 'Nenhuma conversa encontrada' : 'Configure a instância primeiro'}</p>
             </div>
           ) : (
-            filteredConvs.map((chat) => (
-              <button key={chat.remoteJid} onClick={() => handleSelectChat(chat)}
-                className={`w-full flex items-center gap-3 p-4 hover:bg-[#111] transition-colors border-b border-[#1A1A1A] text-left ${
-                  selectedChat?.remoteJid === chat.remoteJid ? 'bg-[#111] border-l-2 border-l-[#39FF14]' : ''
-                }`}
-              >
-                <Avatar src={chat.profilePicUrl} name={chat.pushName} size={10} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-white truncate">{chat.pushName}</p>
-                    {chat.lastMessageTs && (
-                      <span className="text-[10px] text-[#555] shrink-0 ml-1">
-                        {timeAgo(new Date(chat.lastMessageTs * 1000).toISOString())}
-                      </span>
-                    )}
+            filteredConvs.map(chat => {
+              const isActive = selectedChat?.remoteJid === chat.remoteJid
+              return (
+                <button key={chat.remoteJid} onClick={() => handleSelectChat(chat)}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '9px 12px', textAlign: 'left',
+                    background: isActive ? 'var(--ng)' : 'transparent',
+                    cursor: 'pointer', border: 'none', borderBottom: '1px solid var(--bs)',
+                    borderLeft: isActive ? '2px solid var(--neon)' : '2px solid transparent',
+                    transition: 'background .12s',
+                  }}
+                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--ng)' }}
+                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+                >
+                  <Avatar src={chat.profilePicUrl} name={chat.pushName} size={34} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--t)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{chat.pushName}</span>
+                      {chat.lastMessageTs && (
+                        <span style={{ fontSize: 9, color: 'var(--t3)', flexShrink: 0, fontFamily: 'var(--fm)' }}>
+                          {timeAgo(new Date(chat.lastMessageTs * 1000).toISOString())}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, marginTop: 2 }}>
+                      <p style={{ fontSize: 10, color: 'var(--t3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                        {chat.lastFromMe && <span style={{ color: 'var(--neon)', opacity: .6 }}>Você: </span>}
+                        {chat.lastMessageContent || chat.phoneNumber}
+                      </p>
+                      {chat.unreadCount > 0 && (
+                        <span style={{
+                          background: 'var(--neon)', color: '#000', fontSize: 9, fontWeight: 700,
+                          width: 18, height: 18, borderRadius: '50%',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                        }}>
+                          {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between mt-0.5">
-                    <p className="text-xs text-[#555] truncate">
-                      {chat.lastFromMe && <span className="text-[#39FF14]/60">Você: </span>}
-                      {chat.lastMessageContent || chat.phoneNumber}
-                    </p>
-                    {chat.unreadCount > 0 && (
-                      <span className="bg-[#39FF14] text-black text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shrink-0 ml-1">
-                        {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </button>
-            ))
+                </button>
+              )
+            })
           )}
         </div>
       </div>
 
-      {/* ── Área do chat ── */}
+      {/* ── Área de chat ── */}
       {selectedChat ? (
-        <div className="flex-1 flex flex-col min-w-0">
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           {/* Header */}
-          <div className="h-16 px-4 border-b border-[#222] flex items-center justify-between bg-[#111] shrink-0">
-            <div className="flex items-center gap-3">
-              <Avatar src={selectedChat.profilePicUrl} name={selectedChat.pushName} size={9} />
+          <div style={{
+            height: 52, padding: '0 14px', borderBottom: '1px solid var(--bs)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            background: 'var(--surf)', flexShrink: 0,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Avatar src={selectedChat.profilePicUrl} name={selectedChat.pushName} size={30} />
               <div>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-semibold text-white">{selectedChat.pushName}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--t)' }}>{selectedChat.pushName}</span>
                   {selectedChat.leadId && (
                     <button
                       onClick={() => navigate('/pipeline')}
-                      className="flex items-center gap-1 text-[10px] text-[#39FF14]/70 hover:text-[#39FF14] transition-colors"
-                      title="Ver no Pipeline"
+                      style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9, color: 'var(--neon)', opacity: .7, background: 'none', border: 'none', cursor: 'pointer' }}
                     >
-                      <ExternalLink size={10} /> {selectedChat.leadStage}
+                      <ExternalLink size={9} /> {selectedChat.leadStage}
                     </button>
                   )}
                   {upsertLeadMutation.isPending && (
-                    <span className="text-[10px] text-[#555] flex items-center gap-1">
-                      <UserPlus size={10} /> criando lead...
+                    <span style={{ fontSize: 9, color: 'var(--t3)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <UserPlus size={9} /> criando lead...
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-[#555]">+{selectedChat.phoneNumber}</p>
+                <p style={{ fontSize: 9, color: 'var(--t3)', fontFamily: 'var(--fm)' }}>+{selectedChat.phoneNumber}</p>
               </div>
             </div>
-            <div className="flex items-center gap-1">
-              {selectedChat.leadId && (
-                <Button variant="ghost" size="sm" onClick={() => navigate('/pipeline')}
-                  className="text-xs text-[#39FF14]/60 hover:text-[#39FF14]">
-                  <ExternalLink size={12} /> Pipeline
-                </Button>
-              )}
-              <Button variant="ghost" size="icon"><Phone size={15} /></Button>
-              <Button variant="ghost" size="icon"><MoreVertical size={15} /></Button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {/* Ver Lead button */}
+              <button
+                onClick={() => {
+                  if (selectedChat.leadId) {
+                    openLeadPanel(selectedChat.leadId)
+                  } else {
+                    openLeadPanelCreate({
+                      client_name: selectedChat.pushName,
+                      client_phone: selectedChat.phoneNumber,
+                      source: 'whatsapp',
+                    })
+                  }
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600,
+                  border: '1px solid var(--b)', background: 'transparent', color: 'var(--t2)',
+                  cursor: 'pointer', transition: 'all .15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--nb)'; e.currentTarget.style.color = 'var(--neon)' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--b)'; e.currentTarget.style.color = 'var(--t2)' }}
+              >
+                <User size={10} /> Ver Lead
+              </button>
+              <Button variant="ghost" size="icon-sm"><Phone size={14} /></Button>
+              <Button variant="ghost" size="icon-sm"><MoreVertical size={14} /></Button>
             </div>
           </div>
 
           {/* Mensagens */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-1">
+          <div style={{ flex: 1, overflowY: 'auto', padding: 12, background: 'var(--bg)', display: 'flex', flexDirection: 'column', gap: 2 }}>
             {loadingMsgs && (
-              <div className="flex justify-center py-8">
-                <div className="w-6 h-6 border-2 border-[#39FF14] border-t-transparent rounded-full animate-spin" />
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0' }}>
+                <div style={{ width: 22, height: 22, border: '2px solid var(--neon)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin .8s linear infinite' }} />
               </div>
             )}
             {!loadingMsgs && !messages?.length && (
-              <div className="flex items-center justify-center h-full text-[#555] text-sm">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--t3)', fontSize: 11 }}>
                 Nenhuma mensagem ainda. Inicie a conversa!
               </div>
             )}
-            {messages?.map((msg) => <MessageBubble key={msg.id} msg={msg} />)}
+            {messages?.map(msg => <MessageBubble key={msg.id} msg={msg} />)}
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input */}
-          <div className="p-4 border-t border-[#222] bg-[#111] shrink-0">
-            <div className="flex items-center gap-2">
-              <button className="text-[#555] hover:text-[#A0A0A0] p-2"><Paperclip size={18} /></button>
-              <button className="text-[#555] hover:text-[#A0A0A0] p-2"><Smile size={18} /></button>
+          {/* Input de envio */}
+          <div style={{ padding: '8px 12px', background: 'var(--surf)', borderTop: '1px solid var(--bs)', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <button style={{ color: 'var(--t3)', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+                onMouseEnter={e => (e.currentTarget.style.color = 'var(--t2)')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--t3)')}
+              ><Paperclip size={16} /></button>
+              <button style={{ color: 'var(--t3)', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+                onMouseEnter={e => (e.currentTarget.style.color = 'var(--t2)')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--t3)')}
+              ><Smile size={16} /></button>
               <input type="text" placeholder="Digite uma mensagem..."
                 value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                className="flex-1 h-10 px-4 rounded-xl bg-[#1A1A1A] border border-[#222] text-white text-sm placeholder:text-[#555] focus:outline-none focus:border-[#39FF14]"
+                onChange={e => setMessage(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
+                style={{
+                  flex: 1, height: 34, padding: '0 10px',
+                  background: 'var(--el)', border: '1px solid var(--b)',
+                  borderRadius: 7, color: 'var(--t)', fontSize: 11, outline: 'none', fontFamily: 'var(--fn)',
+                }}
+                onFocus={e => (e.currentTarget.style.borderColor = 'var(--nb)')}
+                onBlur={e => (e.currentTarget.style.borderColor = 'var(--b)')}
               />
-              <Button onClick={handleSend} loading={sendMutation.isPending}
-                disabled={!message.trim()} size="icon" className="rounded-xl">
-                <Send size={16} />
-              </Button>
+              <button
+                onClick={handleSend}
+                disabled={!message.trim() || sendMutation.isPending}
+                style={{
+                  width: 32, height: 32, borderRadius: 6, flexShrink: 0,
+                  background: 'var(--neon)', color: '#000', border: 'none',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: message.trim() ? 'pointer' : 'not-allowed', opacity: message.trim() ? 1 : .4,
+                }}
+              >
+                {sendMutation.isPending
+                  ? <div style={{ width: 14, height: 14, border: '2px solid #000', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin .8s linear infinite' }} />
+                  : <Send size={14} />
+                }
+              </button>
             </div>
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-center text-[#333]">
-          <div className="text-center">
-            <div className="w-16 h-16 rounded-2xl bg-[#1A1A1A] border border-[#222] flex items-center justify-center mx-auto mb-4">
-              <Phone size={28} className="text-[#333]" />
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
+          <div style={{ textAlign: 'center', color: 'var(--t3)' }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: 12,
+              background: 'var(--el)', border: '1px solid var(--b)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 14px',
+            }}>
+              <Phone size={24} style={{ color: 'var(--t3)' }} />
             </div>
-            <p className="text-sm">Selecione uma conversa</p>
-            <p className="text-xs text-[#555] mt-1">Leads são criados automaticamente</p>
+            <p style={{ fontSize: 12, color: 'var(--t2)' }}>Selecione uma conversa</p>
+            <p style={{ fontSize: 10, color: 'var(--t3)', marginTop: 4 }}>Leads são criados automaticamente</p>
           </div>
         </div>
       )}

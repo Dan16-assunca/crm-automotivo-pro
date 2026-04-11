@@ -1,14 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell, Legend,
+  ResponsiveContainer,
 } from 'recharts'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
-
-const COLORS = ['#39FF14', '#0A84FF', '#FFD60A', '#FF9F0A', '#BF5AF2', '#FF3B30']
 
 export default function Reports() {
   const { store } = useAuthStore()
@@ -59,77 +57,93 @@ export default function Reports() {
     enabled: !!store?.id,
   })
 
+  const tooltipStyle = {
+    contentStyle: { background: 'var(--el)', border: '1px solid var(--b)', borderRadius: 7 },
+    labelStyle: { color: 'var(--t)' },
+    itemStyle: { color: 'var(--t2)' },
+  }
+
   return (
-    <div className="space-y-6">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div>
-        <h1 className="text-2xl font-bold text-white">Relatórios</h1>
-        <p className="text-sm text-[#555]">Analytics e performance do funil</p>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--t)' }}>Relatórios</h1>
+        <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>Analytics e performance do funil</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <Card>
-          <CardHeader>
+          <CardHeader style={{ padding: '14px 16px 0' }}>
             <CardTitle>Motivos de Perda</CardTitle>
             <Badge variant="danger">Leads perdidos</Badge>
           </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={240}>
+          <CardContent style={{ padding: '8px 16px 14px' }}>
+            <ResponsiveContainer width="100%" height={220}>
               <BarChart data={lostReasons ?? []} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#222" horizontal={false} />
-                <XAxis type="number" tick={{ fill: '#555', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="name" tick={{ fill: '#A0A0A0', fontSize: 11 }} axisLine={false} tickLine={false} width={120} />
-                <Tooltip contentStyle={{ background: '#1A1A1A', border: '1px solid #222', borderRadius: 8 }} labelStyle={{ color: '#fff' }} />
-                <Bar dataKey="value" fill="#FF3B30" radius={[0, 4, 4, 0]} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--b)" horizontal={false} />
+                <XAxis type="number" tick={{ fill: 'var(--t3)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="name" tick={{ fill: 'var(--t2)', fontSize: 10 }} axisLine={false} tickLine={false} width={110} />
+                <Tooltip {...tooltipStyle} />
+                <Bar dataKey="value" fill="var(--red)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader style={{ padding: '14px 16px 0' }}>
             <CardTitle>Performance por Origem</CardTitle>
           </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={240}>
+          <CardContent style={{ padding: '8px 16px 14px' }}>
+            <ResponsiveContainer width="100%" height={220}>
               <BarChart data={sourcePerformance ?? []}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#222" />
-                <XAxis dataKey="name" tick={{ fill: '#555', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#555', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ background: '#1A1A1A', border: '1px solid #222', borderRadius: 8 }} />
-                <Bar dataKey="total" fill="#0A84FF" radius={[4,4,0,0]} name="Total" />
-                <Bar dataKey="won" fill="#39FF14" radius={[4,4,0,0]} name="Ganhos" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--b)" />
+                <XAxis dataKey="name" tick={{ fill: 'var(--t3)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: 'var(--t3)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <Tooltip {...tooltipStyle} />
+                <Bar dataKey="total" fill="var(--blu)" radius={[4,4,0,0]} name="Total" />
+                <Bar dataKey="won"   fill="var(--neon)" radius={[4,4,0,0]} name="Ganhos" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
 
-      {/* Source conversion table */}
+      {/* Conversion table */}
       <Card>
-        <CardHeader>
+        <CardHeader style={{ padding: '14px 16px 0' }}>
           <CardTitle>Taxa de Conversão por Origem</CardTitle>
         </CardHeader>
-        <CardContent>
-          <table className="w-full">
+        <CardContent style={{ padding: '0 0 4px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr className="border-b border-[#222]">
+              <tr>
                 {['Origem', 'Total de Leads', 'Ganhos', 'Taxa de Conversão'].map(h => (
-                  <th key={h} className="px-4 py-2 text-left text-xs text-[#555] uppercase tracking-wider">{h}</th>
+                  <th key={h} style={{
+                    padding: '8px 16px', textAlign: 'left',
+                    fontSize: 10, fontWeight: 600, color: 'var(--t3)',
+                    textTransform: 'uppercase', letterSpacing: '.06em',
+                    borderBottom: '1px solid var(--b)',
+                  }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {(sourcePerformance ?? []).map((row, i) => (
-                <tr key={i} className="border-b border-[#1A1A1A] hover:bg-[#39FF14]/3">
-                  <td className="px-4 py-3 text-sm text-white font-medium">{row.name}</td>
-                  <td className="px-4 py-3 text-sm text-[#A0A0A0]">{row.total}</td>
-                  <td className="px-4 py-3 text-sm text-[#39FF14]">{row.won}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-1.5 bg-[#1A1A1A] rounded-full overflow-hidden">
-                        <div className="h-full bg-[#39FF14] rounded-full" style={{ width: `${row.rate}%` }} />
+                <tr
+                  key={i}
+                  style={{ borderBottom: '1px solid var(--bs)' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--el)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
+                  <td style={{ padding: '9px 16px', fontSize: 12, color: 'var(--t)', fontWeight: 600 }}>{row.name}</td>
+                  <td style={{ padding: '9px 16px', fontSize: 12, color: 'var(--t2)' }}>{row.total}</td>
+                  <td style={{ padding: '9px 16px', fontSize: 12, color: 'var(--neon)' }}>{row.won}</td>
+                  <td style={{ padding: '9px 16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ flex: 1, height: 4, background: 'var(--el)', borderRadius: 99, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', background: 'var(--neon)', borderRadius: 99, width: `${row.rate}%` }} />
                       </div>
-                      <span className="text-xs text-[#39FF14] w-8">{row.rate}%</span>
+                      <span style={{ fontSize: 10, color: 'var(--neon)', minWidth: 28 }}>{row.rate}%</span>
                     </div>
                   </td>
                 </tr>

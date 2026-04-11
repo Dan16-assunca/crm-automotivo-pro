@@ -39,10 +39,10 @@ export const toast = {
 }
 
 const CONFIG: Record<ToastType, { icon: React.ReactNode; color: string; border: string }> = {
-  success: { icon: <CheckCircle2 size={15} />, color: 'var(--status-won)',     border: 'rgba(48,209,88,0.4)' },
-  error:   { icon: <XCircle size={15} />,      color: 'var(--status-error)',    border: 'rgba(255,59,48,0.4)' },
-  warning: { icon: <AlertTriangle size={15} />, color: 'var(--status-warning)', border: 'rgba(255,214,10,0.4)' },
-  info:    { icon: <Info size={15} />,          color: 'var(--status-info)',     border: 'rgba(10,132,255,0.4)' },
+  success: { icon: <CheckCircle2 size={15} />, color: 'var(--grn)', border: 'rgba(34,197,94,.35)' },
+  error:   { icon: <XCircle size={15} />,      color: 'var(--red)', border: 'rgba(244,63,94,.35)' },
+  warning: { icon: <AlertTriangle size={15} />, color: 'var(--yel)', border: 'rgba(234,179,8,.35)' },
+  info:    { icon: <Info size={15} />,          color: 'var(--blu)', border: 'rgba(59,130,246,.35)' },
 }
 
 function ToastItem({ toast: t, onRemove }: { toast: Toast; onRemove: () => void }) {
@@ -57,20 +57,20 @@ function ToastItem({ toast: t, onRemove }: { toast: Toast; onRemove: () => void 
     <div
       className="flex items-start gap-3 p-4 rounded-[12px] min-w-[300px] max-w-[400px] shadow-[var(--shadow-lg)]"
       style={{
-        background: 'var(--bg-elevated)',
-        border: `1px solid var(--border-default)`,
+        background: 'var(--el)',
+        border: `1px solid var(--b)`,
         borderLeft: `3px solid ${cfg.color}`,
         animation: 'slide-in-right 0.3s ease',
       }}
     >
       <span className="mt-0.5 shrink-0" style={{ color: cfg.color }}>{cfg.icon}</span>
       <div className="flex-1 min-w-0">
-        <p className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>{t.title}</p>
+        <p className="text-[13px] font-semibold" style={{ color: 'var(--t)' }}>{t.title}</p>
         {t.message && (
-          <p className="text-[12px] mt-0.5" style={{ color: 'var(--text-secondary)' }}>{t.message}</p>
+          <p className="text-[12px] mt-0.5" style={{ color: 'var(--t2)' }}>{t.message}</p>
         )}
         {/* Progress bar */}
-        <div className="h-[2px] rounded-full mt-2 overflow-hidden" style={{ background: 'var(--border-subtle)' }}>
+        <div className="h-[2px] rounded-full mt-2 overflow-hidden" style={{ background: 'var(--b)' }}>
           <div
             className="h-full rounded-full"
             style={{
@@ -84,9 +84,9 @@ function ToastItem({ toast: t, onRemove }: { toast: Toast; onRemove: () => void 
       <button
         onClick={onRemove}
         className="shrink-0 transition-colors"
-        style={{ color: 'var(--text-muted)' }}
-        onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-primary)')}
-        onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+        style={{ color: 'var(--t3)' }}
+        onMouseEnter={e => (e.currentTarget.style.color = 'var(--t)')}
+        onMouseLeave={e => (e.currentTarget.style.color = 'var(--t3)')}
       >
         <X size={14} />
       </button>

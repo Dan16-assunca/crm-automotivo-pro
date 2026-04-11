@@ -4,42 +4,43 @@ import { cva, type VariantProps } from 'class-variance-authority'
 
 const buttonVariants = cva(
   [
-    'inline-flex items-center justify-center gap-2 rounded-[8px]',
-    'font-semibold text-[13px] tracking-[0.02em] font-[Space_Grotesk,sans-serif]',
-    'transition-all duration-[250ms] ease-out',
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-neon-full)]',
+    'inline-flex items-center justify-center gap-2',
+    'font-semibold text-[12px] tracking-[.01em]',
+    'transition-all duration-[180ms] ease-out',
+    'focus-visible:outline-none',
     'disabled:opacity-40 disabled:pointer-events-none select-none',
+    'cursor-pointer border-0',
   ].join(' '),
   {
     variants: {
       variant: {
         primary: [
-          'bg-[var(--neon)] text-[var(--text-inverse)]',
-          'hover:bg-[var(--neon-dim)] hover:shadow-[var(--neon-glow)] hover:-translate-y-px',
-          'active:translate-y-0 active:shadow-[var(--neon-glow-sm)]',
+          'bg-[var(--neon)] text-black rounded-[6px]',
+          'hover:bg-[var(--nd)] hover:shadow-[0_0_12px_rgba(61,247,16,.28)] hover:-translate-y-px',
+          'active:translate-y-0',
         ].join(' '),
         secondary: [
-          'bg-transparent text-[var(--neon)] border border-[var(--border-neon)]',
-          'hover:bg-[var(--neon-muted)] hover:border-[var(--neon)] hover:shadow-[var(--neon-glow-sm)]',
+          'bg-transparent text-[var(--t2)] border border-[var(--b)] rounded-[6px]',
+          'hover:border-[var(--nb)] hover:text-[var(--t)]',
         ].join(' '),
         ghost: [
-          'bg-transparent text-[var(--text-secondary)] border border-transparent',
-          'hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] hover:border-[var(--border-default)]',
+          'bg-transparent text-[var(--t3)] rounded-[6px]',
+          'hover:bg-[var(--el)] hover:text-[var(--t)]',
         ].join(' '),
         danger: [
-          'bg-[var(--status-error)] text-white',
-          'hover:brightness-110 hover:shadow-[0_0_20px_rgba(255,59,48,0.4)]',
+          'bg-[var(--red)] text-white rounded-[6px]',
+          'hover:brightness-110',
         ].join(' '),
         outline: [
-          'bg-transparent border border-[var(--border-default)] text-[var(--text-secondary)]',
-          'hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]',
+          'bg-transparent border border-[var(--b)] text-[var(--t2)] rounded-[6px]',
+          'hover:border-[var(--nb)] hover:text-[var(--t)]',
         ].join(' '),
       },
       size: {
-        sm:   'h-8 px-3 text-xs',
-        md:   'h-[38px] px-4 text-[13px]',
-        lg:   'h-11 px-6 text-[14px]',
-        icon: 'h-9 w-9',
+        sm:   'h-7 px-3 text-[11px]',
+        md:   'h-8 px-4 text-[12px]',
+        lg:   'h-10 px-5 text-[13px]',
+        icon: 'h-8 w-8',
         'icon-sm': 'h-7 w-7',
       },
     },
@@ -54,15 +55,16 @@ interface ButtonProps
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, loading, children, disabled, ...props }, ref) => (
+  ({ className, variant, size, loading, children, disabled, style, ...props }, ref) => (
     <button
       ref={ref}
       className={cn(buttonVariants({ variant, size }), className)}
       disabled={disabled || loading}
+      style={style}
       {...props}
     >
       {loading && (
-        <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin shrink-0" />
+        <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin shrink-0" />
       )}
       {children}
     </button>

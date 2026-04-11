@@ -10,6 +10,25 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: 'auto',
+      workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
+        // Never precache index.html — always fetch fresh from network
+        navigateFallback: null,
+        // For navigation requests (HTML), always go to network first
+        runtimeCaching: [
+          {
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'navigate-cache',
+              networkTimeoutSeconds: 5,
+            },
+          },
+        ],
+      },
       includeAssets: ['favicon.ico', 'icons/*.png'],
       manifest: {
         name: 'CRM Automotivo Pro',

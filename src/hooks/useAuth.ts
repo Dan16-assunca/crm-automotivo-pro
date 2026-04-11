@@ -27,6 +27,9 @@ export function useAuth() {
             setUser(profile as Parameters<typeof setUser>[0])
             if (profile.stores) setStore(profile.stores as Parameters<typeof setStore>[0])
           }
+        } else {
+          // No valid session — clear any stale persisted user so ProtectedRoute redirects to login
+          logout()
         }
       } catch (e) {
         console.error('[useAuth] Failed to load profile:', e)
