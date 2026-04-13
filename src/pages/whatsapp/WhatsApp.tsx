@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Send, Search, Phone, MoreVertical, Paperclip, Smile, Check, CheckCheck, Clock, MessageCircleOff, UserPlus, ExternalLink, User } from 'lucide-react'
+import { Send, Search, Phone, MoreVertical, Paperclip, Smile, Check, CheckCheck, Clock, MessageCircleOff, UserPlus, ExternalLink, User, ChevronDown } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { useLeadPanelStore } from '@/store/leadPanelStore'
@@ -128,11 +128,39 @@ export default function WhatsApp() {
   const [selectedChat, setSelectedChat] = useState<EvoChat | null>(null)
   const [message, setMessage] = useState('')
   const [search, setSearch] = useState('')
+  const [showInstanceMenu, setShowInstanceMenu] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const bulkUpsertedRef = useRef(false) // evita rodar múltiplas vezes
+  const bulkUpsertedRef = useRef<Record<string, boolean>>({}) // por instância
   const sendingRef = useRef(false) // pausa refetchInterval durante envio
 
-  const instanceName = (store?.settings as Record<string, string>)?.whatsapp_instance ?? ''
+  const defaultInstance = (store?.settings as Record<string, string>)?.whatsapp_instance ?? ''
+
+  // ── lista de instâncias disponíveis na Evolution API ─────────────────────
+  const { data: instances } = useQuery({
+    queryKey: ['whatsapp-instances'],
+    queryFn: async () => {
+      const data = await evolutionApi.getInstances() as Record<string, unknown>[] | null
+      if (!Array.isArray(data)) return [defaultInstance].filter(Boolean)
+      return data
+        .map((i: Record<string, unknown>) => {
+          const inst = i?.instance as Record<string, unknown> | undefined
+          return (inst?.instanceName as string) ?? (i?.instanceName as string) ?? ''
+        })
+        .filter(Boolean)
+    },
+    enabled: !!defaultInstance,
+    staleTime: 30000,
+  })
+
+  const instanceList = instances?.length ? instances : [defaultInstance].filter(Boolean)
+  const [selectedInstance, setSelectedInstance] = useState(defaultInstance)
+
+  // Atualiza instância selecionada se o default mudar (ex: após salvar configurações)
+  useEffect(() => {
+    if (defaultInstance && !selectedInstance) setSelectedInstance(defaultInstance)
+  }, [defaultInstance, selectedInstance])
+
+  const instanceName = selectedInstance || defaultInstance
 
   // ── upsert de lead ao abrir conversa ──────────────────────────────────────
 
@@ -206,9 +234,18 @@ export default function WhatsApp() {
 
   const handleSelectChat = useCallback((chat: EvoChat) => {
     setSelectedChat(chat)
+    setShowInstanceMenu(false)
     upsertLeadMutation.mutate(chat)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store?.id, user?.id])
+
+  // Fecha o dropdown de instâncias ao clicar fora
+  useEffect(() => {
+    if (!showInstanceMenu) return
+    const handler = () => setShowInstanceMenu(false)
+    document.addEventListener('click', handler, { capture: true, once: true })
+    return () => document.removeEventListener('click', handler, { capture: true })
+  }, [showInstanceMenu])
 
   // ── lista de conversas ────────────────────────────────────────────────────
 
@@ -246,8 +283,8 @@ export default function WhatsApp() {
         })
         .sort((a, b) => (b.lastMessageTs ?? 0) - (a.lastMessageTs ?? 0))
 
-      // Batch-fetch profile pics for contacts without one (max 20 at a time)
-      const withoutPic = mapped.filter(c => !c.profilePicUrl).slice(0, 20)
+      // Batch-fetch profile pics para os primeiros 10 sem foto (não bloqueia renderização)
+      const withoutPic = mapped.filter(c => !c.profilePicUrl).slice(0, 10)
       if (withoutPic.length > 0) {
         const results = await Promise.allSettled(
           withoutPic.map(c => evolutionApi.fetchProfilePicture(instanceName, c.phoneNumber))
@@ -262,15 +299,16 @@ export default function WhatsApp() {
       return mapped
     },
     enabled: !!instanceName,
-    refetchInterval: 8000,
+    staleTime: 5000,
+    refetchInterval: 12000,
   })
 
   // ── auto-criar leads para todos os contatos ao carregar ──────────────────
 
   useEffect(() => {
     if (!conversations?.length || !store?.id || !user?.id) return
-    if (bulkUpsertedRef.current) return
-    bulkUpsertedRef.current = true
+    if (bulkUpsertedRef.current[instanceName]) return
+    bulkUpsertedRef.current[instanceName] = true
 
     const run = async () => {
       // Busca o primeiro estágio do pipeline uma vez
@@ -437,10 +475,66 @@ export default function WhatsApp() {
       <div style={{ width: 260, flexShrink: 0, borderRight: '1px solid var(--bs)', display: 'flex', flexDirection: 'column', background: 'var(--surf)' }}>
         {/* Search header */}
         <div style={{ padding: '11px 12px', borderBottom: '1px solid var(--bs)' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--t)', marginBottom: 9 }}>WhatsApp</div>
-          {!instanceName && (
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--t)', marginBottom: 8 }}>WhatsApp</div>
+
+          {/* Seletor de instância */}
+          {instanceList.length > 0 ? (
+            <div style={{ position: 'relative', marginBottom: 8 }}>
+              <button
+                onClick={() => setShowInstanceMenu(v => !v)}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '5px 9px', borderRadius: 6, cursor: 'pointer',
+                  background: 'var(--ng)', border: '1px solid var(--nb)',
+                  color: 'var(--neon)', fontSize: 11, fontWeight: 600, fontFamily: 'var(--fn)',
+                }}
+              >
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  📱 {instanceName || 'Selecionar número'}
+                </span>
+                <ChevronDown size={12} style={{ flexShrink: 0, marginLeft: 4, transform: showInstanceMenu ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+              </button>
+
+              {showInstanceMenu && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: 3,
+                  background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 8,
+                  boxShadow: '0 8px 24px rgba(0,0,0,.4)', overflow: 'hidden',
+                }}>
+                  {instanceList.map(inst => (
+                    <button
+                      key={inst}
+                      onClick={() => {
+                        setSelectedInstance(inst)
+                        setSelectedChat(null)
+                        setShowInstanceMenu(false)
+                      }}
+                      style={{
+                        width: '100%', padding: '8px 11px', textAlign: 'left',
+                        background: inst === instanceName ? 'var(--ng)' : 'transparent',
+                        border: 'none', borderBottom: '1px solid var(--bs)',
+                        color: inst === instanceName ? 'var(--neon)' : 'var(--t2)',
+                        fontSize: 11, fontWeight: inst === instanceName ? 600 : 400,
+                        cursor: 'pointer', fontFamily: 'var(--fn)',
+                        display: 'flex', alignItems: 'center', gap: 6,
+                      }}
+                      onMouseEnter={e => { if (inst !== instanceName) e.currentTarget.style.background = 'var(--el)' }}
+                      onMouseLeave={e => { if (inst !== instanceName) e.currentTarget.style.background = 'transparent' }}
+                    >
+                      <span style={{
+                        width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                        background: inst === instanceName ? 'var(--neon)' : 'var(--t3)',
+                      }} />
+                      {inst}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : !instanceName ? (
             <p style={{ fontSize: 10, color: 'var(--yel)', marginBottom: 7 }}>⚠ Configure a instância em Configurações</p>
-          )}
+          ) : null}
+
           <div style={{ position: 'relative' }}>
             <Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)', pointerEvents: 'none' }} />
             <input type="text" placeholder="Buscar conversa..." value={search}
@@ -552,7 +646,12 @@ export default function WhatsApp() {
                     </span>
                   )}
                 </div>
-                <p style={{ fontSize: 9, color: 'var(--t3)', fontFamily: 'var(--fm)' }}>+{selectedChat.phoneNumber}</p>
+                <p style={{ fontSize: 9, color: 'var(--t3)', fontFamily: 'var(--fm)' }}>
+                  +{selectedChat.phoneNumber}
+                  {instanceList.length > 1 && (
+                    <span style={{ marginLeft: 6, opacity: .6 }}>· via {instanceName}</span>
+                  )}
+                </p>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
