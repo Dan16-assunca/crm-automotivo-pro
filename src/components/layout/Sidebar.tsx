@@ -11,7 +11,6 @@ import { useAuthStore } from '@/store/authStore'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import { supabase as sb } from '@/lib/supabase'
 import type { UserRole } from '@/types'
 
 type NavItem = {
@@ -99,7 +98,7 @@ export function Sidebar() {
     Object.keys(localStorage).filter(k => k.startsWith('sb-')).forEach(k => localStorage.removeItem(k))
     sessionStorage.clear()
     // Fire signOut in background (best-effort server invalidation)
-    sb.auth.signOut().catch(() => {})
+    supabase.auth.signOut().catch(() => {})
     window.location.replace('/login')
   }
 

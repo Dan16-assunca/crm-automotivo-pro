@@ -103,7 +103,29 @@ export const evolutionApi = {
       headers,
       body: JSON.stringify({ number, text }),
     })
-    return safeJson(res)
+    const data = await safeJson(res)
+    if (!res.ok) {
+      // Evolution API wraps errors in message / error fields
+      const detail = (data?.message as string) ?? (data?.error as string) ?? `HTTP ${res.status}`
+      throw new Error(detail)
+    }
+    return data
+  },
+
+  /** Busca a foto de perfil de um contato pelo número */
+  fetchProfilePicture: async (instance: string, number: string): Promise<string | null> => {
+    try {
+      const res = await fetch(`${BASE}/chat/fetchProfilePictureUrl/${instance}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ number }),
+      })
+      if (!res.ok) return null
+      const data = await safeJson(res)
+      return (data?.profilePictureUrl as string) ?? null
+    } catch {
+      return null
+    }
   },
 
   sendMedia: async (instance: string, number: string, mediaUrl: string, caption: string) => {

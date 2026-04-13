@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Copy, Check, Trash2, UserCog, Clock, MailCheck, ShieldAlert } from 'lucide-react'
+import { Plus, Check, Trash2, UserCog, Clock, MailCheck } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -32,12 +32,10 @@ const ROLE_VARIANTS: Record<string, 'neon' | 'info' | 'default'> = {
 
 // ─── Modal de convite ─────────────────────────────────────────────────────────
 interface InviteModalProps {
-  storeId: string
-  invitedBy: string
   onClose: () => void
-  onCreated: (invite: TeamInvite) => void
+  onSuccess: () => void
 }
-function InviteModal({ storeId, invitedBy, onClose, onCreated }: InviteModalProps) {
+function InviteModal({ onClose, onSuccess }: InviteModalProps) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<'manager' | 'salesperson'>('salesperson')
@@ -59,24 +57,33 @@ function InviteModal({ storeId, invitedBy, onClose, onCreated }: InviteModalProp
 
     setSubmitting(true)
     try {
-      const { data, error } = await supabase
-        .from('team_invites')
-        .insert({
-          store_id:   storeId,
-          email:      email.trim().toLowerCase(),
-          full_name:  name.trim() || null,
-          role,
-          invited_by: invitedBy,
-        })
-        .select()
-        .single()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) { toast.error('Sessão expirada', 'Faça login novamente'); return }
 
-      if (error) {
-        toast.error('Erro ao criar convite', error.message)
+      const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-team-member`
+      const res = await fetch(fnUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          email:     email.trim().toLowerCase(),
+          full_name: name.trim() || null,
+          role,
+        }),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok || result.error) {
+        toast.error('Erro ao enviar convite', result.error ?? 'Tente novamente')
         return
       }
-      toast.success('Convite criado!', 'Compartilhe o link com o novo membro')
-      onCreated(data as TeamInvite)
+
+      toast.success('Convite enviado!', `Email de convite enviado para ${email.trim().toLowerCase()}`)
+      onSuccess()
     } finally {
       setSubmitting(false)
     }
@@ -129,7 +136,7 @@ function InviteModal({ storeId, invitedBy, onClose, onCreated }: InviteModalProp
           <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
             <Button variant="secondary" size="sm" onClick={onClose} style={{ flex: 1 }}>Cancelar</Button>
             <Button variant="primary" size="sm" loading={submitting} onClick={handleSubmit} style={{ flex: 1 }}>
-              Gerar link de convite
+              Enviar convite por email
             </Button>
           </div>
         </div>
@@ -140,16 +147,7 @@ function InviteModal({ storeId, invitedBy, onClose, onCreated }: InviteModalProp
 
 // ─── Card de convite pendente ─────────────────────────────────────────────────
 function InviteCard({ invite, onDelete }: { invite: TeamInvite; onDelete: (id: string) => void }) {
-  const [copied, setCopied] = useState(false)
-  const link = `${window.location.origin}/convite?token=${invite.token}`
   const isExpired = new Date(invite.expires_at) < new Date()
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(link).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
-  }
 
   const expiresIn = () => {
     const diff = new Date(invite.expires_at).getTime() - Date.now()
@@ -182,12 +180,10 @@ function InviteCard({ invite, onDelete }: { invite: TeamInvite; onDelete: (id: s
           </span>
         </div>
       </div>
-      <div style={{ display: 'flex', gap: 4 }}>
-        <button onClick={handleCopy}
-          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 6, background: copied ? 'var(--ng)' : 'var(--el)', border: `1px solid ${copied ? 'var(--nb)' : 'var(--b)'}`, color: copied ? 'var(--neon)' : 'var(--t2)', cursor: 'pointer', fontSize: 11, fontWeight: 600, transition: 'all .15s' }}>
-          {copied ? <Check size={12} /> : <Copy size={12} />}
-          {copied ? 'Copiado!' : 'Copiar link'}
-        </button>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        <span style={{ fontSize: 10, color: 'var(--t3)', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Check size={11} style={{ color: 'var(--neon)' }} /> Email enviado
+        </span>
         <button onClick={() => onDelete(invite.id)}
           style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, background: 'transparent', border: '1px solid var(--b)', color: 'var(--t3)', cursor: 'pointer', transition: 'all .15s' }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--red)'; e.currentTarget.style.color = 'var(--red)' }}
@@ -205,7 +201,6 @@ export default function Team() {
   const { isAdmin, isManager } = usePermissions()
   const queryClient = useQueryClient()
   const [showInviteModal, setShowInviteModal] = useState(false)
-  const [createdInvite, setCreatedInvite] = useState<TeamInvite | null>(null)
 
   // Membros ativos
   const { data: members, isLoading: loadingMembers } = useQuery({
@@ -270,10 +265,10 @@ export default function Team() {
     },
   })
 
-  const handleInviteCreated = (invite: TeamInvite) => {
+  const handleInviteSuccess = () => {
     setShowInviteModal(false)
-    setCreatedInvite(invite)
     queryClient.invalidateQueries({ queryKey: ['team-invites', store?.id] })
+    queryClient.invalidateQueries({ queryKey: ['team', store?.id] })
   }
 
   const pendingInvites = invites?.filter(i => new Date(i.expires_at) > new Date()) ?? []
@@ -289,25 +284,12 @@ export default function Team() {
             {pendingInvites.length > 0 && ` · ${pendingInvites.length} convite${pendingInvites.length > 1 ? 's' : ''} pendente${pendingInvites.length > 1 ? 's' : ''}`}
           </p>
         </div>
-        {isAdmin && (
+        {isManager && (
           <Button size="sm" onClick={() => setShowInviteModal(true)}>
             <Plus size={13} /> Convidar Membro
           </Button>
         )}
       </div>
-
-      {/* Banner de link criado */}
-      {createdInvite && (
-        <InviteLinkBanner invite={createdInvite} onClose={() => setCreatedInvite(null)} />
-      )}
-
-      {/* Aviso para gerente (sem permissão de convidar) */}
-      {isManager && !isAdmin && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'rgba(234,179,8,.06)', border: '1px solid rgba(234,179,8,.2)', borderRadius: 8, fontSize: 12, color: 'var(--yel)' }}>
-          <ShieldAlert size={14} />
-          Você pode visualizar a equipe. Apenas o admin pode convidar ou alterar membros.
-        </div>
-      )}
 
       {/* Membros */}
       <div>
@@ -349,12 +331,10 @@ export default function Team() {
       )}
 
       {/* Modal de convite */}
-      {showInviteModal && store && user && (
+      {showInviteModal && (
         <InviteModal
-          storeId={store.id}
-          invitedBy={user.id}
           onClose={() => setShowInviteModal(false)}
-          onCreated={handleInviteCreated}
+          onSuccess={handleInviteSuccess}
         />
       )}
     </div>
@@ -449,46 +429,3 @@ function MemberCard({
   )
 }
 
-// ─── Banner após criação de convite ──────────────────────────────────────────
-function InviteLinkBanner({ invite, onClose }: { invite: TeamInvite; onClose: () => void }) {
-  const [copied, setCopied] = useState(false)
-  const link = `${window.location.origin}/convite?token=${invite.token}`
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(link).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
-  }
-
-  return (
-    <div style={{
-      background: 'var(--ng)', border: '1px solid var(--nb)',
-      borderRadius: 9, padding: '14px 16px',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-        <div style={{ flex: 1 }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--neon)', marginBottom: 4 }}>
-            Convite criado! Compartilhe o link abaixo com {invite.full_name || invite.email}:
-          </p>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <code style={{
-              flex: 1, fontSize: 10, background: 'var(--el)', border: '1px solid var(--b)',
-              borderRadius: 6, padding: '6px 10px', color: 'var(--t2)',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block',
-            }}>{link}</code>
-            <button onClick={handleCopy}
-              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 6, background: copied ? 'var(--neon)' : 'var(--el)', border: `1px solid ${copied ? 'var(--neon)' : 'var(--b)'}`, color: copied ? '#000' : 'var(--t2)', cursor: 'pointer', fontSize: 11, fontWeight: 600, flexShrink: 0, transition: 'all .15s' }}>
-              {copied ? <Check size={12} /> : <Copy size={12} />}
-              {copied ? 'Copiado!' : 'Copiar'}
-            </button>
-          </div>
-          <p style={{ fontSize: 10, color: 'var(--t3)', marginTop: 6 }}>
-            O link expira em 7 dias. Você pode compartilhá-lo via WhatsApp ou email.
-          </p>
-        </div>
-        <button onClick={onClose} style={{ color: 'var(--t3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, lineHeight: 1, flexShrink: 0 }}>×</button>
-      </div>
-    </div>
-  )
-}

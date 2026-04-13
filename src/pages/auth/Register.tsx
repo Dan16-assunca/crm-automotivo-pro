@@ -6,7 +6,6 @@ import { z } from 'zod'
 import { motion } from 'framer-motion'
 import { Mail, Lock, User, Building2, Eye, EyeOff, Car, CheckCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { toast } from '@/components/ui/Toast'
@@ -26,7 +25,6 @@ type FormData = z.infer<typeof schema>
 
 export default function Register() {
   const navigate = useNavigate()
-  const { setUser, setStore, setLoading } = useAuthStore()
   const [showPwd, setShowPwd] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false)
@@ -38,69 +36,48 @@ export default function Register() {
   const onSubmit = async (data: FormData) => {
     setSubmitting(true)
     try {
-      // 1. Criar usuário no Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email:    data.email,
-        password: data.password,
-        options:  { data: { full_name: data.full_name } },
+      // Toda a criação transacional acontece na Edge Function (service role server-side)
+      const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-store-and-user`
+      const res = await fetch(fnUrl, {
+        method:  'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          full_name:  data.full_name,
+          store_name: data.store_name,
+          email:      data.email,
+          password:   data.password,
+        }),
       })
-      if (authError) {
-        const msg = authError.message.includes('already registered')
-          ? 'Este email já está cadastrado. Faça login.'
-          : authError.message
-        toast.error('Erro no cadastro', msg)
+
+      const result = await res.json()
+
+      if (!res.ok || result.error) {
+        toast.error('Erro no cadastro', result.error ?? 'Tente novamente')
         return
       }
 
-      // Confirmação de email habilitada no Supabase
-      if (!authData.session) {
+      if (!result.session) {
+        // Edge Function criou a conta mas não devolveu sessão (improvável)
         setNeedsEmailConfirm(true)
         return
       }
 
-      setLoading(true)
-      const userId = authData.user!.id
+      // Injetar sessão no cliente Supabase → dispara onAuthStateChange → loadProfile automático
+      await supabase.auth.setSession({
+        access_token:  result.session.access_token,
+        refresh_token: result.session.refresh_token,
+      })
 
-      // 2. Criar loja
-      const { data: store, error: storeError } = await supabase
-        .from('stores')
-        .insert({ name: data.store_name, plan: 'pro', active: true, settings: {} })
-        .select()
-        .single()
-
-      if (storeError) throw new Error('Erro ao criar loja: ' + storeError.message)
-
-      // 3. Criar perfil de usuário como admin
-      const { data: userProfile, error: userError } = await supabase
-        .from('users')
-        .insert({
-          id:        userId,
-          store_id:  store.id,
-          full_name: data.full_name,
-          email:     data.email,
-          role:      'admin',
-          active:    true,
-        })
-        .select('*, stores(*)')
-        .single()
-
-      if (userError) throw new Error('Erro ao criar perfil: ' + userError.message)
-
-      // 4. Criar etapas padrão do pipeline
-      await supabase.rpc('create_default_stages', { p_store_id: store.id })
-
-      // 5. Atualizar estado global e redirecionar
-      setUser(userProfile as Parameters<typeof setUser>[0])
-      setStore(userProfile.stores as Parameters<typeof setStore>[0])
       toast.success('Conta criada!', `Bem-vindo, ${data.full_name.split(' ')[0]}!`)
       navigate('/dashboard', { replace: true })
 
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Tente novamente'
-      toast.error('Erro ao criar conta', msg)
+      toast.error('Erro ao criar conta', err instanceof Error ? err.message : 'Tente novamente')
     } finally {
       setSubmitting(false)
-      setLoading(false)
     }
   }
 
