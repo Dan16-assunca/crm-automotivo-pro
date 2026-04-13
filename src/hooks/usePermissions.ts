@@ -13,11 +13,18 @@ export interface Permissions {
   canAccess: (...roles: UserRole[]) => boolean
 }
 
+const KNOWN_ROLES: UserRole[] = ['admin', 'manager', 'salesperson']
+
 export function usePermissions(): Permissions {
   const { user, isLoading } = useAuthStore()
-  // Durante o carregamento inicial, usa 'admin' para não filtrar a sidebar prematuramente.
-  // Quando o perfil carregar, o role real do DB substitui.
-  const role = (user?.role ?? (isLoading ? 'admin' : 'salesperson')) as UserRole
+  // Normaliza roles desconhecidos (ex: 'owner') para 'admin'.
+  // Durante o carregamento usa 'admin' para não filtrar a sidebar prematuramente.
+  const rawRole = user?.role as string | undefined
+  const role: UserRole = !user
+    ? (isLoading ? 'admin' : 'salesperson')
+    : KNOWN_ROLES.includes(rawRole as UserRole)
+      ? (rawRole as UserRole)
+      : 'admin'
 
   return {
     role,

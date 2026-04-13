@@ -41,8 +41,14 @@ export function ProtectedRoute({ children, roles }: ProtectedRouteProps) {
   // Não autenticado → login
   if (!user) return <Navigate to="/login" replace />
 
-  // Autenticado mas sem o role necessário → dashboard (sem mensagem de erro)
-  if (roles && !roles.includes(user.role as UserRole)) {
+  // Normaliza roles desconhecidos (ex: 'owner') para 'admin'
+  const KNOWN_ROLES: UserRole[] = ['admin', 'manager', 'salesperson']
+  const effectiveRole: UserRole = KNOWN_ROLES.includes(user.role as UserRole)
+    ? (user.role as UserRole)
+    : 'admin'
+
+  // Autenticado mas sem o role necessário → dashboard
+  if (roles && !roles.includes(effectiveRole)) {
     return <Navigate to="/dashboard" replace />
   }
 

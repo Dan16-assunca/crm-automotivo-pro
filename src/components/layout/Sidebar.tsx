@@ -355,7 +355,7 @@ export function Sidebar() {
                     {store?.name ?? user.full_name ?? 'Loja'}
                   </div>
                   <div style={{ fontSize: 9, color: 'var(--t3)' }}>
-                    {{ admin: 'Admin', manager: 'Gerente', salesperson: 'Vendedor' }[user.role] ?? user.role}
+                    {{ admin: 'Admin', manager: 'Gerente', salesperson: 'Vendedor', owner: 'Admin' }[user.role] ?? 'Admin'}
                     {' · '}Plano {store?.plan?.toUpperCase() ?? 'Pro'}
                   </div>
                 </div>
