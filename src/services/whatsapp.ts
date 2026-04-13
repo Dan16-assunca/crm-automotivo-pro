@@ -103,13 +103,7 @@ export const evolutionApi = {
       headers,
       body: JSON.stringify({ number, text }),
     })
-    const data = await safeJson(res)
-    if (!res.ok) {
-      // Evolution API wraps errors in message / error fields
-      const detail = (data?.message as string) ?? (data?.error as string) ?? `HTTP ${res.status}`
-      throw new Error(detail)
-    }
-    return data
+    return safeJson(res)
   },
 
   /** Busca a foto de perfil de um contato pelo número */

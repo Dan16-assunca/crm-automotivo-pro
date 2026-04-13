@@ -14,8 +14,10 @@ export interface Permissions {
 }
 
 export function usePermissions(): Permissions {
-  const { user } = useAuthStore()
-  const role = (user?.role ?? 'salesperson') as UserRole
+  const { user, isLoading } = useAuthStore()
+  // Durante o carregamento inicial, usa 'admin' para não filtrar a sidebar prematuramente.
+  // Quando o perfil carregar, o role real do DB substitui.
+  const role = (user?.role ?? (isLoading ? 'admin' : 'salesperson')) as UserRole
 
   return {
     role,

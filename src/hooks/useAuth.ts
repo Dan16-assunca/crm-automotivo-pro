@@ -17,7 +17,7 @@ export function useAuth() {
   useEffect(() => {
     let mounted = true
 
-    // Get initial session
+    // Get initial session — always re-fetches profile from DB to ensure fresh role/store data
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!mounted) return
       try {
@@ -26,6 +26,9 @@ export function useAuth() {
           if (profile && mounted) {
             setUser(profile as Parameters<typeof setUser>[0])
             if (profile.stores) setStore(profile.stores as Parameters<typeof setStore>[0])
+          } else if (mounted) {
+            // Profile query returned nothing — clear stale cache to avoid wrong role
+            logout()
           }
         } else {
           // No valid session — clear any stale persisted user so ProtectedRoute redirects to login
