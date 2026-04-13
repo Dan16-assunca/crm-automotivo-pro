@@ -118,7 +118,7 @@ export default function InviteAccept() {
           <p style={{ fontSize: 10, color: 'var(--t3)', letterSpacing: '.25em', textTransform: 'uppercase', marginTop: 4 }}>Ativar Conta</p>
         </div>
 
-        <div style={{ background: 'rgba(13,13,13,.92)', backdropFilter: 'blur(20px)', border: '1px solid var(--bs)', borderRadius: 14, padding: 28, boxShadow: '0 24px 48px rgba(0,0,0,.6)' }}>
+        <div style={{ background: 'var(--card)', backdropFilter: 'blur(20px)', border: '1px solid var(--bs)', borderRadius: 14, padding: 28, boxShadow: '0 24px 48px rgba(0,0,0,.3)' }}>
 
           {pageState === 'loading' && (
             <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0' }}>

@@ -92,9 +92,9 @@ export default function ResetPassword() {
         </div>
 
         <div style={{
-          background: 'rgba(13,13,13,.92)', backdropFilter: 'blur(20px)',
+          background: 'var(--card)', backdropFilter: 'blur(20px)',
           border: '1px solid var(--bs)', borderRadius: 14, padding: 24,
-          boxShadow: '0 24px 48px rgba(0,0,0,.6)',
+          boxShadow: '0 24px 48px rgba(0,0,0,.3)',
         }}>
           {done ? (
             <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 12 }}>

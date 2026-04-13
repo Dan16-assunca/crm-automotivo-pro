@@ -37,12 +37,14 @@ export default function Register() {
     setSubmitting(true)
     try {
       // Toda a criação transacional acontece na Edge Function (service role server-side)
-      const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-store-and-user`
+      const SUPA_URL  = (import.meta.env.VITE_SUPABASE_URL  as string | undefined) ?? 'https://eakdywmuewvuzyqfpcpl.supabase.co'
+      const SUPA_ANON = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVha2R5d211ZXd2dXp5cWZwY3BsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3MjQ5MTgsImV4cCI6MjA5MDMwMDkxOH0.EeUINhQUomMKqhfkjGnkDpO3aO5NZ4Yqd15qof-mB20'
+      const fnUrl = `${SUPA_URL}/functions/v1/create-store-and-user`
       const res = await fetch(fnUrl, {
         method:  'POST',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'apikey': SUPA_ANON,
         },
         body: JSON.stringify({
           full_name:  data.full_name,
@@ -147,7 +149,7 @@ export default function Register() {
         </div>
 
         {/* Card */}
-        <div style={{ background: 'rgba(13,13,13,.92)', backdropFilter: 'blur(20px)', border: '1px solid var(--bs)', borderRadius: 14, padding: 28, boxShadow: '0 24px 48px rgba(0,0,0,.6)' }}>
+        <div style={{ background: 'var(--card)', backdropFilter: 'blur(20px)', border: '1px solid var(--bs)', borderRadius: 14, padding: 28, boxShadow: '0 24px 48px rgba(0,0,0,.3)' }}>
           <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--t)', marginBottom: 4 }}>Cadastro da loja</h2>
           <p style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 20 }}>Crie sua conta e comece a vender mais</p>
 

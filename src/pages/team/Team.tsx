@@ -60,13 +60,15 @@ function InviteModal({ onClose, onSuccess }: InviteModalProps) {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { toast.error('Sessão expirada', 'Faça login novamente'); return }
 
-      const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-team-member`
+      const SUPA_URL  = (import.meta.env.VITE_SUPABASE_URL  as string | undefined) ?? 'https://eakdywmuewvuzyqfpcpl.supabase.co'
+      const SUPA_ANON = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVha2R5d211ZXd2dXp5cWZwY3BsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3MjQ5MTgsImV4cCI6MjA5MDMwMDkxOH0.EeUINhQUomMKqhfkjGnkDpO3aO5NZ4Yqd15qof-mB20'
+      const fnUrl = `${SUPA_URL}/functions/v1/invite-team-member`
       const res = await fetch(fnUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'apikey': SUPA_ANON,
         },
         body: JSON.stringify({
           email:     email.trim().toLowerCase(),

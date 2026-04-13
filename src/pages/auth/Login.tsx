@@ -169,9 +169,9 @@ export default function Login() {
 
         {/* Form card */}
         <div style={{
-          background: 'rgba(13,13,13,.92)', backdropFilter: 'blur(20px)',
+          background: 'var(--card)', backdropFilter: 'blur(20px)',
           border: '1px solid var(--bs)', borderRadius: 14, padding: 28,
-          boxShadow: '0 24px 48px rgba(0,0,0,.6)',
+          boxShadow: '0 24px 48px rgba(0,0,0,.3)',
         }}>
           <AnimatePresence mode="wait">
             {isForgotPassword ? (
