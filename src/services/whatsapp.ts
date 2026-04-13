@@ -19,10 +19,33 @@ async function safeJson(res: Response): Promise<Record<string, unknown> | null> 
   }
 }
 
+/** Parseia resposta que pode ser array ou objeto */
+async function safeJsonAny(res: Response): Promise<unknown> {
+  const text = await res.text()
+  try { return JSON.parse(text) } catch { return null }
+}
+
 export const evolutionApi = {
-  getInstances: async () => {
-    const res = await fetch(`${BASE}/instance/fetchInstances`, { headers })
-    return safeJson(res)
+  /** Retorna lista de nomes de instâncias cadastradas na Evolution API */
+  getInstances: async (): Promise<string[]> => {
+    try {
+      const res = await fetch(`${BASE}/instance/fetchInstances`, { headers })
+      if (!res.ok) return []
+      const data = await safeJsonAny(res)
+      // Evolution API v2 retorna array de objetos
+      if (Array.isArray(data)) {
+        return data
+          .map((i: unknown) => {
+            const item = i as Record<string, unknown>
+            const inst = item?.instance as Record<string, unknown> | undefined
+            return (inst?.instanceName ?? item?.instanceName ?? '') as string
+          })
+          .filter(Boolean)
+      }
+      return []
+    } catch {
+      return []
+    }
   },
 
   // Retorna 'open' | 'close' | 'connecting' | 'qr' | 'not_found'

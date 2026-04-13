@@ -136,31 +136,45 @@ export default function WhatsApp() {
   const defaultInstance = (store?.settings as Record<string, string>)?.whatsapp_instance ?? ''
 
   // ── lista de instâncias disponíveis na Evolution API ─────────────────────
-  const { data: instances } = useQuery({
-    queryKey: ['whatsapp-instances'],
-    queryFn: async () => {
-      const data = await evolutionApi.getInstances() as Record<string, unknown>[] | null
-      if (!Array.isArray(data)) return [defaultInstance].filter(Boolean)
-      return data
-        .map((i: Record<string, unknown>) => {
-          const inst = i?.instance as Record<string, unknown> | undefined
-          return (inst?.instanceName as string) ?? (i?.instanceName as string) ?? ''
-        })
-        .filter(Boolean)
-    },
+  const { data: instances, refetch: refetchInstances } = useQuery({
+    queryKey: ['whatsapp-instances', store?.id],
+    queryFn: () => evolutionApi.getInstances(),
     enabled: !!defaultInstance,
-    staleTime: 30000,
+    staleTime: 20000,
+    refetchOnWindowFocus: true,
   })
 
-  const instanceList = instances?.length ? instances : [defaultInstance].filter(Boolean)
-  const [selectedInstance, setSelectedInstance] = useState(defaultInstance)
+  // Persiste instância selecionada no localStorage por loja
+  const storageKey = `crm-whatsapp-instance-${store?.id ?? ''}`
+  const [selectedInstance, setSelectedInstance] = useState<string>(() => {
+    return localStorage.getItem(storageKey) || defaultInstance
+  })
 
-  // Atualiza instância selecionada se o default mudar (ex: após salvar configurações)
+  // Garante que a instância selecionada é válida após carregar a lista
   useEffect(() => {
-    if (defaultInstance && !selectedInstance) setSelectedInstance(defaultInstance)
-  }, [defaultInstance, selectedInstance])
+    if (!instances?.length) return
+    const valid = instances.includes(selectedInstance)
+    if (!valid) {
+      const next = defaultInstance || instances[0]
+      setSelectedInstance(next)
+      localStorage.setItem(storageKey, next)
+    }
+  }, [instances, selectedInstance, defaultInstance, storageKey])
+
+  const instanceList = instances?.length
+    ? [...new Set([...instances, defaultInstance].filter(Boolean))]
+    : [defaultInstance].filter(Boolean)
 
   const instanceName = selectedInstance || defaultInstance
+
+  const handleSelectInstance = (inst: string) => {
+    setSelectedInstance(inst)
+    localStorage.setItem(storageKey, inst)
+    setSelectedChat(null)
+    setShowInstanceMenu(false)
+    // Invalida cache de conversas da instância anterior para forçar reload
+    queryClient.removeQueries({ queryKey: ['whatsapp-conversations', inst] })
+  }
 
   // ── upsert de lead ao abrir conversa ──────────────────────────────────────
 
@@ -478,22 +492,39 @@ export default function WhatsApp() {
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--t)', marginBottom: 8 }}>WhatsApp</div>
 
           {/* Seletor de instância */}
-          {instanceList.length > 0 ? (
+          {defaultInstance ? (
             <div style={{ position: 'relative', marginBottom: 8 }}>
-              <button
-                onClick={() => setShowInstanceMenu(v => !v)}
-                style={{
-                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '5px 9px', borderRadius: 6, cursor: 'pointer',
-                  background: 'var(--ng)', border: '1px solid var(--nb)',
-                  color: 'var(--neon)', fontSize: 11, fontWeight: 600, fontFamily: 'var(--fn)',
-                }}
-              >
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  📱 {instanceName || 'Selecionar número'}
-                </span>
-                <ChevronDown size={12} style={{ flexShrink: 0, marginLeft: 4, transform: showInstanceMenu ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
-              </button>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button
+                  onClick={() => setShowInstanceMenu(v => !v)}
+                  style={{
+                    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '5px 9px', borderRadius: 6, cursor: 'pointer',
+                    background: 'var(--ng)', border: '1px solid var(--nb)',
+                    color: 'var(--neon)', fontSize: 11, fontWeight: 600, fontFamily: 'var(--fn)',
+                  }}
+                >
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    📱 {instanceName || 'Selecionar número'}
+                  </span>
+                  <ChevronDown size={12} style={{ flexShrink: 0, marginLeft: 4, transform: showInstanceMenu ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+                </button>
+                {/* Botão de recarregar lista de instâncias */}
+                <button
+                  onClick={() => refetchInstances()}
+                  title="Atualizar lista de instâncias"
+                  style={{
+                    width: 28, height: 28, borderRadius: 6, border: '1px solid var(--nb)',
+                    background: 'var(--ng)', color: 'var(--neon)', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                  </svg>
+                </button>
+              </div>
 
               {showInstanceMenu && (
                 <div style={{
@@ -501,14 +532,14 @@ export default function WhatsApp() {
                   background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 8,
                   boxShadow: '0 8px 24px rgba(0,0,0,.4)', overflow: 'hidden',
                 }}>
-                  {instanceList.map(inst => (
+                  {instanceList.length === 0 ? (
+                    <div style={{ padding: '10px 12px', fontSize: 11, color: 'var(--t3)' }}>
+                      Nenhuma instância encontrada
+                    </div>
+                  ) : instanceList.map(inst => (
                     <button
                       key={inst}
-                      onClick={() => {
-                        setSelectedInstance(inst)
-                        setSelectedChat(null)
-                        setShowInstanceMenu(false)
-                      }}
+                      onClick={() => handleSelectInstance(inst)}
                       style={{
                         width: '100%', padding: '8px 11px', textAlign: 'left',
                         background: inst === instanceName ? 'var(--ng)' : 'transparent',
@@ -531,9 +562,9 @@ export default function WhatsApp() {
                 </div>
               )}
             </div>
-          ) : !instanceName ? (
+          ) : (
             <p style={{ fontSize: 10, color: 'var(--yel)', marginBottom: 7 }}>⚠ Configure a instância em Configurações</p>
-          ) : null}
+          )}
 
           <div style={{ position: 'relative' }}>
             <Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)', pointerEvents: 'none' }} />
