@@ -9,6 +9,8 @@ import { ToastContainer } from '@/components/ui/Toast'
 
 // Lazy pages
 const Login = lazy(() => import('@/pages/auth/Login'))
+const Register = lazy(() => import('@/pages/auth/Register'))
+const InviteAccept = lazy(() => import('@/pages/auth/InviteAccept'))
 const ResetPassword = lazy(() => import('@/pages/auth/ResetPassword'))
 const Dashboard = lazy(() => import('@/pages/dashboard/Dashboard'))
 const Pipeline = lazy(() => import('@/pages/pipeline/Pipeline'))
@@ -60,6 +62,8 @@ function AppInner() {
       <Suspense fallback={<PageLoading />}>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/registro" element={<Register />} />
+          <Route path="/convite" element={<InviteAccept />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route
             path="/"
@@ -82,8 +86,12 @@ function AppInner() {
             <Route path="analytics" element={<Analytics />} />
             <Route path="metas" element={<Goals />} />
             <Route path="automacoes" element={<Automations />} />
-            <Route path="equipe" element={<Team />} />
-            <Route path="configuracoes" element={<Settings />} />
+            <Route path="equipe" element={
+              <ProtectedRoute roles={['admin', 'manager']}><Team /></ProtectedRoute>
+            } />
+            <Route path="configuracoes" element={
+              <ProtectedRoute roles={['admin']}><Settings /></ProtectedRoute>
+            } />
             <Route path="calculadora" element={<Calculator />} />
             <Route path="integracoes" element={<Integrations />} />
           </Route>

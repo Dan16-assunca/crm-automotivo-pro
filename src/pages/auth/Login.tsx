@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -298,8 +298,10 @@ export default function Login() {
                 </form>
 
                 <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--t3)', marginTop: 20 }}>
-                  Problemas para acessar?{' '}
-                  <span style={{ color: 'var(--neon)', cursor: 'pointer' }}>Fale com o suporte</span>
+                  Não tem conta?{' '}
+                  <Link to="/registro" style={{ color: 'var(--neon)', textDecoration: 'none', fontWeight: 600 }}>
+                    Criar loja grátis
+                  </Link>
                 </p>
               </motion.div>
             )}

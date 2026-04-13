@@ -3,14 +3,16 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Columns3, Users, MessageCircle,
   Car, Target, Settings, LogOut,
-  ChevronDown, ChevronLeft, ChevronRight,
-  TrendingUp, Calculator, BarChart2, Zap, Plug,
+  ChevronLeft, ChevronRight,
+  TrendingUp, Calculator, BarChart2, Zap, Plug, UserCog,
 } from 'lucide-react'
 import { useUIStore } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
+import { usePermissions } from '@/hooks/usePermissions'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { supabase as sb } from '@/lib/supabase'
+import type { UserRole } from '@/types'
 
 type NavItem = {
   to: string
@@ -18,8 +20,10 @@ type NavItem = {
   label: string
   badgeKey?: string
   dot?: boolean
+  /** Roles que podem ver este item. Undefined = todos. */
+  roles?: UserRole[]
 }
-type NavGroup = { label: string; items: NavItem[] }
+type NavGroup = { label: string; items: NavItem[]; roles?: UserRole[] }
 
 const NAV_GROUPS: NavGroup[] = [
   {
@@ -39,19 +43,20 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Vendas',
     items: [
-      { to: '/estoque',      icon: Car,         label: 'Estoque' },
-      { to: '/inteligencia', icon: TrendingUp,  label: 'Inteligência de Estoque' },
-      { to: '/metas',        icon: Target,      label: 'Metas' },
+      { to: '/estoque',      icon: Car,        label: 'Estoque' },
+      { to: '/inteligencia', icon: TrendingUp, label: 'Inteligência de Estoque', roles: ['admin', 'manager'] },
+      { to: '/metas',        icon: Target,     label: 'Metas',                   roles: ['admin', 'manager'] },
     ],
   },
   {
     label: 'Ferramentas',
     items: [
-      { to: '/calculadora',  icon: Calculator,  label: 'Calculadora de Negócio' },
-      { to: '/analytics',    icon: BarChart2,   label: 'Analytics' },
-      { to: '/automacoes',   icon: Zap,         label: 'Automações & Régua' },
-      { to: '/integracoes',  icon: Plug,        label: 'Integrações' },
-      { to: '/configuracoes',icon: Settings,    label: 'Configurações' },
+      { to: '/calculadora',   icon: Calculator, label: 'Calculadora de Negócio' },
+      { to: '/analytics',     icon: BarChart2,  label: 'Analytics',         roles: ['admin', 'manager'] },
+      { to: '/automacoes',    icon: Zap,        label: 'Automações & Régua', roles: ['admin', 'manager'] },
+      { to: '/integracoes',   icon: Plug,       label: 'Integrações',        roles: ['admin'] },
+      { to: '/equipe',        icon: UserCog,    label: 'Equipe',             roles: ['admin', 'manager'] },
+      { to: '/configuracoes', icon: Settings,   label: 'Configurações',      roles: ['admin'] },
     ],
   },
 ]
@@ -59,10 +64,19 @@ const NAV_GROUPS: NavGroup[] = [
 export function Sidebar() {
   const { theme, toggleTheme, sidebarCollapsed, toggleSidebar } = useUIStore()
   const { store, user, logout } = useAuthStore()
+  const { canAccess } = usePermissions()
   const navigate = useNavigate()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const isDark = theme === 'dark'
   const collapsed = sidebarCollapsed
+
+  // Filtra grupos e itens baseado no role do usuário logado
+  const visibleGroups = NAV_GROUPS
+    .map(group => ({
+      ...group,
+      items: group.items.filter(item => !item.roles || canAccess(...item.roles)),
+    }))
+    .filter(group => group.items.length > 0)
 
   // Badge counts
   const { data: leadsCount } = useQuery({
@@ -199,7 +213,7 @@ export function Sidebar() {
 
       {/* ── Nav ── */}
       <nav style={{ flex: 1, overflowY: 'auto', padding: collapsed ? '10px 6px' : '10px 8px', overflowX: 'hidden' }}>
-        {NAV_GROUPS.map((group) => (
+        {visibleGroups.map((group) => (
           <div key={group.label} style={{ marginBottom: 12 }}>
             {!collapsed && (
               <div style={{
@@ -342,7 +356,8 @@ export function Sidebar() {
                     {store?.name ?? user.full_name ?? 'Loja'}
                   </div>
                   <div style={{ fontSize: 9, color: 'var(--t3)' }}>
-                    Plano {store?.plan?.toUpperCase() ?? 'Pro'} · Ativo
+                    {{ admin: 'Admin', manager: 'Gerente', salesperson: 'Vendedor' }[user.role] ?? user.role}
+                    {' · '}Plano {store?.plan?.toUpperCase() ?? 'Pro'}
                   </div>
                 </div>
               )}

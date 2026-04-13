@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Wifi, WifiOff, QrCode, Save, RefreshCw, LogOut, Loader2, CheckCircle2, XCircle } from 'lucide-react'
+import { Wifi, WifiOff, QrCode, Save, RefreshCw, LogOut, Loader2, CheckCircle2, XCircle, Lock, Eye, EyeOff } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { evolutionApi } from '@/services/whatsapp'
@@ -325,6 +325,109 @@ export default function Settings() {
           </p>
         </CardContent>
       </Card>
+
+      {/* Password change */}
+      <PasswordCard />
+    </div>
+  )
+}
+
+// ─── Card de troca de senha (self-contained para não afetar o restante) ────────
+function PasswordCard() {
+  const [newPwd, setNewPwd]     = useState('')
+  const [confirmPwd, setConfirmPwd] = useState('')
+  const [show, setShow]         = useState(false)
+  const [saving, setSaving]     = useState(false)
+
+  const inp: React.CSSProperties = {
+    width: '100%', height: 34, paddingLeft: 32, paddingRight: 36,
+    background: 'var(--el)', border: '1px solid var(--b)',
+    borderRadius: 7, color: 'var(--t)', fontSize: 12,
+    outline: 'none', fontFamily: 'var(--fn)', boxSizing: 'border-box',
+  }
+  const lbl: React.CSSProperties = {
+    fontSize: 10, fontWeight: 600, color: 'var(--t3)',
+    textTransform: 'uppercase', letterSpacing: '.06em', display: 'block', marginBottom: 5,
+  }
+
+  const handleSave = async () => {
+    if (newPwd.length < 6) { toast.error('Senha muito curta', 'Mínimo 6 caracteres'); return }
+    if (newPwd !== confirmPwd) { toast.error('As senhas não coincidem'); return }
+    setSaving(true)
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPwd })
+      if (error) throw error
+      setNewPwd('')
+      setConfirmPwd('')
+      toast.success('Senha alterada com sucesso!')
+    } catch (err) {
+      toast.error('Erro ao alterar senha', err instanceof Error ? err.message : 'Tente novamente')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div style={{
+      background: 'var(--card)', border: '1px solid var(--bs)',
+      borderRadius: 9, overflow: 'hidden',
+    }}>
+      <div style={{ padding: '14px 16px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--t)' }}>Segurança</p>
+      </div>
+      <div style={{ padding: '14px 16px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <p style={{ fontSize: 12, color: 'var(--t3)' }}>Altere sua senha de acesso à plataforma.</p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {/* Nova senha */}
+          <div>
+            <label style={lbl}>Nova Senha</label>
+            <div style={{ position: 'relative' }}>
+              <Lock size={12} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)', pointerEvents: 'none' }} />
+              <input type={show ? 'text' : 'password'} placeholder="••••••••" value={newPwd}
+                onChange={e => setNewPwd(e.target.value)} style={inp}
+                onFocus={e => (e.currentTarget.style.borderColor = 'var(--nb)')}
+                onBlur={e => (e.currentTarget.style.borderColor = 'var(--b)')} />
+              <button type="button" onClick={() => setShow(v => !v)}
+                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
+                {show ? <EyeOff size={12} /> : <Eye size={12} />}
+              </button>
+            </div>
+          </div>
+
+          {/* Confirmar */}
+          <div>
+            <label style={lbl}>Confirmar Nova Senha</label>
+            <div style={{ position: 'relative' }}>
+              <Lock size={12} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)', pointerEvents: 'none' }} />
+              <input type={show ? 'text' : 'password'} placeholder="••••••••" value={confirmPwd}
+                onChange={e => setConfirmPwd(e.target.value)} style={{ ...inp, paddingRight: 11 }}
+                onFocus={e => (e.currentTarget.style.borderColor = 'var(--nb)')}
+                onBlur={e => (e.currentTarget.style.borderColor = 'var(--b)')} />
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <button
+            onClick={handleSave}
+            disabled={saving || !newPwd || !confirmPwd}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              height: 32, padding: '0 14px', borderRadius: 7, fontSize: 12, fontWeight: 600,
+              background: 'var(--neon)', color: '#000', border: 'none',
+              cursor: saving || !newPwd || !confirmPwd ? 'not-allowed' : 'pointer',
+              opacity: saving || !newPwd || !confirmPwd ? 0.5 : 1,
+              transition: 'opacity .15s',
+            }}
+          >
+            {saving
+              ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> Salvando...</>
+              : <><Lock size={13} /> Alterar Senha</>
+            }
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
