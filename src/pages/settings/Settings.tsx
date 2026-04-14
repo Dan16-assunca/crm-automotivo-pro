@@ -114,29 +114,16 @@ export default function Settings() {
     setQrBase64(null)
     stopPolling()
     try {
-      // PASSO A: Salva instanceName no banco ANTES de gerar QR — sempre, sem condicionais.
-      // Garante que banco e Zustand estão em sincronia antes de qualquer evento de auth.
-      if (!store) { toast.error('Sessão inválida', 'Recarregue a página e tente novamente.'); return }
-      const newSettings = { ...(store.settings as object), whatsapp_instance: trimmed }
-      console.log('[Settings] Salvando instância:', { storeId: store.id, instance: trimmed })
-      const { data: updatedStore, error: saveError } = await supabase
-        .from('stores')
-        .update({ settings: newSettings })
-        .eq('id', store.id)
-        .select()
-        .single()
-      if (saveError) {
-        console.error('[Settings] ERRO AO SALVAR INSTÂNCIA:', saveError)
-        toast.error('Erro ao salvar instância', saveError.message)
+      // PASSO A: Salva instanceName via RPC ANTES de gerar QR.
+      // RPC roda com SECURITY DEFINER — bypass RLS, garantia de escrita.
+      const { data: savedStore, error: saveError } = await supabase
+        .rpc('update_whatsapp_instance', { p_instance_name: trimmed })
+      if (saveError || !savedStore) {
+        console.error('[Settings] RPC error:', saveError)
+        toast.error('Erro ao salvar instância', saveError?.message ?? 'Tente novamente.')
         return
       }
-      if (!updatedStore) {
-        console.error('[Settings] UPDATE retornou null — RLS pode estar bloqueando. storeId:', store.id)
-        toast.error('Erro ao salvar instância', 'Permissão negada. Verifique as políticas de acesso.')
-        return
-      }
-      console.log('[Settings] Instância salva com sucesso:', (updatedStore.settings as Record<string, string>)?.whatsapp_instance)
-      setStore(updatedStore as Parameters<typeof setStore>[0])
+      setStore(savedStore as Parameters<typeof setStore>[0])
 
       // PASSO B: Só depois gera o QR
       const result = await evolutionApi.getQrCode(trimmed)
@@ -173,13 +160,11 @@ export default function Settings() {
 
   const saveSettings = async () => {
     if (!store) return
-    const newSettings = { ...(store.settings as object), whatsapp_instance: instanceName }
     const { data, error } = await supabase
-      .from('stores').update({ settings: newSettings }).eq('id', store.id).select().single()
-
+      .rpc('update_whatsapp_instance', { p_instance_name: instanceName })
     if (error || !data) {
       console.error('[Settings] saveSettings error:', error)
-      toast.error('Erro ao salvar configurações', error?.message ?? 'Permissão negada. Execute a migration 004 no Supabase.')
+      toast.error('Erro ao salvar configurações', error?.message ?? 'Tente novamente.')
       return
     }
     setStore(data as Parameters<typeof setStore>[0])
