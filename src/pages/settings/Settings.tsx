@@ -114,18 +114,24 @@ export default function Settings() {
     setQrBase64(null)
     stopPolling()
     try {
-      // PASSO A: Salva instanceName via RPC ANTES de gerar QR.
-      // RPC roda com SECURITY DEFINER — bypass RLS, garantia de escrita.
-      const { data: savedStore, error: saveError } = await supabase
-        .rpc('update_whatsapp_instance', { p_instance_name: trimmed })
-      if (saveError || !savedStore) {
-        console.error('[Settings] RPC error:', saveError)
-        toast.error('Erro ao salvar instância', saveError?.message ?? 'Tente novamente.')
-        return
+      // PASSO A: Salva instanceName no banco ANTES de gerar QR.
+      if (store) {
+        const newSettings = { ...(store.settings as object), whatsapp_instance: trimmed }
+        const { data: updatedStore, error: saveError } = await supabase
+          .from('stores')
+          .update({ settings: newSettings })
+          .eq('id', store.id)
+          .select()
+          .single()
+        if (saveError) {
+          console.error('[Settings] save error:', saveError)
+          toast.error('Erro ao salvar instância', saveError.message)
+          return
+        }
+        if (updatedStore) setStore(updatedStore as Parameters<typeof setStore>[0])
       }
-      setStore(savedStore as Parameters<typeof setStore>[0])
 
-      // PASSO B: Só depois gera o QR
+      // PASSO B: Gera o QR
       const result = await evolutionApi.getQrCode(trimmed)
       if (result.connected) { onConnected(); return }
       if (result.error) { toast.error('Erro ao gerar QR Code', result.error); setStatus('disconnected'); return }
@@ -160,14 +166,15 @@ export default function Settings() {
 
   const saveSettings = async () => {
     if (!store) return
+    const newSettings = { ...(store.settings as object), whatsapp_instance: instanceName }
     const { data, error } = await supabase
-      .rpc('update_whatsapp_instance', { p_instance_name: instanceName })
-    if (error || !data) {
+      .from('stores').update({ settings: newSettings }).eq('id', store.id).select().single()
+    if (error) {
       console.error('[Settings] saveSettings error:', error)
-      toast.error('Erro ao salvar configurações', error?.message ?? 'Tente novamente.')
+      toast.error('Erro ao salvar configurações', error.message)
       return
     }
-    setStore(data as Parameters<typeof setStore>[0])
+    if (data) setStore(data as Parameters<typeof setStore>[0])
     toast.success('Configurações salvas!')
     if (instanceName.trim()) await registerWebhook(instanceName.trim())
     checkStatus(instanceName)
