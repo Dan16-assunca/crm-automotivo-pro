@@ -138,41 +138,36 @@ export default function WhatsApp() {
   // ── lista de instâncias disponíveis na Evolution API ─────────────────────
   const { data: instances, refetch: refetchInstances } = useQuery({
     queryKey: ['whatsapp-instances', store?.id],
-    queryFn: () => evolutionApi.getInstances(),
-    enabled: !!defaultInstance,
+    queryFn: () => evolutionApi.getInstancesList(),
+    enabled: !!store?.id,
     staleTime: 20000,
     refetchOnWindowFocus: true,
   })
 
-  // Persiste instância selecionada no localStorage por loja
-  const storageKey = `crm-whatsapp-instance-${store?.id ?? ''}`
-  const [selectedInstance, setSelectedInstance] = useState<string>(() => {
-    return localStorage.getItem(storageKey) || defaultInstance
-  })
+  // defaultInstance (do banco) é a fonte de verdade.
+  // O usuário pode trocar via dropdown (selectedInstance), mas ao montar a página
+  // sempre começa pela instância configurada em Configurações.
+  const [selectedInstance, setSelectedInstance] = useState<string>(defaultInstance)
 
-  // Garante que a instância selecionada é válida após carregar a lista
+  // Sincroniza selectedInstance sempre que defaultInstance mudar
+  // (ex: usuário conectou nova instância em Configurações e voltou para cá)
   useEffect(() => {
-    if (!instances?.length) return
-    const valid = instances.includes(selectedInstance)
-    if (!valid) {
-      const next = defaultInstance || instances[0]
-      setSelectedInstance(next)
-      localStorage.setItem(storageKey, next)
+    if (defaultInstance) {
+      setSelectedInstance(defaultInstance)
+      setSelectedChat(null)
     }
-  }, [instances, selectedInstance, defaultInstance, storageKey])
+  }, [defaultInstance])
 
   const instanceList = instances?.length
     ? [...new Set([...instances, defaultInstance].filter(Boolean))]
-    : [defaultInstance].filter(Boolean)
+    : defaultInstance ? [defaultInstance] : []
 
   const instanceName = selectedInstance || defaultInstance
 
   const handleSelectInstance = (inst: string) => {
     setSelectedInstance(inst)
-    localStorage.setItem(storageKey, inst)
     setSelectedChat(null)
     setShowInstanceMenu(false)
-    // Invalida cache de conversas da instância anterior para forçar reload
     queryClient.removeQueries({ queryKey: ['whatsapp-conversations', inst] })
   }
 
@@ -492,7 +487,7 @@ export default function WhatsApp() {
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--t)', marginBottom: 8 }}>WhatsApp</div>
 
           {/* Seletor de instância */}
-          {defaultInstance ? (
+          {(defaultInstance || instanceList.length > 0) ? (
             <div style={{ position: 'relative', marginBottom: 8 }}>
               <div style={{ display: 'flex', gap: 4 }}>
                 <button

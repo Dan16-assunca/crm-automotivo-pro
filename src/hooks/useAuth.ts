@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import type { Store } from '@/types'
 
 async function loadProfile(userId: string) {
   const { data: profile } = await supabase
@@ -9,6 +10,31 @@ async function loadProfile(userId: string) {
     .eq('id', userId)
     .single()
   return profile
+}
+
+/**
+ * Aplica o store vindo do DB no Zustand fazendo MERGE, nunca replace.
+ * Preserva whatsapp_instance do Zustand se for diferente do que o DB retornou —
+ * isso protege contra o caso em que useAuth dispara (TOKEN_REFRESHED, troca de aba)
+ * após o usuário conectar uma instância nova mas antes de o DB receber o update.
+ */
+function applyStore(
+  incoming: Store | null | undefined,
+  setStore: (s: Store | null) => void
+) {
+  if (!incoming) return
+  const currentInstance = (useAuthStore.getState().store?.settings as Record<string, string>)?.whatsapp_instance ?? ''
+  const incomingInstance = (incoming.settings as Record<string, string>)?.whatsapp_instance ?? ''
+
+  if (currentInstance && currentInstance !== incomingInstance) {
+    // Zustand tem instância mais recente que o banco — preserva
+    setStore({
+      ...incoming,
+      settings: { ...(incoming.settings as object), whatsapp_instance: currentInstance },
+    } as Store)
+  } else {
+    setStore(incoming as Store)
+  }
 }
 
 export function useAuth() {
@@ -25,7 +51,7 @@ export function useAuth() {
           const profile = await loadProfile(session.user.id)
           if (profile && mounted) {
             setUser(profile as Parameters<typeof setUser>[0])
-            if (profile.stores) setStore(profile.stores as Parameters<typeof setStore>[0])
+            if (profile.stores) applyStore(profile.stores as Store, setStore)
           } else if (mounted) {
             // Profile query returned nothing — clear stale cache to avoid wrong role
             logout()
@@ -59,7 +85,7 @@ export function useAuth() {
           const profile = await loadProfile(session.user.id)
           if (profile && mounted) {
             setUser(profile as Parameters<typeof setUser>[0])
-            if (profile.stores) setStore(profile.stores as Parameters<typeof setStore>[0])
+            if (profile.stores) applyStore(profile.stores as Store, setStore)
           }
         } catch (e) {
           console.error('[useAuth] onAuthStateChange profile error:', e)

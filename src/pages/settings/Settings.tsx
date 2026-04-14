@@ -57,7 +57,8 @@ export default function Settings() {
     setQrBase64(null)
     setStatus('connected')
     toast.success('WhatsApp conectado!', 'Instância ativa e pronta para uso')
-    if (instanceName.trim()) registerWebhook(instanceName.trim())
+    const trimmed = instanceName.trim()
+    if (trimmed) registerWebhook(trimmed)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stopPolling, instanceName])
 
@@ -104,7 +105,8 @@ export default function Settings() {
   }, [])
 
   const handleGenerateQr = async () => {
-    if (!instanceName.trim()) {
+    const trimmed = instanceName.trim()
+    if (!trimmed) {
       toast.error('Nome da instância obrigatório', 'Preencha o campo acima antes de conectar')
       return
     }
@@ -112,13 +114,38 @@ export default function Settings() {
     setQrBase64(null)
     stopPolling()
     try {
-      const result = await evolutionApi.getQrCode(instanceName.trim())
+      // PASSO A: Salva instanceName no banco ANTES de gerar QR — sempre, sem condicionais.
+      // Garante que banco e Zustand estão em sincronia antes de qualquer evento de auth.
+      if (!store) { toast.error('Sessão inválida', 'Recarregue a página e tente novamente.'); return }
+      const newSettings = { ...(store.settings as object), whatsapp_instance: trimmed }
+      console.log('[Settings] Salvando instância:', { storeId: store.id, instance: trimmed })
+      const { data: updatedStore, error: saveError } = await supabase
+        .from('stores')
+        .update({ settings: newSettings })
+        .eq('id', store.id)
+        .select()
+        .single()
+      if (saveError) {
+        console.error('[Settings] ERRO AO SALVAR INSTÂNCIA:', saveError)
+        toast.error('Erro ao salvar instância', saveError.message)
+        return
+      }
+      if (!updatedStore) {
+        console.error('[Settings] UPDATE retornou null — RLS pode estar bloqueando. storeId:', store.id)
+        toast.error('Erro ao salvar instância', 'Permissão negada. Verifique as políticas de acesso.')
+        return
+      }
+      console.log('[Settings] Instância salva com sucesso:', (updatedStore.settings as Record<string, string>)?.whatsapp_instance)
+      setStore(updatedStore as Parameters<typeof setStore>[0])
+
+      // PASSO B: Só depois gera o QR
+      const result = await evolutionApi.getQrCode(trimmed)
       if (result.connected) { onConnected(); return }
       if (result.error) { toast.error('Erro ao gerar QR Code', result.error); setStatus('disconnected'); return }
       if (result.base64) {
         setQrBase64(result.base64)
         setStatus('connecting')
-        startPolling(instanceName.trim())
+        startPolling(trimmed)
         return
       }
       toast.error('QR não disponível', 'A API não retornou o QR Code. Tente novamente.')
@@ -150,14 +177,15 @@ export default function Settings() {
     const { data, error } = await supabase
       .from('stores').update({ settings: newSettings }).eq('id', store.id).select().single()
 
-    if (error) {
-      toast.error('Erro ao salvar configurações')
-    } else {
-      setStore(data as Parameters<typeof setStore>[0])
-      toast.success('Configurações salvas!')
-      if (instanceName.trim()) await registerWebhook(instanceName.trim())
-      checkStatus(instanceName)
+    if (error || !data) {
+      console.error('[Settings] saveSettings error:', error)
+      toast.error('Erro ao salvar configurações', error?.message ?? 'Permissão negada. Execute a migration 004 no Supabase.')
+      return
     }
+    setStore(data as Parameters<typeof setStore>[0])
+    toast.success('Configurações salvas!')
+    if (instanceName.trim()) await registerWebhook(instanceName.trim())
+    checkStatus(instanceName)
   }
 
   type StatusCfg = { label: string; color: string; icon: React.ReactNode }
@@ -245,7 +273,7 @@ export default function Settings() {
                 {status === 'connecting' ? 'Aguardando scan...' : 'Gerar QR Code'}
               </Button>
             )}
-            {status === 'connected' && (
+            {(status === 'connected' || status === 'disconnected') && (
               <Button size="sm" variant="secondary" onClick={handleDisconnect}>
                 <LogOut size={13} /> Desconectar
               </Button>
