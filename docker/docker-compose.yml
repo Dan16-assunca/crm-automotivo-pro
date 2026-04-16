@@ -16,6 +16,16 @@ services:
       - WEBHOOK_GLOBAL_URL=https://seucrm.com/api/webhook/whatsapp
       - DATABASE_ENABLED=true
       - DATABASE_CONNECTION_URI=mongodb://mongo:27017/evolution
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
+      - DATABASE_SAVE_MESSAGE_UPDATE=true
+      - DATABASE_SAVE_DATA_CONTACTS=true
+      - DATABASE_SAVE_DATA_CHATS=true
+      - STORE_MESSAGE=true
+      - STORE_MESSAGES=true
+      - STORE_MESSAGE_UP=true
+      - STORE_CONTACTS=true
+      - STORE_CHATS=true
       - LOG_LEVEL=ERROR
     depends_on:
       - mongo
