@@ -1,7 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Send, Search, Phone, MoreVertical, Paperclip, Smile, Check, CheckCheck, Clock, MessageCircleOff, UserPlus, ExternalLink, User, ChevronDown } from 'lucide-react'
+import {
+  Send, Search, Phone, MoreVertical, Paperclip, Check, CheckCheck,
+  Clock, MessageCircleOff, UserPlus, ExternalLink, User, ChevronDown,
+  Mic, MicOff, Image as ImageIcon, FileText, Play, Pause, X,
+} from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { useLeadPanelStore } from '@/store/leadPanelStore'
@@ -22,18 +26,23 @@ interface EvoChat {
   lastMessageTs?: number
   lastFromMe?: boolean
   unreadCount: number
-  leadId?: string        // preenchido após upsert
-  leadStage?: string     // nome da etapa no pipeline
+  leadId?: string
+  leadStage?: string
 }
 
 interface EvoMessage {
   id: string
+  keyId: string       // WhatsApp message ID (para buscar mídia)
   fromMe: boolean
   content: string
   type: string
   timestamp: number
   status?: string
   pending?: boolean
+  mediaType?: 'image' | 'audio' | 'video' | 'document' | 'sticker'
+  mimeType?: string
+  fileName?: string
+  duration?: number
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -52,8 +61,40 @@ function extractContent(msg: Record<string, unknown>): string {
     ((m.imageMessage as Record<string, unknown>)?.caption as string) ||
     ((m.videoMessage as Record<string, unknown>)?.caption as string) ||
     ((m.documentMessage as Record<string, unknown>)?.title as string) ||
-    (msg.messageType as string) || ''
+    ''
   )
+}
+
+function extractMedia(msg: Record<string, unknown>): Pick<EvoMessage, 'mediaType' | 'mimeType' | 'fileName' | 'duration'> {
+  const m = msg?.message as Record<string, unknown> | undefined
+  if (!m) return {}
+  if (m.imageMessage) {
+    const img = m.imageMessage as Record<string, unknown>
+    return { mediaType: 'image', mimeType: img.mimetype as string }
+  }
+  if (m.audioMessage || m.pttMessage) {
+    const aud = (m.audioMessage ?? m.pttMessage) as Record<string, unknown>
+    return { mediaType: 'audio', mimeType: aud.mimetype as string, duration: aud.seconds as number }
+  }
+  if (m.videoMessage) {
+    const vid = m.videoMessage as Record<string, unknown>
+    return { mediaType: 'video', mimeType: vid.mimetype as string, duration: vid.seconds as number }
+  }
+  if (m.documentMessage) {
+    const doc = m.documentMessage as Record<string, unknown>
+    return { mediaType: 'document', mimeType: doc.mimetype as string, fileName: (doc.title ?? doc.fileName) as string }
+  }
+  if (m.stickerMessage) {
+    return { mediaType: 'sticker', mimeType: 'image/webp' }
+  }
+  return {}
+}
+
+function fmtDuration(sec?: number) {
+  if (!sec) return ''
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  return `${m}:${String(s).padStart(2, '0')}`
 }
 
 // ─── Avatar com fallback ──────────────────────────────────────────────────────
@@ -81,9 +122,172 @@ function Avatar({ src, name, size = 32 }: { src?: string; name: string; size?: n
   )
 }
 
+// ─── Componente de imagem (busca base64 lazy) ─────────────────────────────────
+
+function ImageMessage({
+  keyId, fromMe, remoteJid, instanceName, caption, mimeType,
+}: {
+  keyId: string; fromMe: boolean; remoteJid: string
+  instanceName: string; caption?: string; mimeType?: string
+}) {
+  const [src, setSrc] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [lightbox, setLightbox] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    evolutionApi.getMediaBase64(instanceName, { id: keyId, fromMe, remoteJid }).then(b64 => {
+      if (cancelled || !b64) { if (!cancelled) setLoading(false); return }
+      const mime = mimeType || 'image/jpeg'
+      setSrc(b64.startsWith('data:') ? b64 : `data:${mime};base64,${b64}`)
+      setLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [keyId, fromMe, remoteJid, instanceName, mimeType])
+
+  if (loading) return (
+    <div style={{ width: 200, height: 140, borderRadius: 6, background: 'var(--el)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ width: 18, height: 18, border: '2px solid var(--neon)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin .8s linear infinite' }} />
+    </div>
+  )
+  if (!src) return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--t3)', fontStyle: 'italic' }}>
+      <ImageIcon size={13} /> Imagem não disponível
+    </div>
+  )
+  return (
+    <>
+      <img
+        src={src}
+        alt="imagem"
+        onClick={() => setLightbox(true)}
+        style={{ maxWidth: 220, maxHeight: 220, borderRadius: 6, cursor: 'zoom-in', display: 'block' }}
+      />
+      {caption && <p style={{ fontSize: 11, color: 'var(--t)', marginTop: 4 }}>{caption}</p>}
+      {lightbox && (
+        <div
+          onClick={() => setLightbox(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(0,0,0,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <button
+            onClick={() => setLightbox(false)}
+            style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}
+          ><X size={24} /></button>
+          <img src={src} alt="imagem" style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: 8, objectFit: 'contain' }} />
+        </div>
+      )}
+    </>
+  )
+}
+
+// ─── Componente de áudio (busca base64 lazy) ──────────────────────────────────
+
+function AudioMessage({
+  keyId, fromMe, remoteJid, instanceName, duration, mimeType,
+}: {
+  keyId: string; fromMe: boolean; remoteJid: string
+  instanceName: string; duration?: number; mimeType?: string
+}) {
+  const [src, setSrc] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [playing, setPlaying] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [audioDuration, setAudioDuration] = useState(duration ?? 0)
+  const audioRef = useRef<HTMLAudioElement>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    evolutionApi.getMediaBase64(instanceName, { id: keyId, fromMe, remoteJid }).then(b64 => {
+      if (cancelled || !b64) { if (!cancelled) setLoading(false); return }
+      const mime = mimeType?.includes('ogg') ? 'audio/ogg' : mimeType?.includes('mp4') ? 'audio/mp4' : 'audio/ogg; codecs=opus'
+      setSrc(b64.startsWith('data:') ? b64 : `data:${mime};base64,${b64}`)
+      setLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [keyId, fromMe, remoteJid, instanceName, mimeType])
+
+  const togglePlay = () => {
+    const a = audioRef.current
+    if (!a) return
+    if (playing) { a.pause(); setPlaying(false) }
+    else { a.play(); setPlaying(true) }
+  }
+
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', minWidth: 180 }}>
+      <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--el)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 12, height: 12, border: '2px solid var(--t3)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin .8s linear infinite' }} />
+      </div>
+      <span style={{ fontSize: 10, color: 'var(--t3)' }}>Carregando áudio…</span>
+    </div>
+  )
+  if (!src) return (
+    <span style={{ fontSize: 11, color: 'var(--t3)', fontStyle: 'italic' }}>
+      🎵 Áudio {duration ? `(${fmtDuration(duration)})` : ''}
+    </span>
+  )
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 200 }}>
+      <audio
+        ref={audioRef}
+        src={src}
+        onEnded={() => { setPlaying(false); setProgress(0); setCurrentTime(0) }}
+        onTimeUpdate={() => {
+          const a = audioRef.current
+          if (!a || !a.duration) return
+          setCurrentTime(a.currentTime)
+          setProgress((a.currentTime / a.duration) * 100)
+        }}
+        onLoadedMetadata={() => {
+          const a = audioRef.current
+          if (a && a.duration && isFinite(a.duration)) setAudioDuration(Math.round(a.duration))
+        }}
+      />
+      <button
+        onClick={togglePlay}
+        style={{
+          width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+          background: 'var(--neon)', border: 'none', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000',
+        }}
+      >
+        {playing ? <Pause size={14} /> : <Play size={14} />}
+      </button>
+      <div style={{ flex: 1 }}>
+        <div
+          style={{ height: 3, background: 'var(--bs)', borderRadius: 2, cursor: 'pointer', position: 'relative' }}
+          onClick={e => {
+            const rect = e.currentTarget.getBoundingClientRect()
+            const pct = (e.clientX - rect.left) / rect.width
+            const a = audioRef.current
+            if (a && a.duration) { a.currentTime = pct * a.duration }
+          }}
+        >
+          <div style={{ height: '100%', width: `${progress}%`, background: 'var(--neon)', borderRadius: 2, transition: 'width .1s linear' }} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
+          <span style={{ fontSize: 9, color: 'var(--t3)', fontFamily: 'var(--fm)' }}>
+            {fmtDuration(Math.round(currentTime))}
+          </span>
+          <span style={{ fontSize: 9, color: 'var(--t3)', fontFamily: 'var(--fm)' }}>
+            {fmtDuration(audioDuration)}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Bolha de mensagem ────────────────────────────────────────────────────────
 
-function MessageBubble({ msg }: { msg: EvoMessage }) {
+function MessageBubble({
+  msg, instanceName, remoteJid,
+}: { msg: EvoMessage; instanceName: string; remoteJid: string }) {
   const time = new Date(msg.timestamp * 1000)
     .toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 
@@ -95,20 +299,71 @@ function MessageBubble({ msg }: { msg: EvoMessage }) {
     return <Check size={11} style={{ color: 'var(--t3)' }} />
   }
 
+  const renderContent = () => {
+    if (msg.mediaType === 'image') {
+      return (
+        <ImageMessage
+          keyId={msg.keyId}
+          fromMe={msg.fromMe}
+          remoteJid={remoteJid}
+          instanceName={instanceName}
+          caption={msg.content || undefined}
+          mimeType={msg.mimeType}
+        />
+      )
+    }
+    if (msg.mediaType === 'audio' || msg.mediaType === 'sticker' && msg.mimeType?.includes('audio')) {
+      return (
+        <AudioMessage
+          keyId={msg.keyId}
+          fromMe={msg.fromMe}
+          remoteJid={remoteJid}
+          instanceName={instanceName}
+          duration={msg.duration}
+          mimeType={msg.mimeType}
+        />
+      )
+    }
+    if (msg.mediaType === 'video') {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 6, background: 'var(--el)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Play size={14} style={{ color: 'var(--t2)' }} />
+          </div>
+          <div>
+            <p style={{ fontSize: 11, color: 'var(--t2)' }}>Vídeo {msg.duration ? `(${fmtDuration(msg.duration)})` : ''}</p>
+            {msg.content && <p style={{ fontSize: 10, color: 'var(--t3)' }}>{msg.content}</p>}
+          </div>
+        </div>
+      )
+    }
+    if (msg.mediaType === 'document') {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <FileText size={20} style={{ color: 'var(--t2)', flexShrink: 0 }} />
+          <p style={{ fontSize: 11, color: 'var(--t2)', wordBreak: 'break-word' }}>
+            {msg.fileName || 'Documento'}
+          </p>
+        </div>
+      )
+    }
+    if (msg.content) {
+      return <p style={{ color: 'var(--t)', wordBreak: 'break-word', whiteSpace: 'pre-wrap', fontSize: 11 }}>{msg.content}</p>
+    }
+    return <p style={{ color: 'var(--t3)', fontStyle: 'italic', fontSize: 11 }}>{msg.type}</p>
+  }
+
   return (
     <div style={{ display: 'flex', justifyContent: msg.fromMe ? 'flex-end' : 'flex-start', marginBottom: 6 }}>
       <div style={{
-        maxWidth: '70%', padding: '7px 10px', borderRadius: 9,
-        fontSize: 11, lineHeight: 1.5,
+        maxWidth: msg.mediaType === 'image' ? 240 : '70%',
+        padding: '7px 10px', borderRadius: 9,
         opacity: msg.pending ? .6 : 1,
         ...(msg.fromMe
           ? { background: 'rgba(61,247,16,.1)', border: '1px solid rgba(61,247,16,.18)', borderTopRightRadius: 3 }
           : { background: 'var(--el)', border: '1px solid var(--bs)', borderTopLeftRadius: 3 })
       }}>
-        {msg.content
-          ? <p style={{ color: 'var(--t)', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{msg.content}</p>
-          : <p style={{ color: 'var(--t3)', fontStyle: 'italic' }}>{msg.type}</p>
-        }
+        {renderContent()}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3, marginTop: 3 }}>
           <span style={{ fontSize: 8, color: 'var(--t3)', fontFamily: 'var(--fm)' }}>{time}</span>
           <StatusIcon />
@@ -129,9 +384,16 @@ export default function WhatsApp() {
   const [message, setMessage] = useState('')
   const [search, setSearch] = useState('')
   const [showInstanceMenu, setShowInstanceMenu] = useState(false)
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordingSecs, setRecordingSecs] = useState(0)
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const bulkUpsertedRef = useRef<Record<string, boolean>>({}) // por instância
-  const sendingRef = useRef(false) // pausa refetchInterval durante envio
+  const bulkUpsertedRef = useRef<Record<string, boolean>>({})
+  const sendingRef = useRef(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const defaultInstance = (store?.settings as Record<string, string>)?.whatsapp_instance ?? ''
 
@@ -144,13 +406,8 @@ export default function WhatsApp() {
     refetchOnWindowFocus: true,
   })
 
-  // defaultInstance (do banco) é a fonte de verdade.
-  // O usuário pode trocar via dropdown (selectedInstance), mas ao montar a página
-  // sempre começa pela instância configurada em Configurações.
   const [selectedInstance, setSelectedInstance] = useState<string>(defaultInstance)
 
-  // Sincroniza selectedInstance sempre que defaultInstance mudar
-  // (ex: usuário conectou nova instância em Configurações e voltou para cá)
   useEffect(() => {
     if (defaultInstance) {
       setSelectedInstance(defaultInstance)
@@ -177,7 +434,6 @@ export default function WhatsApp() {
     mutationFn: async (chat: EvoChat) => {
       if (!store?.id || !user?.id) return null
 
-      // Busca lead com os últimos 8 dígitos do número (tolerante a DDI)
       const last8 = chat.phoneNumber.slice(-8)
       const { data: existing } = await supabase
         .from('leads')
@@ -194,7 +450,6 @@ export default function WhatsApp() {
         }
       }
 
-      // Busca primeira etapa do pipeline
       const { data: firstStage } = await supabase
         .from('pipeline_stages')
         .select('id, name')
@@ -213,28 +468,23 @@ export default function WhatsApp() {
           client_name: chat.pushName,
           client_phone: chat.phoneNumber,
           source: 'whatsapp',
-          status: 'new',
+          status: 'active',
         })
         .select('id')
         .single()
 
       if (error) throw error
-
       return { leadId: newLead.id, leadStage: firstStage.name, isNew: true }
     },
     onSuccess: (result, chat) => {
       if (!result) return
-      // Atualiza o chat selecionado com o leadId
       setSelectedChat(prev =>
         prev?.remoteJid === chat.remoteJid
           ? { ...prev, leadId: result.leadId, leadStage: result.leadStage }
           : prev
       )
       if (result.isNew) {
-        toast.success(
-          `Lead criado: ${chat.pushName}`,
-          `Adicionado em "${result.leadStage}" no Pipeline`
-        )
+        toast.success(`Lead criado: ${chat.pushName}`, `Adicionado em "${result.leadStage}" no Pipeline`)
         queryClient.invalidateQueries({ queryKey: ['pipeline-leads'] })
         queryClient.invalidateQueries({ queryKey: ['leads'] })
       }
@@ -248,7 +498,6 @@ export default function WhatsApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store?.id, user?.id])
 
-  // Fecha o dropdown de instâncias ao clicar fora
   useEffect(() => {
     if (!showInstanceMenu) return
     const handler = () => setShowInstanceMenu(false)
@@ -276,8 +525,6 @@ export default function WhatsApp() {
           const fromMe = key?.fromMe as boolean | undefined
           const remoteJid = chat.remoteJid as string
           const remoteJidAlt = key?.remoteJidAlt as string | undefined
-          // Não usa lastMsg.pushName quando fromMe=true: a API retorna o nome do próprio
-          // usuário (ou "Você") nesses casos, o que sobrescreveria o nome do contato.
           const pushName = ((chat.pushName as string) || '').trim() ||
             (!fromMe ? ((lastMsg?.pushName as string) || '').trim() : '') ||
             extractPhone(remoteJid, remoteJidAlt)
@@ -289,13 +536,12 @@ export default function WhatsApp() {
             profilePicUrl: chat.profilePicUrl as string | undefined,
             lastMessageContent: extractContent(lastMsg ?? {}),
             lastMessageTs: lastMsg?.messageTimestamp as number | undefined,
-            lastFromMe: key?.fromMe as boolean | undefined,
+            lastFromMe: fromMe,
             unreadCount: (chat.unreadCount as number) ?? 0,
           }
         })
         .sort((a, b) => (b.lastMessageTs ?? 0) - (a.lastMessageTs ?? 0))
 
-      // Batch-fetch profile pics para os primeiros 10 sem foto (não bloqueia renderização)
       const withoutPic = mapped.filter(c => !c.profilePicUrl).slice(0, 10)
       if (withoutPic.length > 0) {
         const results = await Promise.allSettled(
@@ -315,7 +561,7 @@ export default function WhatsApp() {
     refetchInterval: 12000,
   })
 
-  // ── auto-criar leads para todos os contatos ao carregar ──────────────────
+  // ── auto-criar leads ──────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!conversations?.length || !store?.id || !user?.id) return
@@ -323,7 +569,6 @@ export default function WhatsApp() {
     bulkUpsertedRef.current[instanceName] = true
 
     const run = async () => {
-      // Busca o primeiro estágio do pipeline uma vez
       const { data: firstStage } = await supabase
         .from('pipeline_stages')
         .select('id, name')
@@ -333,7 +578,6 @@ export default function WhatsApp() {
 
       if (!firstStage) return
 
-      // Busca todos os leads existentes com source=whatsapp para evitar duplicatas
       const { data: existing } = await supabase
         .from('leads')
         .select('client_phone')
@@ -341,7 +585,6 @@ export default function WhatsApp() {
 
       const existingPhones = new Set((existing ?? []).map(l => l.client_phone ?? ''))
 
-      // Filtra contatos que ainda não são leads
       const toInsert = conversations
         .filter(c => c.phoneNumber.length >= 8)
         .filter(c => {
@@ -359,20 +602,21 @@ export default function WhatsApp() {
         }))
 
       if (!toInsert.length) return
-
       await supabase.from('leads').insert(toInsert)
       queryClient.invalidateQueries({ queryKey: ['pipeline-leads'] })
       queryClient.invalidateQueries({ queryKey: ['leads'] })
     }
 
     run().catch(console.error)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversations, store?.id, user?.id])
 
   // ── mensagens do chat selecionado ─────────────────────────────────────────
 
+  const messagesQueryKey = ['whatsapp-messages', instanceName, selectedChat?.remoteJid]
+
   const { data: messages, isLoading: loadingMsgs } = useQuery({
-    queryKey: ['whatsapp-messages', instanceName, selectedChat?.remoteJid],
+    queryKey: messagesQueryKey,
     queryFn: async () => {
       const res = await evolutionApi.findMessages(instanceName, selectedChat!.remoteJid, 50) as Record<string, unknown> | null
       const msgs = res?.messages as Record<string, unknown> | undefined
@@ -382,33 +626,61 @@ export default function WhatsApp() {
           const key = msg.key as Record<string, unknown>
           const updates = (msg.MessageUpdate as Record<string, unknown>[] | undefined) ?? []
           const lastUpdate = updates[updates.length - 1]
+          const media = extractMedia(msg)
           return {
             id: msg.id as string,
+            keyId: (key?.id as string) ?? (msg.id as string),
             fromMe: (key?.fromMe as boolean) ?? false,
             content: extractContent(msg),
             type: (msg.messageType as string) ?? 'unknown',
             timestamp: (msg.messageTimestamp as number) ?? 0,
             status: (lastUpdate?.status as string) ?? (msg.status as string),
+            ...media,
           }
         })
         .sort((a, b) => a.timestamp - b.timestamp)
     },
     enabled: !!selectedChat?.remoteJid && !!instanceName,
-    refetchInterval: sendingRef.current ? false : 5000,
+    refetchInterval: sendingRef.current ? false : 3000,
   })
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // ── envio com atualização otimista ────────────────────────────────────────
+  // ── Supabase Realtime — mensagens recebidas em tempo real ─────────────────
+
+  useEffect(() => {
+    if (!selectedChat?.remoteJid || !store?.id) return
+    const jid = selectedChat.remoteJid
+
+    const channel = supabase
+      .channel(`wa-rt-${jid}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'whatsapp_messages', filter: `store_id=eq.${store.id}` },
+        (payload) => {
+          const row = payload.new as Record<string, unknown>
+          // Só invalida se for a conversa aberta atualmente
+          if (row.remote_jid === jid || row.remote_jid === jid.replace('@s.whatsapp.net', '') + '@s.whatsapp.net') {
+            queryClient.invalidateQueries({ queryKey: messagesQueryKey })
+            queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations', instanceName] })
+          }
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedChat?.remoteJid, store?.id, instanceName])
+
+  // ── envio de texto com atualização otimista ───────────────────────────────
 
   const sendMutation = useMutation({
     mutationFn: async (text: string) => {
       if (!selectedChat) throw new Error('Nenhum chat selecionado')
       if (!instanceName) throw new Error('WhatsApp não configurado. Vá em Configurações.')
       await evolutionApi.sendText(instanceName, selectedChat.phoneNumber, text)
-      // Salva no Supabase para histórico / integração
       await supabase.from('whatsapp_messages').insert({
         store_id: store!.id,
         instance_name: instanceName,
@@ -421,34 +693,31 @@ export default function WhatsApp() {
     },
     onMutate: async (text) => {
       sendingRef.current = true
-      const qKey = ['whatsapp-messages', instanceName, selectedChat?.remoteJid]
-      await queryClient.cancelQueries({ queryKey: qKey })
-      const previous = queryClient.getQueryData<EvoMessage[]>(qKey)
+      await queryClient.cancelQueries({ queryKey: messagesQueryKey })
+      const previous = queryClient.getQueryData<EvoMessage[]>(messagesQueryKey)
       const optimistic: EvoMessage = {
         id: `pending-${Date.now()}`,
+        keyId: `pending-${Date.now()}`,
         fromMe: true,
         content: text,
         type: 'conversation',
         timestamp: Math.floor(Date.now() / 1000),
         pending: true,
       }
-      queryClient.setQueryData<EvoMessage[]>(qKey, old => [...(old ?? []), optimistic])
+      queryClient.setQueryData<EvoMessage[]>(messagesQueryKey, old => [...(old ?? []), optimistic])
       setMessage('')
       return { previous }
     },
     onSuccess: () => {
-      const qKey = ['whatsapp-messages', instanceName, selectedChat?.remoteJid]
-      // Aguarda 3s para a Evolution API indexar a mensagem antes de refazer fetch
       setTimeout(async () => {
-        const before = queryClient.getQueryData<EvoMessage[]>(qKey) ?? []
+        const before = queryClient.getQueryData<EvoMessage[]>(messagesQueryKey) ?? []
         const pending = before.filter(m => m.pending)
-        await queryClient.refetchQueries({ queryKey: qKey })
-        // Se o refetch não trouxe as mensagens pendentes de volta, reinsere-as
+        await queryClient.refetchQueries({ queryKey: messagesQueryKey })
         if (pending.length > 0) {
-          const after = queryClient.getQueryData<EvoMessage[]>(qKey) ?? []
+          const after = queryClient.getQueryData<EvoMessage[]>(messagesQueryKey) ?? []
           const stillMissing = pending.filter(p => !after.some(m => m.id === p.id))
           if (stillMissing.length > 0) {
-            queryClient.setQueryData<EvoMessage[]>(qKey, [...after, ...stillMissing])
+            queryClient.setQueryData<EvoMessage[]>(messagesQueryKey, [...after, ...stillMissing])
           }
         }
         sendingRef.current = false
@@ -457,9 +726,8 @@ export default function WhatsApp() {
     },
     onError: (err: Error, _text, context) => {
       sendingRef.current = false
-      const qKey = ['whatsapp-messages', instanceName, selectedChat?.remoteJid]
-      if (context?.previous) queryClient.setQueryData(qKey, context.previous)
-      setMessage(_text) // restaura o texto no input
+      if (context?.previous) queryClient.setQueryData(messagesQueryKey, context.previous)
+      setMessage(_text)
       toast.error('Erro ao enviar', err.message)
     },
   })
@@ -468,6 +736,92 @@ export default function WhatsApp() {
     if (!message.trim() || sendMutation.isPending) return
     sendMutation.mutate(message.trim())
   }
+
+  // ── envio de imagem via arquivo ───────────────────────────────────────────
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !selectedChat || !instanceName) return
+    e.target.value = ''
+
+    const reader = new FileReader()
+    reader.onloadend = async () => {
+      const dataUrl = reader.result as string
+      const base64 = dataUrl.split(',')[1]
+      if (!base64) return
+
+      if (file.type.startsWith('image/')) {
+        const ok = await evolutionApi.sendImageBase64(instanceName, selectedChat.phoneNumber, base64)
+        if (ok) {
+          setTimeout(() => queryClient.invalidateQueries({ queryKey: messagesQueryKey }), 2000)
+          queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations', instanceName] })
+        } else {
+          toast.error('Erro ao enviar imagem', 'Verifique o tamanho do arquivo e tente novamente.')
+        }
+      } else {
+        toast.info('Tipo não suportado', 'Por enquanto apenas imagens podem ser enviadas.')
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // ── gravação de áudio ─────────────────────────────────────────────────────
+
+  const startRecording = async () => {
+    if (!selectedChat || !instanceName) return
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/ogg;codecs=opus'
+      const recorder = new MediaRecorder(stream, { mimeType })
+      audioChunksRef.current = []
+      recorder.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop())
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/ogg' })
+        const reader = new FileReader()
+        reader.onloadend = async () => {
+          const b64 = (reader.result as string).split(',')[1]
+          if (!b64) return
+          const ok = await evolutionApi.sendAudio(instanceName, selectedChat.phoneNumber, b64)
+          if (ok) {
+            setTimeout(() => queryClient.invalidateQueries({ queryKey: messagesQueryKey }), 3000)
+            queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations', instanceName] })
+          } else {
+            toast.error('Erro ao enviar áudio', 'Tente novamente.')
+          }
+        }
+        reader.readAsDataURL(blob)
+      }
+      recorder.start()
+      mediaRecorderRef.current = recorder
+      setIsRecording(true)
+      setRecordingSecs(0)
+      recordingTimerRef.current = setInterval(() => setRecordingSecs(s => s + 1), 1000)
+    } catch {
+      toast.error('Microfone não disponível', 'Permita acesso ao microfone nas configurações do browser.')
+    }
+  }
+
+  const stopRecording = (cancel = false) => {
+    if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null }
+    setIsRecording(false)
+    setRecordingSecs(0)
+    if (cancel) {
+      mediaRecorderRef.current?.stream.getTracks().forEach(t => t.stop())
+      mediaRecorderRef.current = null
+      audioChunksRef.current = []
+    } else {
+      mediaRecorderRef.current?.stop()
+    }
+  }
+
+  // Limpa ao desmontar
+  useEffect(() => () => {
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
+    mediaRecorderRef.current?.stream?.getTracks().forEach(t => t.stop())
+  }, [])
 
   const filteredConvs = conversations?.filter(c =>
     c.pushName.toLowerCase().includes(search.toLowerCase()) ||
@@ -485,7 +839,6 @@ export default function WhatsApp() {
 
       {/* ── Lista de conversas ── */}
       <div style={{ width: 260, flexShrink: 0, borderRight: '1px solid var(--bs)', display: 'flex', flexDirection: 'column', background: 'var(--surf)' }}>
-        {/* Search header */}
         <div style={{ padding: '11px 12px', borderBottom: '1px solid var(--bs)' }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--t)', marginBottom: 8 }}>WhatsApp</div>
 
@@ -507,7 +860,6 @@ export default function WhatsApp() {
                   </span>
                   <ChevronDown size={12} style={{ flexShrink: 0, marginLeft: 4, transform: showInstanceMenu ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
                 </button>
-                {/* Botão de recarregar lista de instâncias */}
                 <button
                   onClick={() => refetchInstances()}
                   title="Atualizar lista de instâncias"
@@ -531,9 +883,7 @@ export default function WhatsApp() {
                   boxShadow: '0 8px 24px rgba(0,0,0,.4)', overflow: 'hidden',
                 }}>
                   {instanceList.length === 0 ? (
-                    <div style={{ padding: '10px 12px', fontSize: 11, color: 'var(--t3)' }}>
-                      Nenhuma instância encontrada
-                    </div>
+                    <div style={{ padding: '10px 12px', fontSize: 11, color: 'var(--t3)' }}>Nenhuma instância encontrada</div>
                   ) : instanceList.map(inst => (
                     <button
                       key={inst}
@@ -550,10 +900,7 @@ export default function WhatsApp() {
                       onMouseEnter={e => { if (inst !== instanceName) e.currentTarget.style.background = 'var(--el)' }}
                       onMouseLeave={e => { if (inst !== instanceName) e.currentTarget.style.background = 'transparent' }}
                     >
-                      <span style={{
-                        width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
-                        background: inst === instanceName ? 'var(--neon)' : 'var(--t3)',
-                      }} />
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, background: inst === instanceName ? 'var(--neon)' : 'var(--t3)' }} />
                       {inst}
                     </button>
                   ))}
@@ -566,7 +913,8 @@ export default function WhatsApp() {
 
           <div style={{ position: 'relative' }}>
             <Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)', pointerEvents: 'none' }} />
-            <input type="text" placeholder="Buscar conversa..." value={search}
+            <input
+              type="text" placeholder="Buscar conversa..." value={search}
               onChange={e => setSearch(e.target.value)}
               style={{
                 width: '100%', height: 30, paddingLeft: 26, paddingRight: 9,
@@ -602,7 +950,9 @@ export default function WhatsApp() {
             filteredConvs.map(chat => {
               const isActive = selectedChat?.remoteJid === chat.remoteJid
               return (
-                <button key={chat.remoteJid} onClick={() => handleSelectChat(chat)}
+                <button
+                  key={chat.remoteJid}
+                  onClick={() => handleSelectChat(chat)}
                   style={{
                     width: '100%', display: 'flex', alignItems: 'center', gap: 10,
                     padding: '9px 12px', textAlign: 'left',
@@ -684,7 +1034,6 @@ export default function WhatsApp() {
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {/* Ver Lead button */}
               <button
                 onClick={() => {
                   if (selectedChat.leadId) {
@@ -725,48 +1074,111 @@ export default function WhatsApp() {
                 Nenhuma mensagem ainda. Inicie a conversa!
               </div>
             )}
-            {messages?.map(msg => <MessageBubble key={msg.id} msg={msg} />)}
+            {messages?.map(msg => (
+              <MessageBubble
+                key={msg.id}
+                msg={msg}
+                instanceName={instanceName}
+                remoteJid={selectedChat.remoteJid}
+              />
+            ))}
             <div ref={messagesEndRef} />
           </div>
 
           {/* Input de envio */}
           <div style={{ padding: '8px 12px', background: 'var(--surf)', borderTop: '1px solid var(--bs)', flexShrink: 0 }}>
+            {/* Barra de gravação */}
+            {isRecording && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8,
+                padding: '6px 10px', borderRadius: 7,
+                background: 'rgba(255,60,60,.08)', border: '1px solid rgba(255,60,60,.2)',
+              }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#ff3c3c', animation: 'pulse 1s ease-in-out infinite', flexShrink: 0 }} />
+                <span style={{ fontSize: 11, color: 'var(--t2)', flex: 1 }}>
+                  Gravando… {fmtDuration(recordingSecs)}
+                </span>
+                <button
+                  onClick={() => stopRecording(true)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', display: 'flex', alignItems: 'center' }}
+                  title="Cancelar"
+                >
+                  <X size={14} />
+                </button>
+                <button
+                  onClick={() => stopRecording(false)}
+                  style={{
+                    padding: '3px 10px', borderRadius: 5, border: 'none', cursor: 'pointer',
+                    background: 'var(--neon)', color: '#000', fontSize: 10, fontWeight: 700,
+                  }}
+                >
+                  Enviar
+                </button>
+              </div>
+            )}
+
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <button style={{ color: 'var(--t3)', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+              {/* Anexo de imagem */}
+              <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileChange} />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                title="Enviar imagem"
+                style={{ color: 'var(--t3)', background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}
                 onMouseEnter={e => (e.currentTarget.style.color = 'var(--t2)')}
                 onMouseLeave={e => (e.currentTarget.style.color = 'var(--t3)')}
-              ><Paperclip size={16} /></button>
-              <button style={{ color: 'var(--t3)', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
-                onMouseEnter={e => (e.currentTarget.style.color = 'var(--t2)')}
-                onMouseLeave={e => (e.currentTarget.style.color = 'var(--t3)')}
-              ><Smile size={16} /></button>
-              <input type="text" placeholder="Digite uma mensagem..."
+              >
+                <Paperclip size={16} />
+              </button>
+
+              <input
+                type="text"
+                placeholder={isRecording ? 'Gravando áudio…' : 'Digite uma mensagem...'}
                 value={message}
+                disabled={isRecording}
                 onChange={e => setMessage(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
                 style={{
                   flex: 1, height: 34, padding: '0 10px',
                   background: 'var(--el)', border: '1px solid var(--b)',
                   borderRadius: 7, color: 'var(--t)', fontSize: 11, outline: 'none', fontFamily: 'var(--fn)',
+                  opacity: isRecording ? .5 : 1,
                 }}
                 onFocus={e => (e.currentTarget.style.borderColor = 'var(--nb)')}
                 onBlur={e => (e.currentTarget.style.borderColor = 'var(--b)')}
               />
-              <button
-                onClick={handleSend}
-                disabled={!message.trim() || sendMutation.isPending}
-                style={{
-                  width: 32, height: 32, borderRadius: 6, flexShrink: 0,
-                  background: 'var(--neon)', color: '#000', border: 'none',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: message.trim() ? 'pointer' : 'not-allowed', opacity: message.trim() ? 1 : .4,
-                }}
-              >
-                {sendMutation.isPending
-                  ? <div style={{ width: 14, height: 14, border: '2px solid #000', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin .8s linear infinite' }} />
-                  : <Send size={14} />
-                }
-              </button>
+
+              {/* Botão microfone ou enviar */}
+              {message.trim() ? (
+                <button
+                  onClick={handleSend}
+                  disabled={sendMutation.isPending}
+                  style={{
+                    width: 32, height: 32, borderRadius: 6, flexShrink: 0,
+                    background: 'var(--neon)', color: '#000', border: 'none',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', opacity: sendMutation.isPending ? .5 : 1,
+                  }}
+                >
+                  {sendMutation.isPending
+                    ? <div style={{ width: 14, height: 14, border: '2px solid #000', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin .8s linear infinite' }} />
+                    : <Send size={14} />
+                  }
+                </button>
+              ) : (
+                <button
+                  onClick={isRecording ? () => stopRecording(false) : startRecording}
+                  title={isRecording ? 'Enviar áudio' : 'Gravar áudio'}
+                  style={{
+                    width: 32, height: 32, borderRadius: 6, flexShrink: 0, border: 'none',
+                    background: isRecording ? 'var(--neon)' : 'var(--el)',
+                    color: isRecording ? '#000' : 'var(--t2)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                    transition: 'all .15s',
+                  }}
+                >
+                  {isRecording ? <MicOff size={15} /> : <Mic size={15} />}
+                </button>
+              )}
             </div>
           </div>
         </div>

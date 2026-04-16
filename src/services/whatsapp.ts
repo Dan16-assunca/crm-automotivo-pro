@@ -177,6 +177,53 @@ export const evolutionApi = {
     return safeJson(res)
   },
 
+  /** Busca conteúdo base64 de uma mensagem de mídia (imagem, áudio, vídeo, documento) */
+  getMediaBase64: async (
+    instanceName: string,
+    key: { id: string; fromMe: boolean; remoteJid: string },
+  ): Promise<string | null> => {
+    try {
+      const res = await fetch(`${BASE}/chat/getBase64FromMediaMessage/${instanceName}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ key, convertToMp4: false }),
+      })
+      if (!res.ok) return null
+      const data = await safeJson(res)
+      return (data?.base64 as string) ?? null
+    } catch {
+      return null
+    }
+  },
+
+  /** Envia mensagem de áudio (voz) em formato WhatsApp PTT */
+  sendAudio: async (instanceName: string, number: string, audioBase64: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`${BASE}/message/sendWhatsAppAudio/${instanceName}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ number, audioMessage: { audio: audioBase64, encoding: true } }),
+      })
+      return res.ok
+    } catch {
+      return false
+    }
+  },
+
+  /** Envia imagem em base64 */
+  sendImageBase64: async (instanceName: string, number: string, base64: string, caption = ''): Promise<boolean> => {
+    try {
+      const res = await fetch(`${BASE}/message/sendMedia/${instanceName}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ number, mediatype: 'image', media: base64, caption }),
+      })
+      return res.ok
+    } catch {
+      return false
+    }
+  },
+
   /** Retorna lista de nomes de instâncias cadastradas na Evolution API */
   getInstancesList: async (): Promise<string[]> => {
     try {
