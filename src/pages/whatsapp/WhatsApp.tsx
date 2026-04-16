@@ -273,10 +273,13 @@ export default function WhatsApp() {
         .map((chat: Record<string, unknown>): EvoChat => {
           const lastMsg = chat.lastMessage as Record<string, unknown> | undefined
           const key = lastMsg?.key as Record<string, unknown> | undefined
+          const fromMe = key?.fromMe as boolean | undefined
           const remoteJid = chat.remoteJid as string
           const remoteJidAlt = key?.remoteJidAlt as string | undefined
+          // Não usa lastMsg.pushName quando fromMe=true: a API retorna o nome do próprio
+          // usuário (ou "Você") nesses casos, o que sobrescreveria o nome do contato.
           const pushName = ((chat.pushName as string) || '').trim() ||
-            ((lastMsg?.pushName as string) || '').trim() ||
+            (!fromMe ? ((lastMsg?.pushName as string) || '').trim() : '') ||
             extractPhone(remoteJid, remoteJidAlt)
 
           return {
