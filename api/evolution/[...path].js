@@ -1,29 +1,39 @@
-const EVOLUTION_API_URL = (process.env.VITE_EVOLUTION_API_URL ?? '').replace(/\/$/, '')
-const EVOLUTION_API_KEY = process.env.VITE_EVOLUTION_API_KEY ?? ''
+// Proxy server-side para a Evolution API
+// A API Key NUNCA chega ao browser — fica segura nas variáveis de ambiente do servidor.
+// Em produção (Vercel): configure EVOLUTION_API_URL e EVOLUTION_API_KEY no dashboard.
+// Em desenvolvimento: configure no .env (sem prefixo VITE_).
+
+const EVOLUTION_API_URL = (process.env.EVOLUTION_API_URL ?? '').replace(/\/$/, '')
+const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY ?? ''
 
 export default async function handler(req, res) {
-  // CORS preflight
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, apikey, Authorization')
+  // CORS — permite apenas a origem do próprio app
+  const origin = req.headers.origin ?? '*'
+  res.setHeader('Access-Control-Allow-Origin', origin)
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  res.setHeader('Access-Control-Allow-Credentials', 'true')
+
   if (req.method === 'OPTIONS') {
     res.status(204).end()
     return
   }
 
   if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY) {
-    console.error('[evolution-proxy] Missing env vars', {
-      url: EVOLUTION_API_URL ? 'set' : 'MISSING',
-      key: EVOLUTION_API_KEY ? 'set' : 'MISSING',
+    console.error('[evolution-proxy] Variáveis de ambiente não configuradas:', {
+      EVOLUTION_API_URL: EVOLUTION_API_URL ? 'ok' : 'FALTANDO',
+      EVOLUTION_API_KEY: EVOLUTION_API_KEY ? 'ok' : 'FALTANDO',
     })
-    res.status(500).json({ error: 'Proxy not configured (missing env vars)' })
+    res.status(500).json({
+      error: 'Evolution API não configurada no servidor.',
+      hint: 'Configure EVOLUTION_API_URL e EVOLUTION_API_KEY nas variáveis de ambiente do Vercel.',
+    })
     return
   }
 
   const segments = req.query.path
   const path = Array.isArray(segments) ? segments.join('/') : (segments ?? '')
 
-  // Repassa query strings (exceto o param 'path' interno do Vercel)
   const qs = new URLSearchParams()
   for (const [key, value] of Object.entries(req.query)) {
     if (key === 'path') continue
@@ -32,40 +42,32 @@ export default async function handler(req, res) {
   const qsStr = qs.toString()
   const targetUrl = `${EVOLUTION_API_URL}/${path}${qsStr ? `?${qsStr}` : ''}`
 
-  const fetchHeaders = {
-    'Content-Type': 'application/json',
-    apikey: EVOLUTION_API_KEY,
-  }
-
   const fetchOptions = {
     method: req.method ?? 'GET',
-    headers: fetchHeaders,
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: EVOLUTION_API_KEY,   // ← injetada server-side, nunca exposta ao browser
+    },
   }
 
   if (req.method !== 'GET' && req.method !== 'HEAD' && req.body) {
     fetchOptions.body = JSON.stringify(req.body)
   }
 
-  console.log(`[evolution-proxy] ${req.method} → ${targetUrl}`)
-
   try {
     const response = await fetch(targetUrl, fetchOptions)
     const text = await response.text()
 
     let data
-    try {
-      data = JSON.parse(text)
-    } catch {
-      data = { raw: text }
-    }
+    try { data = JSON.parse(text) } catch { data = { raw: text } }
 
     if (!response.ok) {
-      console.error(`[evolution-proxy] upstream error ${response.status}:`, text.slice(0, 300))
+      console.error(`[evolution-proxy] upstream ${response.status}:`, text.slice(0, 300))
     }
 
     res.status(response.status).json(data)
   } catch (err) {
-    console.error('[evolution-proxy] fetch failed:', err)
-    res.status(502).json({ error: 'Evolution API unreachable', detail: String(err) })
+    console.error('[evolution-proxy] erro de rede:', err)
+    res.status(502).json({ error: 'Evolution API inacessível', detail: String(err) })
   }
 }
