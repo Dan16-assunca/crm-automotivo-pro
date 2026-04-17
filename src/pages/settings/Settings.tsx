@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Wifi, WifiOff, QrCode, Save, RefreshCw, LogOut, Loader2, CheckCircle2, XCircle, Lock, Eye, EyeOff } from 'lucide-react'
+import { Wifi, WifiOff, QrCode, Save, RefreshCw, LogOut, Loader2, CheckCircle2, XCircle, Lock, Eye, EyeOff, Key, Link2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
-import { evolutionApi } from '@/services/whatsapp'
+import { evolutionApi, configureEvolutionApi } from '@/services/whatsapp'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
@@ -15,9 +15,17 @@ const QR_TTL = 30
 
 export default function Settings() {
   const { store, setStore } = useAuthStore()
-  const [instanceName, setInstanceName] = useState(
-    (store?.settings as Record<string, string>)?.whatsapp_instance ?? ''
-  )
+  const cfg = store?.settings as Record<string, string> | undefined
+  const [instanceName, setInstanceName] = useState(cfg?.whatsapp_instance ?? '')
+  const [evolutionUrl, setEvolutionUrl]  = useState(cfg?.evolution_api_url ?? import.meta.env.VITE_EVOLUTION_API_URL ?? '')
+  const [evolutionKey, setEvolutionKey]  = useState(cfg?.evolution_api_key ?? import.meta.env.VITE_EVOLUTION_API_KEY ?? '')
+  const [showKey, setShowKey]            = useState(false)
+
+  // Aplica a configuração sempre que store carregar
+  useEffect(() => {
+    if (evolutionUrl && evolutionKey) configureEvolutionApi(evolutionUrl, evolutionKey)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const [status, setStatus] = useState<ConnectionStatus>('unknown')
   const [qrBase64, setQrBase64] = useState<string | null>(null)
@@ -32,24 +40,11 @@ export default function Settings() {
     if (qrTimerRef.current) { clearInterval(qrTimerRef.current); qrTimerRef.current = null }
   }, [])
 
+  const WEBHOOK_URL = 'https://eakdywmuewvuzyqfpcpl.supabase.co/functions/v1/whatsapp-webhook'
+
   const registerWebhook = async (instance: string) => {
-    try {
-      await fetch(`${import.meta.env.VITE_EVOLUTION_API_URL}/webhook/set/${instance}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', apikey: import.meta.env.VITE_EVOLUTION_API_KEY },
-        body: JSON.stringify({
-          webhook: {
-            url: 'https://eakdywmuewvuzyqfpcpl.supabase.co/functions/v1/whatsapp-webhook',
-            webhook_by_events: true,
-            webhook_base64: false,
-            enabled: true,
-            events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE'],
-          },
-        }),
-      })
-    } catch (err) {
-      console.warn('[Settings] Failed to register webhook:', err)
-    }
+    const ok = await evolutionApi.setWebhook(instance, WEBHOOK_URL)
+    if (!ok) console.warn('[Settings] Failed to register webhook')
   }
 
   const onConnected = useCallback(() => {
@@ -166,7 +161,14 @@ export default function Settings() {
 
   const saveSettings = async () => {
     if (!store) return
-    const newSettings = { ...(store.settings as object), whatsapp_instance: instanceName }
+    const trimUrl = evolutionUrl.trim().replace(/\/$/, '')
+    const trimKey = evolutionKey.trim()
+    const newSettings = {
+      ...(store.settings as object),
+      whatsapp_instance: instanceName,
+      evolution_api_url: trimUrl,
+      evolution_api_key: trimKey,
+    }
     const { data, error } = await supabase
       .from('stores').update({ settings: newSettings }).eq('id', store.id).select().single()
     if (error) {
@@ -175,6 +177,7 @@ export default function Settings() {
       return
     }
     if (data) setStore(data as Parameters<typeof setStore>[0])
+    if (trimUrl && trimKey) configureEvolutionApi(trimUrl, trimKey)
     toast.success('Configurações salvas!')
     if (instanceName.trim()) await registerWebhook(instanceName.trim())
     checkStatus(instanceName)
@@ -232,6 +235,57 @@ export default function Settings() {
           <p style={{ fontSize: 12, color: 'var(--t3)' }}>
             Conecte sua instância do Evolution API para envio e recebimento de mensagens via WhatsApp.
           </p>
+
+          {/* URL da Evolution API */}
+          <div>
+            <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.06em', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
+              <Link2 size={10} /> URL da Evolution API
+            </label>
+            <input
+              type="url"
+              placeholder="https://api.seudominio.com"
+              value={evolutionUrl}
+              onChange={e => setEvolutionUrl(e.target.value)}
+              style={{
+                width: '100%', height: 34, padding: '0 10px',
+                background: 'var(--el)', border: '1px solid var(--b)',
+                borderRadius: 7, color: 'var(--t)', fontSize: 12, outline: 'none',
+                fontFamily: 'var(--fn)', boxSizing: 'border-box',
+              }}
+              onFocus={e => (e.currentTarget.style.borderColor = 'var(--nb)')}
+              onBlur={e => (e.currentTarget.style.borderColor = 'var(--b)')}
+            />
+          </div>
+
+          {/* API Key */}
+          <div>
+            <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.06em', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
+              <Key size={10} /> API Key
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showKey ? 'text' : 'password'}
+                placeholder="Sua chave de autenticação"
+                value={evolutionKey}
+                onChange={e => setEvolutionKey(e.target.value)}
+                style={{
+                  width: '100%', height: 34, padding: '0 36px 0 10px',
+                  background: 'var(--el)', border: '1px solid var(--b)',
+                  borderRadius: 7, color: 'var(--t)', fontSize: 12, outline: 'none',
+                  fontFamily: 'var(--fn)', boxSizing: 'border-box',
+                }}
+                onFocus={e => (e.currentTarget.style.borderColor = 'var(--nb)')}
+                onBlur={e => (e.currentTarget.style.borderColor = 'var(--b)')}
+              />
+              <button
+                type="button"
+                onClick={() => setShowKey(v => !v)}
+                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}
+              >
+                {showKey ? <EyeOff size={12} /> : <Eye size={12} />}
+              </button>
+            </div>
+          </div>
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
             <div style={{ flex: 1 }}>
