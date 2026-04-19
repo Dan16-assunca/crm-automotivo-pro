@@ -185,17 +185,17 @@ export const evolutionApi = {
     }
   },
 
-  /** Desconecta (logout) a instância. */
+  /** Desconecta (logout) a instância. UazapiGO usa GET para logout. */
   disconnectInstance: async (instanceToken: string): Promise<void> => {
     try {
-      await fetch(`${BASE}/instance/logout?${tqs(instanceToken)}`, { method: 'POST', headers })
+      await fetch(`${BASE}/instance/logout?${tqs(instanceToken)}`, { method: 'GET', headers })
     } catch { /* noop */ }
   },
 
-  /** Deleta a instância do servidor. */
+  /** Deleta a instância do servidor. UazapiGO usa GET para delete. */
   deleteInstance: async (instanceToken: string): Promise<void> => {
     try {
-      await fetch(`${BASE}/instance/delete?${tqs(instanceToken)}`, { method: 'DELETE', headers })
+      await fetch(`${BASE}/instance/delete?${tqs(instanceToken)}`, { method: 'GET', headers })
     } catch { /* noop */ }
   },
 
@@ -275,22 +275,22 @@ export const evolutionApi = {
     }
   },
 
-  /** Marca mensagens de um chat como lidas. */
+  /** Marca mensagens de um chat como lidas. UazapiGO usa GET para /messages/read. */
   markAsRead: async (instanceToken: string, remoteJid: string): Promise<void> => {
     try {
-      await fetch(`${BASE}/messages/read?${tqs(instanceToken)}`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ jid: remoteJid }),
-      })
+      await fetch(
+        `${BASE}/messages/read?${tqs(instanceToken)}&jid=${encodeURIComponent(remoteJid)}`,
+        { method: 'GET', headers },
+      )
     } catch { /* noop */ }
   },
 
   // ── Envio de mensagens ───────────────────────────────────────────────────────
 
+  // UazapiGO usa /send/* em vez de /messages/* para envio
   sendText: async (instanceToken: string, number: string, text: string): Promise<Record<string, unknown> | null> => {
     try {
-      const res = await fetch(`${BASE}/messages/text?${tqs(instanceToken)}`, {
+      const res = await fetch(`${BASE}/send/text?${tqs(instanceToken)}`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ number, text }),
@@ -308,7 +308,7 @@ export const evolutionApi = {
     quoted: { keyId: string; fromMe: boolean; remoteJid: string; content?: string },
   ): Promise<Record<string, unknown> | null> => {
     try {
-      const res = await fetch(`${BASE}/messages/text?${tqs(instanceToken)}`, {
+      const res = await fetch(`${BASE}/send/text?${tqs(instanceToken)}`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -327,10 +327,10 @@ export const evolutionApi = {
 
   sendAudio: async (instanceToken: string, number: string, audioBase64: string): Promise<boolean> => {
     try {
-      const res = await fetch(`${BASE}/messages/audio?${tqs(instanceToken)}`, {
+      const res = await fetch(`${BASE}/send/media?${tqs(instanceToken)}`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ number, audio: audioBase64, encoding: true }),
+        body: JSON.stringify({ number, type: 'audio', base64: audioBase64, encoding: true }),
       })
       return res.ok
     } catch {
@@ -340,10 +340,10 @@ export const evolutionApi = {
 
   sendImageBase64: async (instanceToken: string, number: string, base64: string, caption = ''): Promise<boolean> => {
     try {
-      const res = await fetch(`${BASE}/messages/image?${tqs(instanceToken)}`, {
+      const res = await fetch(`${BASE}/send/media?${tqs(instanceToken)}`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ number, image: base64, caption }),
+        body: JSON.stringify({ number, type: 'image', base64, caption }),
       })
       return res.ok
     } catch {
@@ -359,10 +359,10 @@ export const evolutionApi = {
     caption = '',
   ): Promise<boolean> => {
     try {
-      const res = await fetch(`${BASE}/messages/${mediaType}?${tqs(instanceToken)}`, {
+      const res = await fetch(`${BASE}/send/media?${tqs(instanceToken)}`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ number, url: mediaUrl, caption }),
+        body: JSON.stringify({ number, type: mediaType, url: mediaUrl, caption }),
       })
       return res.ok
     } catch {
@@ -383,11 +383,11 @@ export const evolutionApi = {
     key: { id: string; fromMe: boolean; remoteJid: string },
   ): Promise<string | null> => {
     try {
-      const res = await fetch(`${BASE}/media/download?${tqs(instanceToken)}`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ key }),
-      })
+      // UazapiGO usa GET para /media/download com o id da mensagem como query param
+      const res = await fetch(
+        `${BASE}/media/download?${tqs(instanceToken)}&id=${encodeURIComponent(key.id)}`,
+        { method: 'GET', headers },
+      )
       if (!res.ok) return null
       const data = await safeJson(res)
       return (data?.base64 as string) ?? null
