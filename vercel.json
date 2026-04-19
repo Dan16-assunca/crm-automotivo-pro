@@ -4,6 +4,6 @@
   "framework": "vite",
   "regions": ["gru1"],
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/:path*", "destination": "/index.html" }
   ]
 }
