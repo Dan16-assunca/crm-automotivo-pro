@@ -31,9 +31,12 @@ export default async function handler(req, res) {
     return
   }
 
-  const segments = req.query.path
-  const path     = Array.isArray(segments) ? segments.join('/') : (segments ?? '')
+  // Extrai o path diretamente da URL — mais confiável que req.query.path,
+  // que fica vazio quando o Vercel usa roteamento explícito src/dest.
+  const rawUrlPath = (req.url ?? '').split('?')[0]               // ex: /api/whatsapp/instance/create
+  const path       = rawUrlPath.replace(/^\/api\/whatsapp\/?/, '') // ex: instance/create
 
+  // Repassa todos os query params originais (ex: ?token=xxx)
   const qs = new URLSearchParams()
   for (const [key, value] of Object.entries(req.query)) {
     if (key === 'path') continue
