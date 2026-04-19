@@ -3,6 +3,8 @@
   "outputDirectory": "dist",
   "regions": ["gru1"],
   "routes": [
+    { "src": "/api/whatsapp/(.*)", "dest": "/api/whatsapp/[...path]" },
+    { "src": "/api/evolution/(.*)", "dest": "/api/evolution/[...path]" },
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]
