@@ -1,10 +1,14 @@
-// Evolution API — chamada sempre via proxy /api/evolution
-// A API Key fica no servidor (Vercel env vars) — nunca exposta ao browser.
-// Em desenvolvimento, o vite.config.ts proxia /api/evolution para a Evolution API real.
+// Serviço WhatsApp — UazapiGO (servidor próprio)
+// ─────────────────────────────────────────────────────────────────────────────
+// Autenticação em dois níveis:
+//   • Admin (criar/listar instâncias): header `admintoken` → injetado pelo proxy server-side
+//   • Por instância (mensagens, status, QR): query param `?token=<instanceToken>`
+//
+// O proxy em api/whatsapp/[...path].js já injeta o admintoken no header e repassa
+// todos os query params ao servidor UazapiGO — nenhum segredo chega ao browser.
 
-const BASE = (import.meta.env.VITE_EVOLUTION_API_URL ?? '/api/evolution').replace(/\/$/, '')
+const BASE = (import.meta.env.VITE_EVOLUTION_API_URL ?? '/api/whatsapp').replace(/\/$/, '')
 
-// Sem apikey aqui — o proxy server-side injeta automaticamente
 const headers = { 'Content-Type': 'application/json' }
 
 async function safeJson(res: Response): Promise<Record<string, unknown> | null> {
@@ -17,116 +21,191 @@ async function safeJson(res: Response): Promise<Record<string, unknown> | null> 
   }
 }
 
-// Nome de instância gerado automaticamente pelo sistema
+/** Converte instanceToken em query string: ?token=<token> */
+const tqs = (token: string) => `token=${encodeURIComponent(token)}`
+
+// ─── Utilitários de telefone ──────────────────────────────────────────────────
+
+/** Formata número para envio: remove não-dígitos, adiciona 55 se necessário */
+export function formatPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '')
+  if (digits.length <= 11) return `55${digits}`
+  return digits
+}
+
+/** Extrai número limpo do remoteJid (ex: "5511999887766@s.whatsapp.net" → "5511999887766") */
+export function extractPhone(remoteJid: string): string {
+  return remoteJid.replace(/@.+$/, '')
+}
+
+/** Verifica se é um JID de grupo */
+export function isGroup(remoteJid: string): boolean {
+  return remoteJid.endsWith('@g.us')
+}
+
+// ─── Nome de instância ────────────────────────────────────────────────────────
+
 // Formato: crm_<store_id_first8>_<timestamp_base36>
-// Ex: crm_a1b2c3d4_x7k2mq — único, sem dados sensíveis, seguro como nome no Evolution API
 export function generateInstanceName(storeId: string): string {
   const short = storeId.replace(/-/g, '').slice(0, 8)
   const ts    = Date.now().toString(36).slice(-6)
   return `crm_${short}_${ts}`
 }
 
+// ─── API principal ────────────────────────────────────────────────────────────
+
 export const evolutionApi = {
-  // ── Instâncias ──────────────────────────────────────────────────────────────
 
-  getInstances: async () => {
-    const res = await fetch(`${BASE}/instance/fetchInstances`, { headers })
-    return safeJson(res)
-  },
+  // ── Admin: Instâncias ────────────────────────────────────────────────────────
+  // Essas chamadas usam `admintoken` header (injetado pelo proxy).
 
-  createInstance: async (instanceName: string) => {
-    const res = await fetch(`${BASE}/instance/create`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ instanceName, qrcode: true, integration: 'WHATSAPP-BAILEYS' }),
-    })
-    return safeJson(res)
-  },
-
-  getConnectionState: async (instanceName: string): Promise<string> => {
+  /**
+   * Cria uma instância na UazapiGO.
+   * Retorna { token, id } — o token é usado em todas as chamadas subsequentes.
+   */
+  createInstance: async (instanceName: string): Promise<{ token: string; id: string } | null> => {
     try {
-      const res = await fetch(`${BASE}/instance/connectionState/${instanceName}`, { headers })
-      if (res.status === 404) return 'not_found'
+      const res = await fetch(`${BASE}/instance/create`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ name: instanceName }),
+      })
+      const data = await safeJson(res)
+      if (!data) return null
+      const instance = (data.instance ?? data) as Record<string, string>
+      const token = (instance.token ?? data.token) as string
+      const id    = (instance.id    ?? data.id)    as string
+      if (!token) { console.error('[whatsapp.ts] createInstance sem token:', data); return null }
+      return { token, id }
+    } catch (err) {
+      console.error('[whatsapp.ts] createInstance error:', err)
+      return null
+    }
+  },
+
+  /**
+   * Lista todas as instâncias do servidor (admin).
+   * Retorna array de { name, token, id, status }.
+   */
+  getInstances: async (): Promise<Array<{ name: string; token: string; id: string; status: string }>> => {
+    try {
+      const res = await fetch(`${BASE}/instance/all`, { headers })
+      if (!res.ok) return []
+      const data = await safeJson(res)
+      if (!Array.isArray(data)) return []
+      return data.map((i: unknown) => {
+        const item = i as Record<string, unknown>
+        return {
+          name:   (item.name   ?? item.instanceName ?? '') as string,
+          token:  (item.token  ?? '') as string,
+          id:     (item.id     ?? '') as string,
+          status: (item.status ?? 'disconnected') as string,
+        }
+      })
+    } catch {
+      return []
+    }
+  },
+
+  /** Compat: retorna apenas os nomes (usado em código legado de sync) */
+  getInstancesList: async (): Promise<string[]> => {
+    const list = await evolutionApi.getInstances()
+    return list.map(i => i.name).filter(Boolean)
+  },
+
+  // ── Por instância: todas usam ?token=<instanceToken> ─────────────────────────
+
+  /**
+   * Verifica o estado da conexão.
+   * Retorna 'open' quando conectado, 'connecting', 'disconnected', 'not_found', etc.
+   */
+  getConnectionState: async (instanceToken: string): Promise<string> => {
+    try {
+      const res = await fetch(`${BASE}/instance/status?${tqs(instanceToken)}`, { headers })
       if (!res.ok) return 'not_found'
       const data = await safeJson(res)
       if (!data) return 'not_found'
-      return (data?.instance as Record<string, string>)?.state ?? (data?.state as string) ?? 'close'
+      const status = (data.instance as Record<string, string>)?.status
+                  ?? (data.status as string)
+                  ?? 'close'
+      return status
     } catch {
       return 'not_found'
     }
   },
 
-  // Retorna { base64 } se QR disponível, { connected: true, owner } se já conectado
-  getQrCode: async (instanceName: string): Promise<{ base64?: string; connected?: boolean; owner?: string; error?: string }> => {
+  /**
+   * Obtém o número de telefone do owner da instância conectada.
+   */
+  getOwnerPhone: async (instanceToken: string): Promise<string | null> => {
     try {
-      const connectRes = await fetch(`${BASE}/instance/connect/${instanceName}`, { headers })
-      const data = await safeJson(connectRes)
-
-      if (connectRes.ok) {
-        if (!data) return { error: 'API não retornou JSON válido.' }
-        const state = (data?.instance as Record<string, string>)?.state
-        if (state === 'open') {
-          const owner = (data?.instance as Record<string, string>)?.owner ?? ''
-          return { connected: true, owner }
-        }
-        const raw = (data?.base64 ?? (data?.qrcode as Record<string, string>)?.base64 ?? '') as string
-        if (raw) {
-          const base64 = raw.startsWith('data:') ? raw.split(',')[1] : raw
-          return { base64 }
-        }
-        return { error: 'QR não disponível. Clique em "Desconectar" e tente novamente.' }
-      }
-
-      // Instância não existe — cria
-      const created = await evolutionApi.createInstance(instanceName)
-      if (!created) return { error: 'Falha ao criar instância.' }
-      const raw = ((created?.qrcode as Record<string, string>)?.base64 ?? (created?.base64 as string) ?? '')
-      if (raw) {
-        const base64 = raw.startsWith('data:') ? raw.split(',')[1] : raw
-        return { base64 }
-      }
-      return { error: 'QR não disponível ainda, tente em instantes.' }
-    } catch (err) {
-      return { error: `Erro de rede: ${String(err)}` }
-    }
-  },
-
-  // Retorna phone number do owner após conexão
-  getOwnerPhone: async (instanceName: string): Promise<string | null> => {
-    try {
-      const res = await fetch(`${BASE}/instance/connectionState/${instanceName}`, { headers })
+      const res = await fetch(`${BASE}/instance/status?${tqs(instanceToken)}`, { headers })
       const data = await safeJson(res)
-      const owner = (data?.instance as Record<string, string>)?.owner ?? ''
+      const inst = data?.instance as Record<string, string> | undefined
+      const owner = inst?.owner ?? (data?.jid as string) ?? ''
       return owner ? owner.replace(/@.+$/, '') : null
     } catch {
       return null
     }
   },
 
-  disconnectInstance: async (instanceName: string) => {
-    const res = await fetch(`${BASE}/instance/logout/${instanceName}`, { method: 'DELETE', headers })
-    return safeJson(res)
-  },
-
-  deleteInstance: async (instanceName: string) => {
-    const res = await fetch(`${BASE}/instance/delete/${instanceName}`, { method: 'DELETE', headers })
-    return safeJson(res)
-  },
-
-  setWebhook: async (instanceName: string, webhookUrl: string): Promise<boolean> => {
+  /**
+   * Aciona a conexão e retorna QR code (ou indica que já está conectado).
+   * Retorna { base64 } se QR disponível, { connected: true, owner } se já conectado.
+   */
+  getQrCode: async (instanceToken: string): Promise<{ base64?: string; connected?: boolean; owner?: string; error?: string }> => {
     try {
-      const res = await fetch(`${BASE}/webhook/set/${instanceName}`, {
+      const res = await fetch(`${BASE}/instance/connect?${tqs(instanceToken)}`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          webhook: {
-            url: webhookUrl,
-            webhook_by_events: true,
-            webhook_base64: false,
-            enabled: true,
-            events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE'],
-          },
-        }),
+      })
+      const data = await safeJson(res)
+      if (!data) return { error: 'API não retornou resposta.' }
+
+      // Já conectado
+      const connected = data.connected as boolean
+      if (connected) {
+        const owner = (data.jid as string)
+                   ?? (data.instance as Record<string, string>)?.owner
+                   ?? ''
+        return { connected: true, owner }
+      }
+
+      // QR disponível em instance.qrcode (string "data:image/png;base64,...")
+      const inst   = data.instance as Record<string, string> | undefined
+      const qrcode = inst?.qrcode ?? (data.qrcode as string) ?? ''
+      if (qrcode) {
+        const base64 = qrcode.startsWith('data:') ? qrcode.split(',')[1] : qrcode
+        return { base64 }
+      }
+
+      return { error: 'QR não disponível ainda, tente em instantes.' }
+    } catch (err) {
+      return { error: `Erro de rede: ${String(err)}` }
+    }
+  },
+
+  /** Desconecta (logout) a instância. */
+  disconnectInstance: async (instanceToken: string): Promise<void> => {
+    try {
+      await fetch(`${BASE}/instance/logout?${tqs(instanceToken)}`, { method: 'POST', headers })
+    } catch { /* noop */ }
+  },
+
+  /** Deleta a instância do servidor. */
+  deleteInstance: async (instanceToken: string): Promise<void> => {
+    try {
+      await fetch(`${BASE}/instance/delete?${tqs(instanceToken)}`, { method: 'DELETE', headers })
+    } catch { /* noop */ }
+  },
+
+  /** Configura o webhook da instância. */
+  setWebhook: async (instanceToken: string, webhookUrl: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`${BASE}/webhook?${tqs(instanceToken)}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ url: webhookUrl, enabled: true }),
       })
       return res.ok
     } catch {
@@ -134,40 +213,18 @@ export const evolutionApi = {
     }
   },
 
-  getInstancesList: async (): Promise<string[]> => {
-    try {
-      const res = await fetch(`${BASE}/instance/fetchInstances`, { headers })
-      if (!res.ok) return []
-      const text = await res.text()
-      let data: unknown
-      try { data = JSON.parse(text) } catch { return [] }
-      if (!Array.isArray(data)) return []
-      return data
-        .map((i: unknown) => {
-          const item = i as Record<string, unknown>
-          const inst = item?.instance as Record<string, unknown> | undefined
-          return (inst?.instanceName ?? item?.instanceName ?? '') as string
-        })
-        .filter(Boolean)
-    } catch {
-      return []
-    }
-  },
+  // ── Contatos e Chats ─────────────────────────────────────────────────────────
 
-  // ── Chats e mensagens ────────────────────────────────────────────────────────
-
-  /** Retorna mapa { número_sem_sufixo: nome } com todos os contatos da instância */
-  findContacts: async (instance: string): Promise<Record<string, string>> => {
+  /** Retorna mapa { número: nome } com todos os contatos da instância */
+  findContacts: async (instanceToken: string): Promise<Record<string, string>> => {
     try {
-      const res = await fetch(`${BASE}/chat/findContacts/${instance}`, {
-        method: 'POST', headers, body: JSON.stringify({ where: {} }),
-      })
+      const res = await fetch(`${BASE}/contacts?${tqs(instanceToken)}`, { headers })
       if (!res.ok) return {}
       const data = await safeJson(res)
       const list = Array.isArray(data) ? data : ((data?.contacts as unknown[]) ?? [])
       const map: Record<string, string> = {}
       for (const c of list as Record<string, unknown>[]) {
-        const jid  = ((c.id ?? c.remoteJid ?? '') as string).replace(/@.+$/, '')
+        const jid  = ((c.id ?? c.remoteJid ?? c.jid ?? '') as string).replace(/@.+$/, '')
         const name = ((c.pushName ?? c.name ?? c.notify ?? '') as string).trim()
         if (jid && name) map[jid] = name
       }
@@ -177,76 +234,103 @@ export const evolutionApi = {
     }
   },
 
-  findChats: async (instance: string) => {
-    const res = await fetch(`${BASE}/chat/findChats/${instance}`, {
-      method: 'POST', headers, body: JSON.stringify({}),
-    })
-    return safeJson(res)
-  },
-
-  findMessages: async (instance: string, remoteJid: string, limit = 50) => {
-    const res = await fetch(`${BASE}/chat/findMessages/${instance}`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ where: { key: { remoteJid } }, limit }),
-    })
-    return safeJson(res)
-  },
-
-  fetchProfilePicture: async (instance: string, number: string): Promise<string | null> => {
+  /** Retorna a lista de chats da instância. */
+  findChats: async (instanceToken: string): Promise<Record<string, unknown>[] | null> => {
     try {
-      const res = await fetch(`${BASE}/chat/fetchProfilePictureUrl/${instance}`, {
-        method: 'POST', headers, body: JSON.stringify({ number }),
-      })
-      if (!res.ok) return null
+      const res = await fetch(`${BASE}/chats?${tqs(instanceToken)}`, { headers })
       const data = await safeJson(res)
-      return (data?.profilePictureUrl as string) ?? null
+      if (Array.isArray(data)) return data as Record<string, unknown>[]
+      return (data?.chats as Record<string, unknown>[] | null) ?? null
     } catch {
       return null
     }
   },
 
-  markAsRead: async (instanceName: string, remoteJid: string): Promise<void> => {
+  /** Retorna mensagens de um chat. */
+  findMessages: async (instanceToken: string, remoteJid: string, limit = 50): Promise<Record<string, unknown> | null> => {
     try {
-      await fetch(`${BASE}/chat/markMessageAsRead/${instanceName}`, {
-        method: 'POST', headers,
-        body: JSON.stringify({ readMessages: [{ remoteJid, fromMe: false, id: 'all' }] }),
+      const jidEncoded = encodeURIComponent(remoteJid)
+      const res = await fetch(
+        `${BASE}/messages?${tqs(instanceToken)}&jid=${jidEncoded}&limit=${limit}`,
+        { headers },
+      )
+      return safeJson(res)
+    } catch {
+      return null
+    }
+  },
+
+  /** Busca URL da foto de perfil de um contato. */
+  fetchProfilePicture: async (instanceToken: string, number: string): Promise<string | null> => {
+    try {
+      const res = await fetch(
+        `${BASE}/contacts/photo?${tqs(instanceToken)}&number=${encodeURIComponent(number)}`,
+        { headers },
+      )
+      if (!res.ok) return null
+      const data = await safeJson(res)
+      return (data?.url as string) ?? (data?.profilePictureUrl as string) ?? null
+    } catch {
+      return null
+    }
+  },
+
+  /** Marca mensagens de um chat como lidas. */
+  markAsRead: async (instanceToken: string, remoteJid: string): Promise<void> => {
+    try {
+      await fetch(`${BASE}/messages/read?${tqs(instanceToken)}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ jid: remoteJid }),
       })
     } catch { /* noop */ }
   },
 
-  // ── Envio ────────────────────────────────────────────────────────────────────
+  // ── Envio de mensagens ───────────────────────────────────────────────────────
 
-  sendText: async (instance: string, number: string, text: string) => {
-    const res = await fetch(`${BASE}/message/sendText/${instance}`, {
-      method: 'POST', headers,
-      body: JSON.stringify({ number, text }),
-    })
-    return safeJson(res)
+  sendText: async (instanceToken: string, number: string, text: string): Promise<Record<string, unknown> | null> => {
+    try {
+      const res = await fetch(`${BASE}/messages/text?${tqs(instanceToken)}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ number, text }),
+      })
+      return safeJson(res)
+    } catch {
+      return null
+    }
   },
 
   sendTextWithQuote: async (
-    instance: string, number: string, text: string,
+    instanceToken: string,
+    number: string,
+    text: string,
     quoted: { keyId: string; fromMe: boolean; remoteJid: string; content?: string },
-  ) => {
-    const res = await fetch(`${BASE}/message/sendText/${instance}`, {
-      method: 'POST', headers,
-      body: JSON.stringify({
-        number, text,
-        quoted: {
-          key: { id: quoted.keyId, fromMe: quoted.fromMe, remoteJid: quoted.remoteJid },
-          ...(quoted.content ? { message: { conversation: quoted.content } } : {}),
-        },
-      }),
-    })
-    return safeJson(res)
+  ): Promise<Record<string, unknown> | null> => {
+    try {
+      const res = await fetch(`${BASE}/messages/text?${tqs(instanceToken)}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          number, text,
+          quoted: {
+            key: { id: quoted.keyId, fromMe: quoted.fromMe, remoteJid: quoted.remoteJid },
+            ...(quoted.content ? { message: { conversation: quoted.content } } : {}),
+          },
+        }),
+      })
+      return safeJson(res)
+    } catch {
+      return null
+    }
   },
 
-  sendAudio: async (instanceName: string, number: string, audioBase64: string): Promise<boolean> => {
+  sendAudio: async (instanceToken: string, number: string, audioBase64: string): Promise<boolean> => {
     try {
-      const res = await fetch(`${BASE}/message/sendWhatsAppAudio/${instanceName}`, {
-        method: 'POST', headers,
-        body: JSON.stringify({ number, audioMessage: { audio: audioBase64, encoding: true } }),
+      const res = await fetch(`${BASE}/messages/audio?${tqs(instanceToken)}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ number, audio: audioBase64, encoding: true }),
       })
       return res.ok
     } catch {
@@ -254,11 +338,12 @@ export const evolutionApi = {
     }
   },
 
-  sendImageBase64: async (instanceName: string, number: string, base64: string, caption = ''): Promise<boolean> => {
+  sendImageBase64: async (instanceToken: string, number: string, base64: string, caption = ''): Promise<boolean> => {
     try {
-      const res = await fetch(`${BASE}/message/sendMedia/${instanceName}`, {
-        method: 'POST', headers,
-        body: JSON.stringify({ number, mediatype: 'image', media: base64, caption }),
+      const res = await fetch(`${BASE}/messages/image?${tqs(instanceToken)}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ number, image: base64, caption }),
       })
       return res.ok
     } catch {
@@ -266,22 +351,42 @@ export const evolutionApi = {
     }
   },
 
-  sendTemplate: async (instance: string, number: string, template: string, variables: Record<string, string>) => {
+  sendMediaUrl: async (
+    instanceToken: string,
+    number: string,
+    mediaUrl: string,
+    mediaType: 'image' | 'video' | 'document' | 'audio',
+    caption = '',
+  ): Promise<boolean> => {
+    try {
+      const res = await fetch(`${BASE}/messages/${mediaType}?${tqs(instanceToken)}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ number, url: mediaUrl, caption }),
+      })
+      return res.ok
+    } catch {
+      return false
+    }
+  },
+
+  sendTemplate: async (instanceToken: string, number: string, template: string, variables: Record<string, string>): Promise<Record<string, unknown> | null> => {
     let text = template
     Object.entries(variables).forEach(([key, value]) => { text = text.replace(`{{${key}}}`, value) })
-    return evolutionApi.sendText(instance, number, text)
+    return evolutionApi.sendText(instanceToken, number, text)
   },
 
   // ── Mídia ────────────────────────────────────────────────────────────────────
 
   getMediaBase64: async (
-    instanceName: string,
+    instanceToken: string,
     key: { id: string; fromMe: boolean; remoteJid: string },
   ): Promise<string | null> => {
     try {
-      const res = await fetch(`${BASE}/chat/getBase64FromMediaMessage/${instanceName}`, {
-        method: 'POST', headers,
-        body: JSON.stringify({ key, convertToMp4: false }),
+      const res = await fetch(`${BASE}/media/download?${tqs(instanceToken)}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ key }),
       })
       if (!res.ok) return null
       const data = await safeJson(res)

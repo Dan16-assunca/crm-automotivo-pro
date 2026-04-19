@@ -9,6 +9,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
+    lock: async (_name, _acquireTimeout, fn) => fn(),
   },
   realtime: {
     params: {

@@ -1,14 +1,22 @@
-import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { motion } from 'framer-motion'
-import { Mail, Lock, User, Building2, Eye, EyeOff, Car, CheckCircle } from 'lucide-react'
+import {
+  Mail, Lock, User, Building2, Eye, EyeOff, Car, CheckCircle,
+  Check, X, Loader2, Globe,
+} from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { toast } from '@/components/ui/Toast'
+import { redirectToTenant, isOnTenantSubdomain } from '@/hooks/useTenant'
+
+const ROOT_DOMAIN = (import.meta.env.VITE_ROOT_DOMAIN as string | undefined) ?? 'crmautomotivopro.com'
+const RESERVED_SLUGS = new Set(['app', 'www', 'api', 'admin', 'mail', 'smtp', 'ftp', 'blog', 'docs', 'status', 'suporte', 'billing', 'demo'])
 
 const schema = z.object({
   full_name:  z.string().min(2, 'Nome obrigatório'),
@@ -23,32 +31,98 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>
 
+function generateSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // remove acentos
+    .replace(/[^a-z0-9]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 30)
+}
+
 export default function Register() {
   const navigate = useNavigate()
-  const [showPwd, setShowPwd] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false)
+  const { user, store } = useAuthStore()
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  // Se já logado, redireciona para o dashboard da loja
+  useEffect(() => {
+    if (user) {
+      const slug = (store as (typeof store & { slug?: string | null }) | null)?.slug
+      if (slug && !isOnTenantSubdomain()) {
+        redirectToTenant(slug, '/dashboard')
+      } else {
+        navigate('/dashboard', { replace: true })
+      }
+    }
+  }, [user, store, navigate])
+
+  const [showPwd, setShowPwd]             = useState(false)
+  const [submitting, setSubmitting]       = useState(false)
+  const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false)
+  const [slug, setSlug]                   = useState('')
+  const [slugStatus, setSlugStatus]       = useState<'idle' | 'checking' | 'available' | 'taken' | 'reserved'>('idle')
+  const debounceRef                       = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
 
+  const storeName = watch('store_name')
+
+  // Auto-gera slug quando o nome da loja muda (se o usuário ainda não editou manualmente)
+  const [slugEdited, setSlugEdited] = useState(false)
+  useEffect(() => {
+    if (!slugEdited && storeName) {
+      const auto = generateSlug(storeName)
+      setSlug(auto)
+    }
+  }, [storeName, slugEdited])
+
+  // Debounce do check de disponibilidade
+  useEffect(() => {
+    if (!slug) { setSlugStatus('idle'); return }
+    if (slug.length < 3) { setSlugStatus('idle'); return }
+    if (RESERVED_SLUGS.has(slug)) { setSlugStatus('reserved'); return }
+
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    setSlugStatus('checking')
+
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const { data } = await supabase.rpc('is_slug_available', { p_slug: slug })
+        setSlugStatus(data ? 'available' : 'taken')
+      } catch {
+        setSlugStatus('idle')
+      }
+    }, 500)
+
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [slug])
+
   const onSubmit = async (data: FormData) => {
+    if (slugStatus !== 'available') {
+      toast.error('Endereço inválido', 'Escolha um endereço disponível para sua loja')
+      return
+    }
     setSubmitting(true)
     try {
-      // Toda a criação transacional acontece na Edge Function (service role server-side)
-      const SUPA_URL  = (import.meta.env.VITE_SUPABASE_URL  as string | undefined) ?? 'https://eakdywmuewvuzyqfpcpl.supabase.co'
-      const SUPA_ANON = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVha2R5d211ZXd2dXp5cWZwY3BsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3MjQ5MTgsImV4cCI6MjA5MDMwMDkxOH0.EeUINhQUomMKqhfkjGnkDpO3aO5NZ4Yqd15qof-mB20'
+      const SUPA_URL  = (import.meta.env.VITE_SUPABASE_URL  as string) ?? 'https://eakdywmuewvuzyqfpcpl.supabase.co'
+      const SUPA_ANON = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ?? ''
       const fnUrl = `${SUPA_URL}/functions/v1/create-store-and-user`
+
       const res = await fetch(fnUrl, {
         method:  'POST',
         headers: {
           'Content-Type': 'application/json',
           'apikey': SUPA_ANON,
+          'Authorization': `Bearer ${SUPA_ANON}`,
         },
         body: JSON.stringify({
           full_name:  data.full_name,
           store_name: data.store_name,
+          slug,
           email:      data.email,
           password:   data.password,
         }),
@@ -57,24 +131,32 @@ export default function Register() {
       const result = await res.json()
 
       if (!res.ok || result.error) {
-        toast.error('Erro no cadastro', result.error ?? 'Tente novamente')
+        const isAlreadyRegistered = result.error?.toLowerCase().includes('cadastrado')
+        if (isAlreadyRegistered) {
+          toast.error('Email já cadastrado', 'Este email já possui uma conta. Clique em "Fazer login".')
+          navigate('/login')
+        } else {
+          toast.error('Erro no cadastro', result.error ?? 'Tente novamente')
+        }
         return
       }
 
       if (!result.session) {
-        // Edge Function criou a conta mas não devolveu sessão (improvável)
         setNeedsEmailConfirm(true)
         return
       }
 
-      // Injetar sessão no cliente Supabase → dispara onAuthStateChange → loadProfile automático
+      // Injeta sessão no cliente Supabase
       await supabase.auth.setSession({
         access_token:  result.session.access_token,
         refresh_token: result.session.refresh_token,
       })
 
-      toast.success('Conta criada!', `Bem-vindo, ${data.full_name.split(' ')[0]}!`)
-      navigate('/dashboard', { replace: true })
+      toast.success('Conta criada!', `Bem-vindo, ${data.full_name.split(' ')[0]}! Redirecionando…`)
+
+      // Redireciona para o subdomínio da loja
+      const finalSlug = result.slug ?? slug
+      setTimeout(() => redirectToTenant(finalSlug, '/dashboard'), 800)
 
     } catch (err) {
       toast.error('Erro ao criar conta', err instanceof Error ? err.message : 'Tente novamente')
@@ -104,7 +186,8 @@ export default function Register() {
             <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--t)', marginBottom: 8 }}>Verifique seu email</h2>
             <p style={{ fontSize: 12, color: 'var(--t3)', lineHeight: 1.7 }}>
               Enviamos um link de confirmação para seu email.<br />
-              Clique no link para ativar sua conta e depois faça login normalmente.
+              Após confirmar, acesse sua loja em:<br />
+              <strong style={{ color: 'var(--neon)' }}>{slug}.{ROOT_DOMAIN}</strong>
             </p>
             <Link to="/login" style={{ display: 'inline-block', marginTop: 20, fontSize: 12, color: 'var(--neon)' }}>
               Ir para o login
@@ -136,7 +219,7 @@ export default function Register() {
       ))}
 
       <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
-        style={{ width: '100%', maxWidth: 420, position: 'relative', zIndex: 10 }}>
+        style={{ width: '100%', maxWidth: 440, position: 'relative', zIndex: 10 }}>
 
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
@@ -145,7 +228,7 @@ export default function Register() {
             <Car size={28} style={{ color: 'var(--neon)' }} />
           </motion.div>
           <h1 style={{ fontSize: 32, fontWeight: 800, color: 'var(--neon)', letterSpacing: '.12em', textShadow: '0 0 20px rgba(61,247,16,.4)' }}>CRM AUTO</h1>
-          <p style={{ fontSize: 10, color: 'var(--t3)', letterSpacing: '.25em', textTransform: 'uppercase', marginTop: 4 }}>Criar Nova Conta</p>
+          <p style={{ fontSize: 10, color: 'var(--t3)', letterSpacing: '.25em', textTransform: 'uppercase', marginTop: 4 }}>Criar Nova Conta · 14 dias grátis</p>
         </div>
 
         {/* Card */}
@@ -154,6 +237,7 @@ export default function Register() {
           <p style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 20 }}>Crie sua conta e comece a vender mais</p>
 
           <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+
             {/* Nome completo */}
             <div>
               <label style={lbl}>Nome Completo</label>
@@ -178,11 +262,55 @@ export default function Register() {
               {errors.store_name && <p style={{ fontSize: 10, color: 'var(--red)', marginTop: 3 }}>{errors.store_name.message}</p>}
             </div>
 
-            {/* Email */}
+            {/* Endereço da loja (slug) */}
             <div>
-              <Input label="Email" type="email" placeholder="seu@email.com" icon={<Mail size={13} />}
-                error={errors.email?.message} {...register('email')} />
+              <label style={lbl}>Endereço da sua loja</label>
+              <div style={{
+                display: 'flex', alignItems: 'center',
+                background: 'var(--el)', border: `1px solid ${
+                  slugStatus === 'available' ? 'var(--neon)' :
+                  slugStatus === 'taken' || slugStatus === 'reserved' ? 'var(--red)' : 'var(--b)'
+                }`,
+                borderRadius: 7, overflow: 'hidden', height: 34, transition: 'border-color .15s',
+              }}>
+                <Globe size={12} style={{ marginLeft: 10, color: 'var(--t3)', flexShrink: 0 }} />
+                <input
+                  type="text"
+                  value={slug}
+                  onChange={e => { setSlug(generateSlug(e.target.value)); setSlugEdited(true) }}
+                  placeholder="minha-loja"
+                  style={{
+                    flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                    color: 'var(--t)', fontSize: 12, fontFamily: 'var(--fn)',
+                    paddingLeft: 8, height: '100%',
+                  }}
+                />
+                <span style={{ fontSize: 10, color: 'var(--t3)', paddingRight: 8, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  .{ROOT_DOMAIN}
+                </span>
+                <div style={{ width: 20, marginRight: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {slugStatus === 'checking' && <Loader2 size={12} style={{ color: 'var(--t3)', animation: 'spin 1s linear infinite' }} />}
+                  {slugStatus === 'available' && <Check size={12} style={{ color: 'var(--neon)' }} />}
+                  {(slugStatus === 'taken' || slugStatus === 'reserved') && <X size={12} style={{ color: 'var(--red)' }} />}
+                </div>
+              </div>
+              <p style={{
+                fontSize: 10, marginTop: 4,
+                color: slugStatus === 'available' ? 'var(--neon)' :
+                  slugStatus === 'taken' ? 'var(--red)' :
+                  slugStatus === 'reserved' ? 'var(--red)' : 'var(--t3)',
+              }}>
+                {slugStatus === 'available' && `✓ ${slug}.${ROOT_DOMAIN} está disponível!`}
+                {slugStatus === 'taken'     && `✗ Este endereço já está em uso`}
+                {slugStatus === 'reserved'  && `✗ Este endereço é reservado pelo sistema`}
+                {slugStatus === 'idle' && slug.length > 0 && slug.length < 3 && 'Mínimo 3 caracteres'}
+                {slugStatus === 'idle' && slug.length === 0 && 'Será o endereço exclusivo da sua loja'}
+              </p>
             </div>
+
+            {/* Email */}
+            <Input label="Email" type="email" placeholder="dono@minha-loja.com.br" icon={<Mail size={13} />}
+              error={errors.email?.message} {...register('email')} />
 
             {/* Senha */}
             <div>
@@ -214,9 +342,32 @@ export default function Register() {
               {errors.confirm && <p style={{ fontSize: 10, color: 'var(--red)', marginTop: 3 }}>{errors.confirm.message}</p>}
             </div>
 
-            <Button type="submit" variant="primary" size="lg" loading={submitting} style={{ marginTop: 4 }}>
-              {submitting ? 'Criando conta...' : 'Criar conta grátis'}
+            {/* Preview do endereço */}
+            {slug && slugStatus === 'available' && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                style={{
+                  background: 'var(--ng)', border: '1px solid var(--nb)',
+                  borderRadius: 8, padding: '10px 14px',
+                }}>
+                <p style={{ fontSize: 11, color: 'var(--t3)', margin: 0 }}>Sua loja ficará acessível em:</p>
+                <p style={{ fontSize: 13, color: 'var(--neon)', fontWeight: 600, margin: '3px 0 0' }}>
+                  {slug}.{ROOT_DOMAIN}
+                </p>
+              </motion.div>
+            )}
+
+            <Button type="submit" variant="primary" size="lg"
+              loading={submitting}
+              disabled={slugStatus !== 'available' || submitting}
+              style={{ marginTop: 4 }}>
+              {submitting ? 'Criando conta...' : 'Criar conta grátis →'}
             </Button>
+
+            <p style={{ textAlign: 'center', fontSize: 10, color: 'var(--t3)', lineHeight: 1.6 }}>
+              14 dias grátis, sem cartão de crédito.<br />
+              Ao criar, você concorda com os Termos de Uso.
+            </p>
           </form>
 
           <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--t3)', marginTop: 18 }}>

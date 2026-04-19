@@ -1,9 +1,41 @@
 // Edge Function: create-store-and-user
 // Cria conta + loja de forma transacional usando service role.
 // O frontend NÃO usa service role key — toda a operação privilegiada fica aqui.
+// Aceita `slug` para multi-tenancy — gera automaticamente se não fornecido.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
+
+/** Gera slug a partir do nome da loja */
+function generateSlug(name: string): string {
+  const normalized = name
+    .toLowerCase()
+    .replace(/[áàâãä]/g, 'a')
+    .replace(/[éèêë]/g, 'e')
+    .replace(/[íìîï]/g, 'i')
+    .replace(/[óòôõö]/g, 'o')
+    .replace(/[úùûü]/g, 'u')
+    .replace(/ç/g, 'c')
+    .replace(/[^a-z0-9]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 30)
+  return normalized || 'loja'
+}
+
+/** Garante unicidade do slug adicionando sufixo numérico se necessário */
+async function ensureUniqueSlug(admin: ReturnType<typeof createClient>, base: string): Promise<string> {
+  let candidate = base
+  let attempt = 0
+  while (attempt < 20) {
+    const { data } = await admin.from('stores').select('id').eq('slug', candidate).single()
+    if (!data) return candidate  // disponível
+    attempt++
+    candidate = `${base}${attempt}`
+  }
+  // Fallback com timestamp
+  return `${base}-${Date.now().toString(36).slice(-4)}`
+}
 
 Deno.serve(async (req: Request) => {
   // CORS preflight
@@ -18,7 +50,7 @@ Deno.serve(async (req: Request) => {
     })
 
   try {
-    const { full_name, store_name, email, password } = await req.json()
+    const { full_name, store_name, slug: requestedSlug, email, password } = await req.json()
 
     // Validação básica
     if (!full_name?.trim() || !store_name?.trim() || !email?.trim() || !password) {
@@ -33,19 +65,16 @@ Deno.serve(async (req: Request) => {
     const serviceKey   = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const anonKey      = Deno.env.get('SUPABASE_ANON_KEY')!
 
-    // Admin client: operações privilegiadas (cria usuário confirmado, cria registros)
     const admin = createClient(supabaseUrl, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     })
-
-    // Anon client: faz o sign-in final para devolver a session ao frontend
     const anon = createClient(supabaseUrl, anonKey)
 
     // ── 1. Criar usuário no Auth (já confirmado) ─────────────────────────────
     const { data: authData, error: authError } = await admin.auth.admin.createUser({
       email:         email.trim().toLowerCase(),
       password,
-      email_confirm: true,               // confirma sem precisar de email
+      email_confirm: true,
       user_metadata: { full_name },
     })
 
@@ -61,19 +90,38 @@ Deno.serve(async (req: Request) => {
 
     const userId = authData.user.id
     let storeId: string | null = null
+    let finalSlug: string | null = null
 
     try {
-      // ── 2. Criar loja ───────────────────────────────────────────────────────
+      // ── 2. Resolver slug único ───────────────────────────────────────────────
+      const baseSlug = requestedSlug?.trim()
+        ? requestedSlug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 30)
+        : generateSlug(store_name.trim())
+
+      finalSlug = await ensureUniqueSlug(admin, baseSlug)
+
+      // ── 3. Criar loja ──────────────────────────────────────────────────────
       const { data: store, error: storeErr } = await admin
         .from('stores')
-        .insert({ name: store_name.trim(), plan: 'pro', active: true, settings: {} })
+        .insert({
+          name:     store_name.trim(),
+          slug:     finalSlug,
+          plan:     'starter',
+          status:   'trial',
+          active:   true,
+          settings: {
+            whatsapp_instance: null,
+            whatsapp_status:   'disconnected',
+          },
+          trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+        })
         .select('id')
         .single()
 
       if (storeErr) throw new Error('Erro ao criar loja: ' + storeErr.message)
       storeId = store.id
 
-      // ── 3. Criar perfil do usuário (admin da loja) ──────────────────────────
+      // ── 4. Criar perfil do usuário (admin da loja) ─────────────────────────
       const { error: userErr } = await admin.from('users').insert({
         id:        userId,
         store_id:  storeId,
@@ -82,36 +130,30 @@ Deno.serve(async (req: Request) => {
         role:      'admin',
         active:    true,
       })
-
       if (userErr) throw new Error('Erro ao criar perfil: ' + userErr.message)
 
-      // ── 4. Criar etapas padrão do pipeline ──────────────────────────────────
-      // SECURITY DEFINER → bypassa RLS, não há problema
+      // ── 5. Criar etapas padrão do pipeline ────────────────────────────────
       const { error: stagesErr } = await admin.rpc('create_default_stages', { p_store_id: storeId })
       if (stagesErr) {
-        // Não é fatal — estágios podem ser criados manualmente depois
         console.warn('create_default_stages warning:', stagesErr.message)
       }
 
-      // ── 5. Fazer sign-in e retornar session para login automático ────────────
+      // ── 6. Sign-in e retorno da session ───────────────────────────────────
       const { data: signIn, error: signInErr } = await anon.auth.signInWithPassword({
         email:    email.trim().toLowerCase(),
         password,
       })
-
       if (signInErr) throw new Error('Conta criada mas erro ao entrar: ' + signInErr.message)
 
-      return json({ session: signIn.session, user: signIn.user })
+      return json({ session: signIn.session, user: signIn.user, slug: finalSlug })
 
     } catch (err) {
-      // ── ROLLBACK: remover o que foi criado para não deixar dados órfãos ─────
+      // ── ROLLBACK ──────────────────────────────────────────────────────────
       console.error('[create-store-and-user] rollback:', err)
       if (storeId) {
         await admin.from('stores').delete().eq('id', storeId).catch(() => {})
       }
-      // Deleta o auth user para que o email fique disponível para nova tentativa
       await admin.auth.admin.deleteUser(userId).catch(() => {})
-
       throw err
     }
   } catch (err) {

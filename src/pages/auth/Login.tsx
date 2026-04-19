@@ -10,6 +10,7 @@ import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { toast } from '@/components/ui/Toast'
+import { redirectToTenant, isOnTenantSubdomain } from '@/hooks/useTenant'
 
 const schema = z.object({
   email: z.string().email('Email inválido'),
@@ -79,9 +80,18 @@ export default function Login() {
 
         if (profile) {
           setUser(profile as Parameters<typeof setUser>[0])
-          if (profile.stores) setStore(profile.stores as Parameters<typeof setStore>[0])
+          const storeData = profile.stores as (Parameters<typeof setStore>[0] & { slug?: string | null }) | null
+          if (storeData) setStore(storeData as Parameters<typeof setStore>[0])
+
           toast.success('Bem-vindo!', `Olá, ${profile.full_name?.split(' ')[0]}`)
-          navigate('/dashboard', { replace: true })
+
+          // Se a loja tem slug e não estamos no subdomínio correto, redireciona
+          const slug = storeData?.slug
+          if (slug && !isOnTenantSubdomain()) {
+            redirectToTenant(slug, '/dashboard')
+          } else {
+            navigate('/dashboard', { replace: true })
+          }
         }
       }
     } catch {

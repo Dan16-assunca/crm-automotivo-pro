@@ -19,6 +19,8 @@ import { toast } from '@/components/ui/Toast'
 interface WaInstance {
   id: string
   instance_name: string
+  instance_token: string | null
+  uazapi_id: string | null
   label: string | null
   phone_number: string | null
   status: string
@@ -40,6 +42,7 @@ function WhatsAppSection() {
   const [loadingQr, setLoadingQr]   = useState(false)
   const [syncing, setSyncing]       = useState(false)
   const [currentInst, setCurrentInst] = useState<string | null>(null)
+  const [currentToken, setCurrentToken] = useState<string | null>(null)
 
   const pollRef    = useRef<ReturnType<typeof setInterval> | null>(null)
   const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -57,7 +60,7 @@ function WhatsAppSection() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('whatsapp_instances')
-        .select('id, instance_name, label, phone_number, status, profile_pic_url, connected_at')
+        .select('id, instance_name, instance_token, uazapi_id, label, phone_number, status, profile_pic_url, connected_at')
         .eq('store_id', store!.id)
         .order('created_at', { ascending: true })
       if (error) throw error
@@ -67,59 +70,58 @@ function WhatsAppSection() {
     refetchInterval: 8000,
   })
 
-  // ── Auto-sync: detecta instâncias já conectadas no Evolution API mas não cadastradas no banco
-  // Roda uma vez no mount. Essencial para quem conectou o WhatsApp antes deste sistema.
+  // ── Auto-sync: detecta instâncias já conectadas na UazapiGO mas não cadastradas no banco
   useEffect(() => {
     if (!store?.id) return
 
     const sync = async () => {
       setSyncing(true)
       try {
-        // 1. Busca todas as instâncias na Evolution API
-        const apiNames = await evolutionApi.getInstancesList()
-        if (!apiNames.length) { setSyncing(false); return }
+        // 1. Busca todas as instâncias na UazapiGO (admin)
+        const apiInstances = await evolutionApi.getInstances()
+        if (!apiInstances.length) { setSyncing(false); return }
 
-        // 2. Compara com o que já está no banco
+        // 2. Compara com o banco
         const { data: dbRows } = await supabase
           .from('whatsapp_instances')
-          .select('instance_name, status')
+          .select('instance_name, instance_token, status')
           .eq('store_id', store.id)
-        const dbMap = Object.fromEntries((dbRows ?? []).map(r => [r.instance_name, r.status]))
+        const dbMap = Object.fromEntries((dbRows ?? []).map(r => [r.instance_name, r]))
 
         let anyNew = false
 
-        for (const name of apiNames) {
-          const state = await evolutionApi.getConnectionState(name)
+        for (const inst of apiInstances) {
+          if (!inst.token) continue
+          const state  = await evolutionApi.getConnectionState(inst.token)
           const isOpen = state === 'open'
 
-          if (!dbMap[name]) {
-            // Instância não existe no banco — insere (apenas se estiver conectada, evita poluir lista)
+          if (!dbMap[inst.name]) {
             if (!isOpen) continue
-            const phone = await evolutionApi.getOwnerPhone(name)
-            const pic   = phone ? await evolutionApi.fetchProfilePicture(name, phone) : null
+            const phone = await evolutionApi.getOwnerPhone(inst.token)
+            const pic   = phone ? await evolutionApi.fetchProfilePicture(inst.token, phone) : null
             await supabase.from('whatsapp_instances').insert({
               store_id: store.id,
-              instance_name: name,
+              instance_name: inst.name,
+              instance_token: inst.token,
+              uazapi_id: inst.id,
               phone_number: phone,
               profile_pic_url: pic,
               status: 'connected',
               connected_at: new Date().toISOString(),
             })
-            if (isOpen) await evolutionApi.setWebhook(name, WEBHOOK_URL)
+            if (isOpen) await evolutionApi.setWebhook(inst.token, WEBHOOK_URL)
             anyNew = true
-          } else if (
-            dbMap[name] !== 'connecting' &&  // ← nunca sobrescrever instância em setup de QR
-            dbMap[name] !== (isOpen ? 'connected' : 'disconnected')
-          ) {
-            // Status divergente — corrige
-            await supabase.from('whatsapp_instances')
-              .update({ status: isOpen ? 'connected' : 'disconnected' })
-              .eq('store_id', store.id)
-              .eq('instance_name', name)
-            if (isOpen) await evolutionApi.setWebhook(name, WEBHOOK_URL)
-          } else if (isOpen && dbMap[name] === 'connected') {
-            // Já está correto no banco — só garante o webhook
-            await evolutionApi.setWebhook(name, WEBHOOK_URL)
+          } else {
+            const dbRow = dbMap[inst.name]
+            if (dbRow.status === 'connecting') continue
+            if (dbRow.status !== (isOpen ? 'connected' : 'disconnected')) {
+              await supabase.from('whatsapp_instances')
+                .update({ status: isOpen ? 'connected' : 'disconnected', instance_token: inst.token })
+                .eq('store_id', store.id).eq('instance_name', inst.name)
+              if (isOpen) await evolutionApi.setWebhook(inst.token, WEBHOOK_URL)
+            } else if (isOpen) {
+              await evolutionApi.setWebhook(inst.token, WEBHOOK_URL)
+            }
           }
         }
 
@@ -161,26 +163,40 @@ function WhatsAppSection() {
     const name = generateInstanceName(store.id)
     setCurrentInst(name)
 
-    // Cria registro no banco com status 'connecting'
+    // 1. Cria a instância na UazapiGO e obtém o instanceToken
+    const created = await evolutionApi.createInstance(name)
+    if (!created) {
+      toast.error('Erro ao criar instância', 'Não foi possível conectar à UazapiGO.')
+      setAdding(false)
+      setLoadingQr(false)
+      return
+    }
+
+    const { token, id } = created
+    setCurrentToken(token)
+
+    // 2. Salva no banco com o token
     const { error: dbErr } = await supabase.from('whatsapp_instances').insert({
       store_id: store.id,
       instance_name: name,
+      instance_token: token,
+      uazapi_id: id,
       status: 'connecting',
     })
     if (dbErr) {
-      toast.error('Erro ao criar instância', dbErr.message)
+      toast.error('Erro ao salvar instância', dbErr.message)
       setAdding(false)
       setLoadingQr(false)
       return
     }
     refetch()
 
-    // Busca QR code
-    const result = await evolutionApi.getQrCode(name)
+    // 3. Aciona conexão e obtém QR code
+    const result = await evolutionApi.getQrCode(token)
     setLoadingQr(false)
 
     if (result.connected) {
-      await handleConnected(name)
+      await handleConnected(name, token)
       return
     }
     if (result.error) {
@@ -192,11 +208,11 @@ function WhatsAppSection() {
     }
     if (result.base64) {
       setQrBase64(result.base64)
-      startQrCountdown(name)
+      startQrCountdown(name, token)
     }
   }
 
-  const startQrCountdown = (name: string) => {
+  const startQrCountdown = (name: string, token: string) => {
     setQrSecs(QR_TTL)
     timerRef.current = setInterval(() => {
       setQrSecs(prev => {
@@ -212,24 +228,23 @@ function WhatsAppSection() {
       })
     }, 1000)
 
-    // Polling para detectar quando o QR foi scaneado
+    // Polling usando instanceToken (não o nome)
     pollRef.current = setInterval(async () => {
-      const state = await evolutionApi.getConnectionState(name)
+      const state = await evolutionApi.getConnectionState(token)
       if (state === 'open') {
         stopAll()
-        await handleConnected(name)
+        await handleConnected(name, token)
       }
     }, 3000)
   }
 
-  const handleConnected = async (name: string) => {
+  const handleConnected = async (name: string, token: string) => {
     stopAll()
     setQrBase64(null)
     setAdding(false)
 
-    // Busca telefone do owner
-    const phone = await evolutionApi.getOwnerPhone(name)
-    const pic   = phone ? await evolutionApi.fetchProfilePicture(name, phone) : null
+    const phone = await evolutionApi.getOwnerPhone(token)
+    const pic   = phone ? await evolutionApi.fetchProfilePicture(token, phone) : null
 
     await supabase.from('whatsapp_instances').update({
       status: 'connected',
@@ -238,30 +253,32 @@ function WhatsAppSection() {
       connected_at: new Date().toISOString(),
     }).eq('instance_name', name)
 
-    // Registra webhook automaticamente
-    await evolutionApi.setWebhook(name, WEBHOOK_URL)
+    await evolutionApi.setWebhook(token, WEBHOOK_URL)
 
     refetch()
     queryClient.invalidateQueries({ queryKey: ['wa-instances-whatsapp'] })
+    queryClient.invalidateQueries({ queryKey: ['whatsapp-instances-db'] })
     toast.success('WhatsApp conectado!', phone ? `Número: +${phone}` : 'Instância ativa')
   }
 
   const handleDisconnect = async (inst: WaInstance) => {
-    await evolutionApi.disconnectInstance(inst.instance_name)
+    if (inst.instance_token) await evolutionApi.disconnectInstance(inst.instance_token)
     await supabase.from('whatsapp_instances').update({ status: 'disconnected', connected_at: null })
       .eq('id', inst.id)
     refetch()
-    queryClient.invalidateQueries({ queryKey: ['wa-instances-whatsapp'] })
+    queryClient.invalidateQueries({ queryKey: ['whatsapp-instances-db'] })
     toast.info('WhatsApp desconectado', inst.phone_number ?? inst.instance_name)
   }
 
   const handleRemove = async (inst: WaInstance) => {
     if (!confirm(`Remover o número ${inst.phone_number ?? inst.instance_name}?\nIsso desconectará o WhatsApp permanentemente.`)) return
-    await evolutionApi.disconnectInstance(inst.instance_name).catch(() => {})
-    await evolutionApi.deleteInstance(inst.instance_name).catch(() => {})
+    if (inst.instance_token) {
+      await evolutionApi.disconnectInstance(inst.instance_token).catch(() => {})
+      await evolutionApi.deleteInstance(inst.instance_token).catch(() => {})
+    }
     await supabase.from('whatsapp_instances').delete().eq('id', inst.id)
     refetch()
-    queryClient.invalidateQueries({ queryKey: ['wa-instances-whatsapp'] })
+    queryClient.invalidateQueries({ queryKey: ['whatsapp-instances-db'] })
     toast.success('Número removido')
   }
 
@@ -272,13 +289,33 @@ function WhatsAppSection() {
     stopAll()
     setCurrentInst(inst.instance_name)
 
-    await supabase.from('whatsapp_instances').update({ status: 'connecting' }).eq('id', inst.id)
+    // Se não tem token, recria a instância na UazapiGO
+    let token = inst.instance_token
+    if (!token) {
+      const created = await evolutionApi.createInstance(inst.instance_name)
+      if (!created) {
+        toast.error('Erro ao reconectar', 'Não foi possível criar instância na UazapiGO.')
+        setAdding(false)
+        setLoadingQr(false)
+        return
+      }
+      token = created.token
+      await supabase.from('whatsapp_instances').update({
+        instance_token: token,
+        uazapi_id: created.id,
+        status: 'connecting',
+      }).eq('id', inst.id)
+    } else {
+      await supabase.from('whatsapp_instances').update({ status: 'connecting' }).eq('id', inst.id)
+    }
+
+    setCurrentToken(token)
     refetch()
 
-    const result = await evolutionApi.getQrCode(inst.instance_name)
+    const result = await evolutionApi.getQrCode(token)
     setLoadingQr(false)
 
-    if (result.connected) { await handleConnected(inst.instance_name); return }
+    if (result.connected) { await handleConnected(inst.instance_name, token); return }
     if (result.error) {
       toast.error('Erro ao gerar QR Code', result.error)
       await supabase.from('whatsapp_instances').update({ status: 'disconnected' }).eq('id', inst.id)
@@ -288,7 +325,7 @@ function WhatsAppSection() {
     }
     if (result.base64) {
       setQrBase64(result.base64)
-      startQrCountdown(inst.instance_name)
+      startQrCountdown(inst.instance_name, token)
     }
   }
 

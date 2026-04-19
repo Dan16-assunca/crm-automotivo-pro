@@ -52,17 +52,29 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      // Proxy de desenvolvimento: /api/evolution → Evolution API real
-      // Em produção, o Vercel usa o serverless function em api/evolution/[...path].js
+      // Proxy de desenvolvimento: /api/whatsapp → Uazapi
+      // Em produção, o Vercel usa o serverless function em api/whatsapp/[...path].js
       proxy: {
+        '/api/whatsapp': {
+          target: env.UAZAPI_BASE_URL || 'https://api.uazapi.dev',
+          changeOrigin: true,
+          rewrite: (p) => p.replace(/^\/api\/whatsapp/, ''),
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq) => {
+              const token = env.UAZAPI_ADMIN_TOKEN || ''
+              if (token) proxyReq.setHeader('admintoken', token)
+            })
+          },
+        },
+        // Legado: redireciona /api/evolution para Uazapi também (compatibilidade durante transição)
         '/api/evolution': {
-          target: env.EVOLUTION_API_URL || 'http://localhost:8080',
+          target: env.UAZAPI_BASE_URL || 'https://api.uazapi.dev',
           changeOrigin: true,
           rewrite: (p) => p.replace(/^\/api\/evolution/, ''),
           configure: (proxy) => {
             proxy.on('proxyReq', (proxyReq) => {
-              const key = env.EVOLUTION_API_KEY || ''
-              if (key) proxyReq.setHeader('apikey', key)
+              const token = env.UAZAPI_ADMIN_TOKEN || ''
+              if (token) proxyReq.setHeader('admintoken', token)
             })
           },
         },

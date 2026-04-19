@@ -20,6 +20,7 @@ import { toast } from '@/components/ui/Toast'
 interface WaInstance {
   id: string
   instance_name: string
+  instance_token: string | null
   phone_number: string | null
   label: string | null
   status: string
@@ -224,9 +225,9 @@ function Avatar({ src, name, size = 32 }: { src?: string; name: string; size?: n
 
 // ─── ImageMessage ─────────────────────────────────────────────────────────────
 
-function ImageMessage({ keyId, fromMe, remoteJid, instanceName, caption, mimeType }: {
+function ImageMessage({ keyId, fromMe, remoteJid, instanceToken, caption, mimeType }: {
   keyId: string; fromMe: boolean; remoteJid: string
-  instanceName: string; caption?: string; mimeType?: string
+  instanceToken: string; caption?: string; mimeType?: string
 }) {
   const [src, setSrc] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -234,14 +235,14 @@ function ImageMessage({ keyId, fromMe, remoteJid, instanceName, caption, mimeTyp
 
   useEffect(() => {
     let cancelled = false
-    evolutionApi.getMediaBase64(instanceName, { id: keyId, fromMe, remoteJid }).then(b64 => {
+    evolutionApi.getMediaBase64(instanceToken, { id: keyId, fromMe, remoteJid }).then(b64 => {
       if (cancelled || !b64) { if (!cancelled) setLoading(false); return }
       const mime = mimeType || 'image/jpeg'
       setSrc(b64.startsWith('data:') ? b64 : `data:${mime};base64,${b64}`)
       setLoading(false)
     })
     return () => { cancelled = true }
-  }, [keyId, fromMe, remoteJid, instanceName, mimeType])
+  }, [keyId, fromMe, remoteJid, instanceToken, mimeType])
 
   if (loading) return (
     <div style={{ width: 200, height: 140, borderRadius: 6, background: 'var(--el)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -279,9 +280,9 @@ function ImageMessage({ keyId, fromMe, remoteJid, instanceName, caption, mimeTyp
 
 // ─── VideoMessage ─────────────────────────────────────────────────────────────
 
-function VideoMessage({ keyId, fromMe, remoteJid, instanceName, caption, mimeType, duration }: {
+function VideoMessage({ keyId, fromMe, remoteJid, instanceToken, caption, mimeType, duration }: {
   keyId: string; fromMe: boolean; remoteJid: string
-  instanceName: string; caption?: string; mimeType?: string; duration?: number
+  instanceToken: string; caption?: string; mimeType?: string; duration?: number
 }) {
   const [src, setSrc] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -291,7 +292,7 @@ function VideoMessage({ keyId, fromMe, remoteJid, instanceName, caption, mimeTyp
   const loadVideo = () => {
     if (loaded || loading) return
     setLoading(true)
-    evolutionApi.getMediaBase64(instanceName, { id: keyId, fromMe, remoteJid }).then(b64 => {
+    evolutionApi.getMediaBase64(instanceToken, { id: keyId, fromMe, remoteJid }).then(b64 => {
       if (!b64) { setLoading(false); return }
       const mime = mimeType || 'video/mp4'
       setSrc(b64.startsWith('data:') ? b64 : `data:${mime};base64,${b64}`)
@@ -335,16 +336,16 @@ function VideoMessage({ keyId, fromMe, remoteJid, instanceName, caption, mimeTyp
 
 // ─── DocumentMessage ──────────────────────────────────────────────────────────
 
-function DocumentMessage({ keyId, fromMe, remoteJid, instanceName, fileName, mimeType }: {
+function DocumentMessage({ keyId, fromMe, remoteJid, instanceToken, fileName, mimeType }: {
   keyId: string; fromMe: boolean; remoteJid: string
-  instanceName: string; fileName?: string; mimeType?: string
+  instanceToken: string; fileName?: string; mimeType?: string
 }) {
   const [downloading, setDownloading] = useState(false)
 
   const handleDownload = async () => {
     setDownloading(true)
     try {
-      const b64 = await evolutionApi.getMediaBase64(instanceName, { id: keyId, fromMe, remoteJid })
+      const b64 = await evolutionApi.getMediaBase64(instanceToken, { id: keyId, fromMe, remoteJid })
       if (!b64) { toast.error('Arquivo não disponível'); return }
       const mime = mimeType || 'application/octet-stream'
       const dataUrl = b64.startsWith('data:') ? b64 : `data:${mime};base64,${b64}`
@@ -379,9 +380,9 @@ function DocumentMessage({ keyId, fromMe, remoteJid, instanceName, fileName, mim
 
 // ─── AudioMessage ─────────────────────────────────────────────────────────────
 
-function AudioMessage({ keyId, fromMe, remoteJid, instanceName, duration, mimeType }: {
+function AudioMessage({ keyId, fromMe, remoteJid, instanceToken, duration, mimeType }: {
   keyId: string; fromMe: boolean; remoteJid: string
-  instanceName: string; duration?: number; mimeType?: string
+  instanceToken: string; duration?: number; mimeType?: string
 }) {
   const [src, setSrc] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -393,14 +394,14 @@ function AudioMessage({ keyId, fromMe, remoteJid, instanceName, duration, mimeTy
 
   useEffect(() => {
     let cancelled = false
-    evolutionApi.getMediaBase64(instanceName, { id: keyId, fromMe, remoteJid }).then(b64 => {
+    evolutionApi.getMediaBase64(instanceToken, { id: keyId, fromMe, remoteJid }).then(b64 => {
       if (cancelled || !b64) { if (!cancelled) setLoading(false); return }
       const mime = mimeType?.includes('ogg') ? 'audio/ogg' : mimeType?.includes('mp4') ? 'audio/mp4' : 'audio/ogg; codecs=opus'
       setSrc(b64.startsWith('data:') ? b64 : `data:${mime};base64,${b64}`)
       setLoading(false)
     })
     return () => { cancelled = true }
-  }, [keyId, fromMe, remoteJid, instanceName, mimeType])
+  }, [keyId, fromMe, remoteJid, instanceToken, mimeType])
 
   const togglePlay = () => {
     const a = audioRef.current
@@ -458,8 +459,8 @@ function AudioMessage({ keyId, fromMe, remoteJid, instanceName, duration, mimeTy
 
 // ─── MessageBubble ────────────────────────────────────────────────────────────
 
-function MessageBubble({ msg, instanceName, remoteJid, onReply }: {
-  msg: EvoMessage; instanceName: string; remoteJid: string
+function MessageBubble({ msg, instanceToken, remoteJid, onReply }: {
+  msg: EvoMessage; instanceToken: string; remoteJid: string
   onReply?: (msg: EvoMessage) => void
 }) {
   const [hovered, setHovered] = useState(false)
@@ -476,19 +477,19 @@ function MessageBubble({ msg, instanceName, remoteJid, onReply }: {
   const renderContent = () => {
     if (msg.mediaType === 'image' || msg.mediaType === 'sticker') {
       return <ImageMessage keyId={msg.keyId} fromMe={msg.fromMe} remoteJid={remoteJid}
-        instanceName={instanceName} caption={msg.content || undefined} mimeType={msg.mimeType} />
+        instanceToken={instanceToken} caption={msg.content || undefined} mimeType={msg.mimeType} />
     }
     if (msg.mediaType === 'audio') {
       return <AudioMessage keyId={msg.keyId} fromMe={msg.fromMe} remoteJid={remoteJid}
-        instanceName={instanceName} duration={msg.duration} mimeType={msg.mimeType} />
+        instanceToken={instanceToken} duration={msg.duration} mimeType={msg.mimeType} />
     }
     if (msg.mediaType === 'video') {
       return <VideoMessage keyId={msg.keyId} fromMe={msg.fromMe} remoteJid={remoteJid}
-        instanceName={instanceName} caption={msg.content || undefined} mimeType={msg.mimeType} duration={msg.duration} />
+        instanceToken={instanceToken} caption={msg.content || undefined} mimeType={msg.mimeType} duration={msg.duration} />
     }
     if (msg.mediaType === 'document') {
       return <DocumentMessage keyId={msg.keyId} fromMe={msg.fromMe} remoteJid={remoteJid}
-        instanceName={instanceName} fileName={msg.fileName} mimeType={msg.mimeType} />
+        instanceToken={instanceToken} fileName={msg.fileName} mimeType={msg.mimeType} />
     }
     if (msg.content) {
       return <p style={{ color: 'var(--t)', wordBreak: 'break-word', whiteSpace: 'pre-wrap', fontSize: 13, lineHeight: 1.4 }}>
@@ -627,17 +628,13 @@ export default function WhatsApp() {
       // Primeiro: tenta banco (instâncias já sincronizadas)
       const { data } = await supabase
         .from('whatsapp_instances')
-        .select('id, instance_name, phone_number, label, status')
+        .select('id, instance_name, instance_token, phone_number, label, status')
         .eq('store_id', store.id)
         .eq('status', 'connected')
       if ((data ?? []).length > 0) return data as WaInstance[]
 
-      // Fallback: se banco vazio, vai direto na Evolution API
-      // (instâncias conectadas antes do novo sistema)
-      const apiNames = await evolutionApi.getInstancesList()
-      return apiNames.map(name => ({
-        id: name, instance_name: name, phone_number: null, label: null, status: 'connected',
-      }))
+      // Fallback: se banco vazio, retorna lista vazia (UazapiGO requer token)
+      return []
     },
     enabled: !!store?.id,
     staleTime: 15000,
@@ -668,7 +665,8 @@ export default function WhatsApp() {
   }, [store?.id])
 
   const instanceList = instances ?? []
-  const instanceName = selectedInstance
+  const instanceName  = selectedInstance
+  const instanceToken = instanceList.find(i => i.instance_name === selectedInstance)?.instance_token ?? ''
 
   const handleSelectInstance = (name: string) => {
     setSelectedInstance(name)
@@ -687,8 +685,8 @@ export default function WhatsApp() {
   // ── contatos do WhatsApp (para resolver nomes) ───────────────────────────
   const { data: contactsMap = {} } = useQuery({
     queryKey: ['whatsapp-contacts', instanceName],
-    queryFn: () => evolutionApi.findContacts(instanceName),
-    enabled: !!instanceName,
+    queryFn: () => evolutionApi.findContacts(instanceToken),
+    enabled: !!instanceToken,
     staleTime: 120_000,
   })
 
@@ -719,8 +717,8 @@ export default function WhatsApp() {
   const { data: conversations, isLoading } = useQuery({
     queryKey: ['whatsapp-conversations', instanceName],
     queryFn: async () => {
-      if (!instanceName) return []
-      const chats = await evolutionApi.findChats(instanceName)
+      if (!instanceToken) return []
+      const chats = await evolutionApi.findChats(instanceToken)
       if (!Array.isArray(chats)) return []
 
       const mapped = chats
@@ -754,7 +752,7 @@ export default function WhatsApp() {
       const withoutPic = mapped.filter(c => !c.profilePicUrl).slice(0, 15)
       if (withoutPic.length > 0) {
         const results = await Promise.allSettled(
-          withoutPic.map(c => evolutionApi.fetchProfilePicture(instanceName, c.phoneNumber))
+          withoutPic.map(c => evolutionApi.fetchProfilePicture(instanceToken, c.phoneNumber))
         )
         results.forEach((r, i) => {
           if (r.status === 'fulfilled' && r.value) withoutPic[i].profilePicUrl = r.value
@@ -762,7 +760,7 @@ export default function WhatsApp() {
       }
       return mapped
     },
-    enabled: !!instanceName,
+    enabled: !!instanceToken,
     staleTime: 8000,
     refetchInterval: 15000,
   })
@@ -832,10 +830,10 @@ export default function WhatsApp() {
     setShowInstanceMenu(false)
     setReplyTo(null)
     upsertLeadMutation.mutate(updatedChat)
-    if (chat.unreadCount > 0 && instanceName)
-      evolutionApi.markAsRead(instanceName, chat.remoteJid).catch(() => {})
+    if (chat.unreadCount > 0 && instanceToken)
+      evolutionApi.markAsRead(instanceToken, chat.remoteJid).catch(() => {})
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store?.id, user?.id, instanceName, contactsMap, leadsMap])
+  }, [store?.id, user?.id, instanceToken, contactsMap, leadsMap])
 
   // ── mensagens ─────────────────────────────────────────────────────────────
   const messagesQueryKey = ['whatsapp-messages', instanceName, selectedChat?.remoteJid]
@@ -843,7 +841,7 @@ export default function WhatsApp() {
   const { data: messages, isLoading: loadingMsgs } = useQuery({
     queryKey: messagesQueryKey,
     queryFn: async () => {
-      const res = await evolutionApi.findMessages(instanceName, selectedChat!.remoteJid, 60) as Record<string, unknown> | null
+      const res = await evolutionApi.findMessages(instanceToken, selectedChat!.remoteJid, 60) as Record<string, unknown> | null
       const msgs = res?.messages as Record<string, unknown> | undefined
       const records: Record<string, unknown>[] = (msgs?.records ?? res?.records ?? []) as Record<string, unknown>[]
       return records.map((msg): EvoMessage => {
@@ -865,7 +863,7 @@ export default function WhatsApp() {
         }
       }).sort((a, b) => a.timestamp - b.timestamp)
     },
-    enabled: !!selectedChat?.remoteJid && !!instanceName,
+    enabled: !!selectedChat?.remoteJid && !!instanceToken,
     refetchInterval: sendingRef.current ? false : 5000,
   })
 
@@ -875,7 +873,7 @@ export default function WhatsApp() {
 
   // ── Supabase Realtime — novas mensagens ───────────────────────────────────
   useEffect(() => {
-    if (!store?.id || !instanceName) return
+    if (!store?.id || !instanceToken) return
     const jid = selectedChat?.remoteJid
 
     const channel = supabase.channel(`wa-rt-${store.id}`)
@@ -900,20 +898,20 @@ export default function WhatsApp() {
 
     return () => { supabase.removeChannel(channel) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store?.id, instanceName, selectedChat?.remoteJid])
+  }, [store?.id, instanceToken, selectedChat?.remoteJid])
 
   // ── envio de texto ────────────────────────────────────────────────────────
   const sendMutation = useMutation({
     mutationFn: async (text: string) => {
       if (!selectedChat) throw new Error('Nenhum chat selecionado')
-      if (!instanceName) throw new Error('Conecte um número em Configurações.')
+      if (!instanceToken) throw new Error('Conecte um número em Configurações.')
       if (replyTo) {
-        await evolutionApi.sendTextWithQuote(instanceName, selectedChat.phoneNumber, text, {
+        await evolutionApi.sendTextWithQuote(instanceToken, selectedChat.phoneNumber, text, {
           keyId: replyTo.keyId, fromMe: replyTo.fromMe,
           remoteJid: selectedChat.remoteJid, content: replyTo.content,
         })
       } else {
-        await evolutionApi.sendText(instanceName, selectedChat.phoneNumber, text)
+        await evolutionApi.sendText(instanceToken, selectedChat.phoneNumber, text)
       }
       await supabase.from('whatsapp_messages').insert({
         store_id: store!.id, instance_name: instanceName,
@@ -965,14 +963,14 @@ export default function WhatsApp() {
   // ── envio de imagem ───────────────────────────────────────────────────────
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file || !selectedChat || !instanceName) return
+    if (!file || !selectedChat || !instanceToken) return
     e.target.value = ''
     const reader = new FileReader()
     reader.onloadend = async () => {
       const base64 = (reader.result as string).split(',')[1]
       if (!base64) return
       if (file.type.startsWith('image/')) {
-        const ok = await evolutionApi.sendImageBase64(instanceName, selectedChat.phoneNumber, base64)
+        const ok = await evolutionApi.sendImageBase64(instanceToken, selectedChat.phoneNumber, base64)
         if (ok) { setTimeout(() => queryClient.invalidateQueries({ queryKey: messagesQueryKey }), 2000) }
         else toast.error('Erro ao enviar imagem')
       } else {
@@ -984,7 +982,7 @@ export default function WhatsApp() {
 
   // ── gravação de áudio ─────────────────────────────────────────────────────
   const startRecording = async () => {
-    if (!selectedChat || !instanceName) return
+    if (!selectedChat || !instanceToken) return
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/ogg;codecs=opus'
@@ -998,7 +996,7 @@ export default function WhatsApp() {
         reader.onloadend = async () => {
           const b64 = (reader.result as string).split(',')[1]
           if (!b64) return
-          const ok = await evolutionApi.sendAudio(instanceName, selectedChat.phoneNumber, b64)
+          const ok = await evolutionApi.sendAudio(instanceToken, selectedChat.phoneNumber, b64)
           if (ok) setTimeout(() => queryClient.invalidateQueries({ queryKey: messagesQueryKey }), 3000)
           else toast.error('Erro ao enviar áudio')
         }
@@ -1064,7 +1062,7 @@ export default function WhatsApp() {
         <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid rgba(255,255,255,.06)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--t)' }}>WhatsApp</span>
-            <button onClick={() => navigate('/settings')} title="Configurações"
+            <button onClick={() => navigate('/configuracoes')} title="Configurações"
               style={{ background: 'none', border: 'none', color: 'var(--t3)', cursor: 'pointer', display: 'flex', padding: 4 }}>
               <Settings size={16} />
             </button>
@@ -1126,7 +1124,7 @@ export default function WhatsApp() {
               <span style={{ fontSize: 13 }}>⚠️</span>
               <p style={{ fontSize: 10, color: '#ffd60a' }}>
                 Nenhum número conectado.{' '}
-                <button onClick={() => navigate('/settings')} style={{ background: 'none', border: 'none', color: '#ffd60a', cursor: 'pointer', fontSize: 10, textDecoration: 'underline', padding: 0 }}>
+                <button onClick={() => navigate('/configuracoes')} style={{ background: 'none', border: 'none', color: '#ffd60a', cursor: 'pointer', fontSize: 10, textDecoration: 'underline', padding: 0 }}>
                   Configurar
                 </button>
               </p>
@@ -1290,7 +1288,7 @@ export default function WhatsApp() {
               item.type === 'separator'
                 ? <DateSeparator key={`sep-${idx}`} label={item.label} />
                 : <MessageBubble key={item.msg.id}
-                    msg={item.msg} instanceName={instanceName}
+                    msg={item.msg} instanceToken={instanceToken}
                     remoteJid={selectedChat.remoteJid} onReply={setReplyTo} />
             )}
             <div ref={messagesEndRef} />
@@ -1417,7 +1415,7 @@ export default function WhatsApp() {
             <p style={{ fontSize: 12, color: '#8696a0' }}>Leads são criados automaticamente ao abrir</p>
           </div>
           {instanceList.length === 0 && (
-            <button onClick={() => navigate('/settings')}
+            <button onClick={() => navigate('/configuracoes')}
               style={{ marginTop: 8, padding: '8px 20px', borderRadius: 8, background: '#25d366', color: '#111', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
               Conectar WhatsApp
             </button>

@@ -20,9 +20,14 @@ export interface Store {
   state?: string
   logo_url?: string
   brand?: string
-  plan: 'free' | 'pro' | 'enterprise'
+  plan: 'free' | 'starter' | 'pro' | 'enterprise'
   active: boolean
   settings: Record<string, unknown>
+  // Multi-tenancy
+  slug?: string | null
+  status?: 'active' | 'suspended' | 'trial' | 'cancelled'
+  trial_ends_at?: string | null
+  custom_domain?: string | null
   created_at: string
   updated_at: string
 }
