@@ -253,21 +253,38 @@ function WhatsAppSection() {
 
   const startQrCountdown = (name: string, token: string) => {
     setQrSecs(QR_TTL)
+
     timerRef.current = setInterval(() => {
       setQrSecs(prev => {
         if (prev <= 1) {
-          stopAll()
+          // QR expirou: renova automaticamente sem apagar a instância
+          clearInterval(timerRef.current!)
+          timerRef.current = null
           setQrBase64(null)
-          toast.info('QR Code expirou', 'Clique em "Adicionar número" novamente')
-          supabase.from('whatsapp_instances').delete().eq('instance_name', name)
-            .then(() => { refetch(); setAdding(false) })
+          setLoadingQr(true)
+          evolutionApi.getQrCode(token).then(result => {
+            setLoadingQr(false)
+            if (result.connected) {
+              stopAll()
+              handleConnected(name, token)
+            } else if (result.base64) {
+              setQrBase64(result.base64)
+              startQrCountdown(name, token)   // reinicia o timer
+            } else {
+              // Falhou ao renovar: encerra
+              stopAll()
+              toast.info('QR Code expirou', 'Clique em "Adicionar número" novamente')
+              supabase.from('whatsapp_instances').delete().eq('instance_name', name)
+                .then(() => { refetch(); setAdding(false) })
+            }
+          })
           return 0
         }
         return prev - 1
       })
     }, 1000)
 
-    // Polling usando instanceToken (não o nome)
+    // Polling de conexão a cada 3s
     pollRef.current = setInterval(async () => {
       const state = await evolutionApi.getConnectionState(token)
       if (state === 'open') {
@@ -508,26 +525,43 @@ function WhatsAppSection() {
               </>
             ) : qrBase64 ? (
               <>
-                <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--t)', textAlign: 'center' }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--t)', textAlign: 'center' }}>
                   Escaneie o QR Code no WhatsApp
                 </p>
-                <p style={{ fontSize: 11, color: 'var(--t3)', textAlign: 'center', marginTop: -8 }}>
-                  WhatsApp → ⋮ Menu → Aparelhos conectados → Conectar aparelho
-                </p>
+
+                {/* Instrução passo a passo */}
+                <div style={{
+                  background: 'rgba(61,247,16,.06)', border: '1px solid rgba(61,247,16,.15)',
+                  borderRadius: 8, padding: '10px 14px', width: '100%', maxWidth: 320,
+                }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--neon)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    ⚠️ Abra o WhatsApp — NÃO use a câmera do celular
+                  </p>
+                  <ol style={{ fontSize: 11, color: 'var(--t2)', paddingLeft: 16, margin: 0, lineHeight: 1.8 }}>
+                    <li>Abra o <strong>WhatsApp</strong> no celular</li>
+                    <li>Toque nos 3 pontos <strong>⋮</strong> (Android) ou <strong>Configurações</strong> (iPhone)</li>
+                    <li>Toque em <strong>Aparelhos conectados</strong></li>
+                    <li>Toque em <strong>Conectar aparelho</strong></li>
+                    <li>Aponte a câmera para este QR Code</li>
+                  </ol>
+                </div>
+
                 <div style={{ padding: 12, background: '#fff', borderRadius: 12, boxShadow: '0 0 0 1px rgba(255,255,255,.05)' }}>
                   <img
                     src={`data:image/png;base64,${qrBase64}`}
                     alt="QR Code WhatsApp"
-                    style={{ width: 200, height: 200, display: 'block' }}
+                    style={{ width: 220, height: 220, display: 'block' }}
                   />
                 </div>
+
                 {/* Timer */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <div style={{ width: 7, height: 7, borderRadius: '50%', background: qrSecs > 15 ? 'var(--neon)' : 'var(--yel)', animation: 'pulse 1.5s ease-in-out infinite' }} />
                   <span style={{ fontSize: 11, fontFamily: 'var(--fm)', color: qrSecs > 15 ? 'var(--neon)' : 'var(--yel)' }}>
-                    Expira em {qrSecs}s
+                    {qrSecs > 0 ? `Expira em ${qrSecs}s` : 'Renovando QR Code…'}
                   </span>
                 </div>
+
                 <button
                   onClick={() => { stopAll(); setQrBase64(null); setAdding(false); if (currentInst) supabase.from('whatsapp_instances').delete().eq('instance_name', currentInst).then(() => refetch()) }}
                   style={{ fontSize: 11, color: 'var(--t3)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
