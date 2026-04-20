@@ -61,9 +61,11 @@ export const evolutionApi = {
 
   /**
    * Cria uma instância na UazapiGO.
-   * Retorna { token, id } — o token é usado em todas as chamadas subsequentes.
+   * Retorna { token, id } em sucesso.
+   * Retorna { limitReached: true } quando o plano atingiu o máximo de instâncias (HTTP 429).
+   * Retorna null em outros erros.
    */
-  createInstance: async (instanceName: string): Promise<{ token: string; id: string } | null> => {
+  createInstance: async (instanceName: string): Promise<{ token: string; id: string } | { limitReached: true } | null> => {
     try {
       const res = await fetch(`${BASE}/instance/create`, {
         method: 'POST',
@@ -72,6 +74,11 @@ export const evolutionApi = {
       })
       const data = await safeJson(res)
       if (!data) return null
+      // Limite de instâncias atingido (UazapiGO retorna 429 com campo "error")
+      if (res.status === 429 || data.error === 'Maximum number of instances reached') {
+        console.warn('[whatsapp.ts] createInstance: limite de instâncias atingido', data)
+        return { limitReached: true }
+      }
       const instance = (data.instance ?? data) as Record<string, string>
       const token = (instance.token ?? data.token) as string
       const id    = (instance.id    ?? data.id)    as string

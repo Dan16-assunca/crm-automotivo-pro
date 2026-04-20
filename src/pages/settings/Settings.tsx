@@ -160,11 +160,16 @@ function WhatsAppSection() {
     setLoadingQr(true)
     stopAll()
 
+    let instanceName: string
+    let token: string
+    let uazapiId: string
+
     const name = generateInstanceName(store.id)
     setCurrentInst(name)
 
-    // 1. Cria a instância na UazapiGO e obtém o instanceToken
+    // 1. Tenta criar nova instância na UazapiGO
     const created = await evolutionApi.createInstance(name)
+
     if (!created) {
       toast.error('Erro ao criar instância', 'Não foi possível conectar à UazapiGO.')
       setAdding(false)
@@ -172,17 +177,51 @@ function WhatsAppSection() {
       return
     }
 
-    const { token, id } = created
+    if ('limitReached' in created) {
+      // Limite de instâncias atingido — tenta adotar uma instância órfã do servidor
+      // (não cadastrada no banco deste estabelecimento)
+      const apiInsts = await evolutionApi.getInstances()
+      const { data: dbRows } = await supabase
+        .from('whatsapp_instances')
+        .select('instance_name')
+        .eq('store_id', store.id)
+      const dbNames = new Set((dbRows ?? []).map(r => r.instance_name))
+
+      const orphan = apiInsts.find(i => i.token && !dbNames.has(i.name))
+      if (!orphan) {
+        toast.error(
+          'Limite de instâncias atingido',
+          'Remova uma instância existente antes de adicionar um novo número.',
+        )
+        setAdding(false)
+        setLoadingQr(false)
+        return
+      }
+
+      // Adota a instância órfã
+      token      = orphan.token
+      uazapiId   = orphan.id
+      instanceName = orphan.name
+      setCurrentInst(instanceName)
+    } else {
+      token        = created.token
+      uazapiId     = created.id
+      instanceName = name
+    }
+
     setCurrentToken(token)
 
-    // 2. Salva no banco com o token
-    const { error: dbErr } = await supabase.from('whatsapp_instances').insert({
-      store_id: store.id,
-      instance_name: name,
-      instance_token: token,
-      uazapi_id: id,
-      status: 'connecting',
-    })
+    // 2. Salva no banco com o token (upsert por instance_name — unique constraint global)
+    const { error: dbErr } = await supabase.from('whatsapp_instances').upsert(
+      {
+        store_id: store.id,
+        instance_name: instanceName,
+        instance_token: token,
+        uazapi_id: uazapiId,
+        status: 'connecting',
+      },
+      { onConflict: 'instance_name' },
+    )
     if (dbErr) {
       toast.error('Erro ao salvar instância', dbErr.message)
       setAdding(false)
@@ -196,19 +235,19 @@ function WhatsAppSection() {
     setLoadingQr(false)
 
     if (result.connected) {
-      await handleConnected(name, token)
+      await handleConnected(instanceName, token)
       return
     }
     if (result.error) {
       toast.error('Erro ao gerar QR Code', result.error)
-      await supabase.from('whatsapp_instances').delete().eq('instance_name', name)
+      await supabase.from('whatsapp_instances').delete().eq('instance_name', instanceName)
       refetch()
       setAdding(false)
       return
     }
     if (result.base64) {
       setQrBase64(result.base64)
-      startQrCountdown(name, token)
+      startQrCountdown(instanceName, token)
     }
   }
 
@@ -293,8 +332,10 @@ function WhatsAppSection() {
     let token = inst.instance_token
     if (!token) {
       const created = await evolutionApi.createInstance(inst.instance_name)
-      if (!created) {
-        toast.error('Erro ao reconectar', 'Não foi possível criar instância na UazapiGO.')
+      if (!created || 'limitReached' in created) {
+        toast.error('Erro ao reconectar', !created
+          ? 'Não foi possível criar instância na UazapiGO.'
+          : 'Limite de instâncias atingido. Remova uma instância antes de reconectar.')
         setAdding(false)
         setLoadingQr(false)
         return
