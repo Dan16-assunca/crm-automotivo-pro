@@ -238,8 +238,9 @@ export const evolutionApi = {
       const list = Array.isArray(data) ? data : ((data?.contacts as unknown[]) ?? [])
       const map: Record<string, string> = {}
       for (const c of list as Record<string, unknown>[]) {
-        const jid  = ((c.id ?? c.remoteJid ?? c.jid ?? '') as string).replace(/@.+$/, '')
-        const name = ((c.pushName ?? c.name ?? c.notify ?? '') as string).trim()
+        // UazapiGO retorna { jid, contact_name } — Evolution API usava { remoteJid, pushName }
+        const jid  = ((c.jid ?? c.id ?? c.remoteJid ?? '') as string).replace(/@.+$/, '')
+        const name = ((c.contact_name ?? c.pushName ?? c.name ?? c.notify ?? '') as string).trim()
         if (jid && name) map[jid] = name
       }
       return map

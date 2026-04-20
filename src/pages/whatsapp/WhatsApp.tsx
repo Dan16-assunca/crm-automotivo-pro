@@ -717,52 +717,40 @@ export default function WhatsApp() {
   const { data: conversations, isLoading } = useQuery({
     queryKey: ['whatsapp-conversations', instanceName],
     queryFn: async () => {
-      if (!instanceToken) return []
-      const chats = await evolutionApi.findChats(instanceToken)
-      if (!Array.isArray(chats)) return []
+      if (!instanceToken || !store?.id) return []
+      // UazapiGO não tem endpoint /chats — lê do Supabase (populado pelo webhook)
+      const { data } = await supabase
+        .from('whatsapp_messages')
+        .select('remote_jid, push_name, content, message_ts, from_me, type, contact_phone, created_at')
+        .eq('store_id', store.id)
+        .eq('instance_name', instanceName)
+        .not('remote_jid', 'like', '%@g.us')
+        .not('remote_jid', 'like', '%@broadcast%')
+        .order('message_ts', { ascending: false })
 
-      const mapped = chats
-        .filter((c: Record<string, unknown>) => {
-          const jid = c.remoteJid as string
-          return jid && !jid.endsWith('@g.us') && !jid.includes('@broadcast') && !jid.includes('status')
-        })
-        .map((chat: Record<string, unknown>): EvoChat => {
-          const lastMsg    = chat.lastMessage as Record<string, unknown> | undefined
-          const key        = lastMsg?.key as Record<string, unknown> | undefined
-          const fromMe     = key?.fromMe as boolean | undefined
-          const remoteJid  = chat.remoteJid as string
-          const phone      = extractPhone(remoteJid)
-          const rawPush    = ((chat.pushName ?? lastMsg?.pushName ?? '') as string).trim()
-          const displayName = resolveName(phone, rawPush, contactsMap, leadsMap)
-
-          return {
-            remoteJid,
+      // Agrupa por remote_jid — mantém apenas a última mensagem de cada contato
+      const byJid = new Map<string, EvoChat>()
+      for (const msg of data ?? []) {
+        if (msg.remote_jid.includes('status@') || msg.remote_jid.includes('@broadcast')) continue
+        if (!byJid.has(msg.remote_jid)) {
+          const phone = (msg.contact_phone as string) || extractPhone(msg.remote_jid as string)
+          const rawName = (msg.push_name as string) || ''
+          byJid.set(msg.remote_jid, {
+            remoteJid: msg.remote_jid as string,
             phoneNumber: phone,
-            pushName: displayName,
-            profilePicUrl: chat.profilePicUrl as string | undefined,
-            lastMessageContent: extractContent(lastMsg ?? {}),
-            lastMessageTs: lastMsg?.messageTimestamp as number | undefined,
-            lastFromMe: fromMe,
-            unreadCount: (chat.unreadCount as number) ?? 0,
-          }
-        })
-        .sort((a, b) => (b.lastMessageTs ?? 0) - (a.lastMessageTs ?? 0))
-
-      // Busca fotos dos primeiros 15 sem foto
-      const withoutPic = mapped.filter(c => !c.profilePicUrl).slice(0, 15)
-      if (withoutPic.length > 0) {
-        const results = await Promise.allSettled(
-          withoutPic.map(c => evolutionApi.fetchProfilePicture(instanceToken, c.phoneNumber))
-        )
-        results.forEach((r, i) => {
-          if (r.status === 'fulfilled' && r.value) withoutPic[i].profilePicUrl = r.value
-        })
+            pushName: resolveName(phone, rawName, contactsMap, leadsMap),
+            lastMessageContent: (msg.content as string) || (msg.type !== 'text' ? `[${msg.type}]` : ''),
+            lastMessageTs: (msg.message_ts as number) || Math.floor(new Date(msg.created_at as string).getTime() / 1000),
+            lastFromMe: (msg.from_me as boolean) || false,
+            unreadCount: 0,
+          })
+        }
       }
-      return mapped
+      return Array.from(byJid.values())
     },
-    enabled: !!instanceToken,
-    staleTime: 8000,
-    refetchInterval: 15000,
+    enabled: !!instanceToken && !!store?.id,
+    staleTime: 5000,
+    refetchInterval: 10000,
   })
 
   // ── auto-criar leads a partir das conversas ───────────────────────────────
@@ -841,29 +829,43 @@ export default function WhatsApp() {
   const { data: messages, isLoading: loadingMsgs } = useQuery({
     queryKey: messagesQueryKey,
     queryFn: async () => {
-      const res = await evolutionApi.findMessages(instanceToken, selectedChat!.remoteJid, 60) as Record<string, unknown> | null
-      const msgs = res?.messages as Record<string, unknown> | undefined
-      const records: Record<string, unknown>[] = (msgs?.records ?? res?.records ?? []) as Record<string, unknown>[]
-      return records.map((msg): EvoMessage => {
-        const key = msg.key as Record<string, unknown>
-        const updates = (msg.MessageUpdate as Record<string, unknown>[] | undefined) ?? []
-        const lastUpdate = updates[updates.length - 1]
-        const media = extractMedia(msg)
-        const replyQuote = extractReplyQuote(msg)
+      if (!store?.id || !selectedChat?.remoteJid) return []
+      // UazapiGO não tem endpoint /messages?jid= — lê do Supabase (populado pelo webhook)
+      const { data } = await supabase
+        .from('whatsapp_messages')
+        .select('id, key_id, message_id, from_me, content, type, message_ts, status, media_mime_type, media_url, created_at')
+        .eq('store_id', store.id)
+        .eq('instance_name', instanceName)
+        .eq('remote_jid', selectedChat.remoteJid)
+        .order('message_ts', { ascending: true })
+        .limit(60)
+
+      return (data ?? []).map((msg): EvoMessage => {
+        const mime = (msg.media_mime_type as string) || ''
+        const msgType = (msg.type as string) || 'text'
+        const mediaType: EvoMessage['mediaType'] = mime.startsWith('image/') ? 'image'
+          : mime.startsWith('audio/') || mime.includes('ogg') ? 'audio'
+          : mime.startsWith('video/') ? 'video'
+          : msgType === 'document' ? 'document'
+          : msgType === 'image' ? 'image'
+          : msgType === 'audio' ? 'audio'
+          : msgType === 'video' ? 'video'
+          : msgType === 'sticker' ? 'image'
+          : undefined
         return {
           id: msg.id as string,
-          keyId: (key?.id as string) ?? (msg.id as string),
-          fromMe: (key?.fromMe as boolean) ?? false,
-          content: extractContent(msg),
-          type: (msg.messageType as string) ?? 'unknown',
-          timestamp: (msg.messageTimestamp as number) ?? 0,
-          status: (lastUpdate?.status as string) ?? (msg.status as string),
-          replyQuote,
-          ...media,
+          keyId: (msg.key_id as string) || (msg.message_id as string) || (msg.id as string),
+          fromMe: (msg.from_me as boolean) ?? false,
+          content: (msg.content as string) || '',
+          type: msgType,
+          timestamp: (msg.message_ts as number) || Math.floor(new Date(msg.created_at as string).getTime() / 1000),
+          status: msg.status as string | undefined,
+          mediaType,
+          mimeType: mime || undefined,
         }
-      }).sort((a, b) => a.timestamp - b.timestamp)
+      })
     },
-    enabled: !!selectedChat?.remoteJid && !!instanceToken,
+    enabled: !!selectedChat?.remoteJid && !!instanceToken && !!store?.id,
     refetchInterval: sendingRef.current ? false : 5000,
   })
 
@@ -917,6 +919,8 @@ export default function WhatsApp() {
         store_id: store!.id, instance_name: instanceName,
         remote_jid: selectedChat.remoteJid, direction: 'outbound',
         type: 'text', content: text, status: 'sent', from_me: true,
+        contact_phone: selectedChat.phoneNumber,
+        message_ts: Math.floor(Date.now() / 1000),
       })
     },
     onMutate: async (text) => {
