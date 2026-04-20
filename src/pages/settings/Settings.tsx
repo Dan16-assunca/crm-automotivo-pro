@@ -252,46 +252,57 @@ function WhatsAppSection() {
   }
 
   const startQrCountdown = (name: string, token: string) => {
+    // Para qualquer intervalo anterior antes de criar novos
+    stopAll()
     setQrSecs(QR_TTL)
 
-    timerRef.current = setInterval(() => {
-      setQrSecs(prev => {
-        if (prev <= 1) {
-          // QR expirou: renova automaticamente sem apagar a instância
-          clearInterval(timerRef.current!)
-          timerRef.current = null
-          setQrBase64(null)
-          setLoadingQr(true)
-          evolutionApi.getQrCode(token).then(result => {
-            setLoadingQr(false)
-            if (result.connected) {
-              stopAll()
-              handleConnected(name, token)
-            } else if (result.base64) {
-              setQrBase64(result.base64)
-              startQrCountdown(name, token)   // reinicia o timer
-            } else {
-              // Falhou ao renovar: encerra
-              stopAll()
-              toast.info('QR Code expirou', 'Clique em "Adicionar número" novamente')
-              supabase.from('whatsapp_instances').delete().eq('instance_name', name)
-                .then(() => { refetch(); setAdding(false) })
-            }
-          })
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    // Polling de conexão a cada 3s
+    // Polling rápido: verifica conexão a cada 2s
     pollRef.current = setInterval(async () => {
       const state = await evolutionApi.getConnectionState(token)
       if (state === 'open') {
         stopAll()
         await handleConnected(name, token)
       }
-    }, 3000)
+    }, 2000)
+
+    // Countdown visual
+    timerRef.current = setInterval(() => {
+      setQrSecs(prev => {
+        if (prev > 1) return prev - 1
+
+        // Timer zerou — verifica conexão ANTES de renovar QR
+        clearInterval(timerRef.current!)
+        timerRef.current = null
+
+        evolutionApi.getConnectionState(token).then(async state => {
+          if (state === 'open') {
+            // Já conectou antes do timer expirar — apenas confirma
+            stopAll()
+            await handleConnected(name, token)
+            return
+          }
+          // Genuinamente desconectado: renova o QR sem resetar a instância
+          setQrBase64(null)
+          setLoadingQr(true)
+          const result = await evolutionApi.getQrCode(token)
+          setLoadingQr(false)
+          if (result.connected) {
+            stopAll()
+            await handleConnected(name, token)
+          } else if (result.base64) {
+            setQrBase64(result.base64)
+            startQrCountdown(name, token)
+          } else {
+            stopAll()
+            toast.info('QR Code expirou', 'Clique em "Adicionar número" novamente')
+            supabase.from('whatsapp_instances').delete().eq('instance_name', name)
+              .then(() => { refetch(); setAdding(false) })
+          }
+        })
+
+        return 0
+      })
+    }, 1000)
   }
 
   const handleConnected = async (name: string, token: string) => {
