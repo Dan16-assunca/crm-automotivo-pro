@@ -637,7 +637,9 @@ export default function WhatsApp() {
       return []
     },
     enabled: !!store?.id,
-    staleTime: 15000,
+    staleTime: 0,
+    refetchInterval: 5000,
+    refetchOnMount: 'always',
     refetchOnWindowFocus: true,
   })
 
