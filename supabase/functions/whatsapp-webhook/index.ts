@@ -92,12 +92,29 @@ Deno.serve(async (req: Request) => {
       auth: { autoRefreshToken: false, persistSession: false },
     })
 
-    const body         = await req.json()
-    const rawEvent     = (body.event as string | undefined) ?? ''
-    const event        = normalizeEvent(rawEvent)
-    const instanceName = body.instance as string | undefined
+    const body = await req.json()
 
-    if (!instanceName) return json({ ok: false, error: 'missing instance' }, 400)
+    // Log completo para diagnóstico (remover após debug)
+    console.log('[whatsapp-webhook] body:', JSON.stringify(body).slice(0, 800))
+
+    const rawEvent = (body.event as string | undefined)
+      ?? (body.type as string | undefined)
+      ?? ''
+    const event = normalizeEvent(rawEvent)
+
+    // UazapiGO pode enviar o nome da instância em vários campos
+    const instanceName: string = (
+      (typeof body.instance === 'string' ? body.instance : undefined)
+      ?? (body.instanceName as string | undefined)
+      ?? (body.instance_name as string | undefined)
+      ?? ((body.instance as Record<string, unknown>)?.name as string | undefined)
+      ?? (body.sender as string | undefined)
+      ?? ''
+    )
+
+    console.log('[whatsapp-webhook] event:', rawEvent, '| instance:', instanceName || '(vazio)')
+
+    if (!instanceName) return json({ ok: false, error: 'missing instance', body_keys: Object.keys(body) }, 400)
 
     // ── Busca store pela instância (tabela whatsapp_instances) ────────────────
     const { data: inst } = await db
