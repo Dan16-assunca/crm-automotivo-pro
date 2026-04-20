@@ -124,7 +124,11 @@ export const evolutionApi = {
 
   /**
    * Verifica o estado da conexão.
-   * Retorna 'open' quando conectado, 'connecting', 'disconnected', 'not_found', etc.
+   * Retorna 'open' quando conectado (normaliza 'connected' → 'open'),
+   * 'connecting', 'disconnected', 'not_found', etc.
+   *
+   * UazapiGO retorna instance.status='connected' e status.connected=true
+   * para instâncias ativas — normalize para 'open' para consistência.
    */
   getConnectionState: async (instanceToken: string): Promise<string> => {
     try {
@@ -132,10 +136,13 @@ export const evolutionApi = {
       if (!res.ok) return 'not_found'
       const data = await safeJson(res)
       if (!data) return 'not_found'
-      const status = (data.instance as Record<string, string>)?.status
-                  ?? (data.status as string)
-                  ?? 'close'
-      return status
+      // Usa status.connected (boolean) como fonte primária de verdade
+      const connectedBool = (data.status as Record<string, unknown>)?.connected
+      if (connectedBool === true) return 'open'
+      const instStatus = (data.instance as Record<string, string>)?.status ?? ''
+      // Normaliza 'connected' → 'open'
+      if (instStatus === 'connected' || instStatus === 'open') return 'open'
+      return instStatus || 'disconnected'
     } catch {
       return 'not_found'
     }
