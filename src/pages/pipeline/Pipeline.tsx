@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   DndContext, DragOverlay, closestCorners, useDroppable,
@@ -631,10 +632,37 @@ export default function Pipeline() {
   const [filter, setFilter] = useState('all')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-  const [showNewLead, setShowNewLead] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [showNewLead, setShowNewLead] = useState(searchParams.get('new') === '1')
   const [newLeadStageId, setNewLeadStageId] = useState('')
 
+  // Limpa o query param após abrir o modal
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      setSearchParams({}, { replace: true })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const storeId = store?.id ?? ''
+
+  const exportLeads = () => {
+    const visible = leads ?? []
+    if (!visible.length) return
+    const stageMap = Object.fromEntries((stages ?? []).map(s => [s.id, s.name]))
+    const headers = ['Nome','Telefone','Email','Etapa','Temperatura','Origem','Interesse','Orçamento','Prioridade','Criado']
+    const rows = visible.map(l => [
+      l.client_name, l.client_phone ?? '', l.client_email ?? '',
+      stageMap[l.stage_id] ?? '', l.temperature ?? '', l.source ?? '',
+      l.vehicle_interest ?? '', l.budget_max ? `R$ ${l.budget_max}` : '',
+      l.priority ?? '', new Date(l.created_at).toLocaleDateString('pt-BR'),
+    ])
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = `pipeline-${new Date().toISOString().slice(0,10)}.csv`; a.click()
+    URL.revokeObjectURL(url)
+  }
 
   const { data: stages, isLoading: stagesLoading, isError: stagesError, error: stagesErr } = useQuery({
     queryKey: ['pipeline-stages', storeId],
@@ -893,12 +921,14 @@ export default function Pipeline() {
         <div style={{ flex: 1 }} />
 
         {/* Action buttons */}
-        <button style={{
+        <button onClick={exportLeads} style={{
           height: 30, padding: '0 11px', borderRadius: 7, border: '1px solid var(--border)',
           background: 'transparent', color: 'var(--text3)', fontSize: 11, cursor: 'pointer',
           display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'inherit',
-        }}>
-          <Download size={11} /> Exportar
+        }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--nb)'; e.currentTarget.style.color = 'var(--neon)' }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text3)' }}>
+          <Download size={11} /> Exportar CSV
         </button>
         <button style={{
           height: 30, padding: '0 11px', borderRadius: 7, border: '1px solid var(--border)',

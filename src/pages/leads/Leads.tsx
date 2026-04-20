@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, Users } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Plus, Search, Users, Download } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { useLeadPanelStore } from '@/store/leadPanelStore'
@@ -19,6 +20,7 @@ export default function Leads() {
   const { store } = useAuthStore()
   const queryClient = useQueryClient()
   const { openLeadPanel } = useLeadPanelStore()
+  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [filterTemp, setFilterTemp] = useState('')
   const [filterSource, setFilterSource] = useState('')
@@ -71,7 +73,32 @@ export default function Leads() {
           <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--t)' }}>Leads</h1>
           <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>{leads?.length ?? 0} leads encontrados</p>
         </div>
-        <Button size="sm"><Plus size={13} /> Novo Lead</Button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => {
+              if (!leads?.length) return
+              const csv = ['Nome,Telefone,Email,Temperatura,Origem,Etapa']
+                .concat((leads ?? []).map((l: Lead) =>
+                  [l.client_name, l.client_phone ?? '', l.client_email ?? '', l.temperature ?? '', l.source ?? '', ''].join(',')
+                )).join('\n')
+              const blob = new Blob([csv], { type: 'text/csv' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a'); a.href = url; a.download = 'leads.csv'; a.click()
+              URL.revokeObjectURL(url)
+            }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px',
+              background: 'var(--el)', border: '1px solid var(--bs)', borderRadius: 7,
+              color: 'var(--t2)', fontSize: 12, cursor: 'pointer',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--nb)'; e.currentTarget.style.color = 'var(--neon)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--bs)'; e.currentTarget.style.color = 'var(--t2)' }}>
+            <Download size={12} /> Exportar
+          </button>
+          <Button size="sm" onClick={() => navigate('/pipeline?new=1')}>
+            <Plus size={13} /> Novo Lead
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

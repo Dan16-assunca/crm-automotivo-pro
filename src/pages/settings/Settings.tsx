@@ -31,6 +31,21 @@ interface WaInstance {
 const WEBHOOK_URL = 'https://eakdywmuewvuzyqfpcpl.supabase.co/functions/v1/whatsapp-webhook'
 const QR_TTL = 45
 
+/** Tenta obter QR code até maxTries vezes com delayMs entre tentativas.
+ *  UazapiGO precisa de alguns segundos após criar a instância para gerar o QR. */
+async function pollForQr(
+  token: string,
+  maxTries = 6,
+  delayMs = 2500,
+): Promise<{ base64?: string; connected?: boolean; owner?: string; error?: string }> {
+  for (let i = 0; i < maxTries; i++) {
+    if (i > 0) await new Promise(r => setTimeout(r, delayMs))
+    const result = await evolutionApi.getQrCode(token)
+    if (result.connected || result.base64) return result
+  }
+  return { error: 'QR não disponível. Verifique se o servidor UazapiGO está acessível e tente novamente.' }
+}
+
 // ─── Seção WhatsApp (self-contained) ─────────────────────────────────────────
 
 function WhatsAppSection() {
@@ -230,8 +245,8 @@ function WhatsAppSection() {
     }
     refetch()
 
-    // 3. Aciona conexão e obtém QR code
-    const result = await evolutionApi.getQrCode(token)
+    // 3. Aciona conexão e obtém QR code (retry: UazapiGO precisa de alguns segundos)
+    const result = await pollForQr(token)
     setLoadingQr(false)
 
     if (result.connected) {
@@ -381,7 +396,7 @@ function WhatsAppSection() {
     setCurrentToken(token)
     refetch()
 
-    const result = await evolutionApi.getQrCode(token)
+    const result = await pollForQr(token)
     setLoadingQr(false)
 
     if (result.connected) { await handleConnected(inst.instance_name, token); return }

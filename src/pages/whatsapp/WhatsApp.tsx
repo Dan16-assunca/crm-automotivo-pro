@@ -5,7 +5,7 @@ import {
   Send, Search, Phone, MoreVertical, Paperclip, Check, CheckCheck,
   Clock, MessageCircleOff, UserPlus, ExternalLink, User, ChevronDown,
   Mic, MicOff, Image as ImageIcon, FileText, Play, Pause, X, Download,
-  Video, Smile, Reply, CornerUpLeft, Settings,
+  Video, Smile, Reply, CornerUpLeft, Settings, Camera, Music2, Film,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
@@ -24,6 +24,7 @@ interface WaInstance {
   phone_number: string | null
   label: string | null
   status: string
+  profile_pic_url?: string | null
 }
 
 interface EvoChat {
@@ -52,6 +53,7 @@ interface EvoMessage {
   mimeType?: string
   fileName?: string
   duration?: number
+  localSrc?: string  // URL local para update otimista (blob URL ou data URL)
   replyQuote?: { keyId: string; content: string; fromMe: boolean; remoteJid: string }
 }
 
@@ -225,15 +227,16 @@ function Avatar({ src, name, size = 32 }: { src?: string; name: string; size?: n
 
 // ─── ImageMessage ─────────────────────────────────────────────────────────────
 
-function ImageMessage({ keyId, fromMe, remoteJid, instanceToken, caption, mimeType }: {
+function ImageMessage({ keyId, fromMe, remoteJid, instanceToken, caption, mimeType, localSrc }: {
   keyId: string; fromMe: boolean; remoteJid: string
-  instanceToken: string; caption?: string; mimeType?: string
+  instanceToken: string; caption?: string; mimeType?: string; localSrc?: string
 }) {
-  const [src, setSrc] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [src, setSrc] = useState<string | null>(localSrc ?? null)
+  const [loading, setLoading] = useState(!localSrc)
   const [lightbox, setLightbox] = useState(false)
 
   useEffect(() => {
+    if (localSrc) { setSrc(localSrc); setLoading(false); return }
     let cancelled = false
     evolutionApi.getMediaBase64(instanceToken, { id: keyId, fromMe, remoteJid }).then(b64 => {
       if (cancelled || !b64) { if (!cancelled) setLoading(false); return }
@@ -242,7 +245,7 @@ function ImageMessage({ keyId, fromMe, remoteJid, instanceToken, caption, mimeTy
       setLoading(false)
     })
     return () => { cancelled = true }
-  }, [keyId, fromMe, remoteJid, instanceToken, mimeType])
+  }, [keyId, fromMe, remoteJid, instanceToken, mimeType, localSrc])
 
   if (loading) return (
     <div style={{ width: 200, height: 140, borderRadius: 6, background: 'var(--el)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -280,17 +283,18 @@ function ImageMessage({ keyId, fromMe, remoteJid, instanceToken, caption, mimeTy
 
 // ─── VideoMessage ─────────────────────────────────────────────────────────────
 
-function VideoMessage({ keyId, fromMe, remoteJid, instanceToken, caption, mimeType, duration }: {
+function VideoMessage({ keyId, fromMe, remoteJid, instanceToken, caption, mimeType, duration, localSrc }: {
   keyId: string; fromMe: boolean; remoteJid: string
-  instanceToken: string; caption?: string; mimeType?: string; duration?: number
+  instanceToken: string; caption?: string; mimeType?: string; duration?: number; localSrc?: string
 }) {
-  const [src, setSrc] = useState<string | null>(null)
+  const [src, setSrc] = useState<string | null>(localSrc ?? null)
   const [loading, setLoading] = useState(false)
-  const [loaded, setLoaded] = useState(false)
+  const [loaded, setLoaded] = useState(!!localSrc)
   const [lightbox, setLightbox] = useState(false)
 
   const loadVideo = () => {
     if (loaded || loading) return
+    if (localSrc) { setSrc(localSrc); setLoaded(true); return }
     setLoading(true)
     evolutionApi.getMediaBase64(instanceToken, { id: keyId, fromMe, remoteJid }).then(b64 => {
       if (!b64) { setLoading(false); return }
@@ -336,19 +340,22 @@ function VideoMessage({ keyId, fromMe, remoteJid, instanceToken, caption, mimeTy
 
 // ─── DocumentMessage ──────────────────────────────────────────────────────────
 
-function DocumentMessage({ keyId, fromMe, remoteJid, instanceToken, fileName, mimeType }: {
+function DocumentMessage({ keyId, fromMe, remoteJid, instanceToken, fileName, mimeType, localSrc }: {
   keyId: string; fromMe: boolean; remoteJid: string
-  instanceToken: string; fileName?: string; mimeType?: string
+  instanceToken: string; fileName?: string; mimeType?: string; localSrc?: string
 }) {
   const [downloading, setDownloading] = useState(false)
 
   const handleDownload = async () => {
     setDownloading(true)
     try {
-      const b64 = await evolutionApi.getMediaBase64(instanceToken, { id: keyId, fromMe, remoteJid })
-      if (!b64) { toast.error('Arquivo não disponível'); return }
-      const mime = mimeType || 'application/octet-stream'
-      const dataUrl = b64.startsWith('data:') ? b64 : `data:${mime};base64,${b64}`
+      let dataUrl = localSrc ?? null
+      if (!dataUrl) {
+        const b64 = await evolutionApi.getMediaBase64(instanceToken, { id: keyId, fromMe, remoteJid })
+        if (!b64) { toast.error('Arquivo não disponível'); return }
+        const mime = mimeType || 'application/octet-stream'
+        dataUrl = b64.startsWith('data:') ? b64 : `data:${mime};base64,${b64}`
+      }
       const a = document.createElement('a')
       a.href = dataUrl; a.download = fileName || 'documento'; a.click()
     } catch { toast.error('Erro ao baixar arquivo') }
@@ -380,12 +387,12 @@ function DocumentMessage({ keyId, fromMe, remoteJid, instanceToken, fileName, mi
 
 // ─── AudioMessage ─────────────────────────────────────────────────────────────
 
-function AudioMessage({ keyId, fromMe, remoteJid, instanceToken, duration, mimeType }: {
+function AudioMessage({ keyId, fromMe, remoteJid, instanceToken, duration, mimeType, localSrc }: {
   keyId: string; fromMe: boolean; remoteJid: string
-  instanceToken: string; duration?: number; mimeType?: string
+  instanceToken: string; duration?: number; mimeType?: string; localSrc?: string
 }) {
-  const [src, setSrc] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [src, setSrc] = useState<string | null>(localSrc ?? null)
+  const [loading, setLoading] = useState(!localSrc)
   const [playing, setPlaying] = useState(false)
   const [progress, setProgress] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
@@ -393,6 +400,7 @@ function AudioMessage({ keyId, fromMe, remoteJid, instanceToken, duration, mimeT
   const audioRef = useRef<HTMLAudioElement>(null)
 
   useEffect(() => {
+    if (localSrc) { setSrc(localSrc); setLoading(false); return }
     let cancelled = false
     evolutionApi.getMediaBase64(instanceToken, { id: keyId, fromMe, remoteJid }).then(b64 => {
       if (cancelled || !b64) { if (!cancelled) setLoading(false); return }
@@ -401,7 +409,7 @@ function AudioMessage({ keyId, fromMe, remoteJid, instanceToken, duration, mimeT
       setLoading(false)
     })
     return () => { cancelled = true }
-  }, [keyId, fromMe, remoteJid, instanceToken, mimeType])
+  }, [keyId, fromMe, remoteJid, instanceToken, mimeType, localSrc])
 
   const togglePlay = () => {
     const a = audioRef.current
@@ -477,19 +485,19 @@ function MessageBubble({ msg, instanceToken, remoteJid, onReply }: {
   const renderContent = () => {
     if (msg.mediaType === 'image' || msg.mediaType === 'sticker') {
       return <ImageMessage keyId={msg.keyId} fromMe={msg.fromMe} remoteJid={remoteJid}
-        instanceToken={instanceToken} caption={msg.content || undefined} mimeType={msg.mimeType} />
+        instanceToken={instanceToken} caption={msg.content || undefined} mimeType={msg.mimeType} localSrc={msg.localSrc} />
     }
     if (msg.mediaType === 'audio') {
       return <AudioMessage keyId={msg.keyId} fromMe={msg.fromMe} remoteJid={remoteJid}
-        instanceToken={instanceToken} duration={msg.duration} mimeType={msg.mimeType} />
+        instanceToken={instanceToken} duration={msg.duration} mimeType={msg.mimeType} localSrc={msg.localSrc} />
     }
     if (msg.mediaType === 'video') {
       return <VideoMessage keyId={msg.keyId} fromMe={msg.fromMe} remoteJid={remoteJid}
-        instanceToken={instanceToken} caption={msg.content || undefined} mimeType={msg.mimeType} duration={msg.duration} />
+        instanceToken={instanceToken} caption={msg.content || undefined} mimeType={msg.mimeType} duration={msg.duration} localSrc={msg.localSrc} />
     }
     if (msg.mediaType === 'document') {
       return <DocumentMessage keyId={msg.keyId} fromMe={msg.fromMe} remoteJid={remoteJid}
-        instanceToken={instanceToken} fileName={msg.fileName} mimeType={msg.mimeType} />
+        instanceToken={instanceToken} fileName={msg.fileName} mimeType={msg.mimeType} localSrc={msg.localSrc} />
     }
     if (msg.content) {
       return <p style={{ color: 'var(--t)', wordBreak: 'break-word', whiteSpace: 'pre-wrap', fontSize: 13, lineHeight: 1.4 }}>
@@ -610,11 +618,15 @@ export default function WhatsApp() {
   const [recordingSecs, setRecordingSecs] = useState(0)
   const [replyTo, setReplyTo] = useState<EvoMessage | null>(null)
   const [showEmoji, setShowEmoji] = useState(false)
+  const [showAttachMenu, setShowAttachMenu] = useState(false)
 
   const messagesEndRef    = useRef<HTMLDivElement>(null)
   const bulkUpsertedRef   = useRef<Record<string, boolean>>({})
   const sendingRef        = useRef(false)
   const fileInputRef      = useRef<HTMLInputElement>(null)
+  const videoInputRef     = useRef<HTMLInputElement>(null)
+  const docInputRef       = useRef<HTMLInputElement>(null)
+  const audioFileInputRef = useRef<HTMLInputElement>(null)
   const mediaRecorderRef  = useRef<MediaRecorder | null>(null)
   const audioChunksRef    = useRef<Blob[]>([])
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -628,7 +640,7 @@ export default function WhatsApp() {
       // Primeiro: tenta banco (instâncias já sincronizadas)
       const { data } = await supabase
         .from('whatsapp_instances')
-        .select('id, instance_name, instance_token, phone_number, label, status')
+        .select('id, instance_name, instance_token, phone_number, label, status, profile_pic_url')
         .eq('store_id', store.id)
         .eq('status', 'connected')
       if ((data ?? []).length > 0) return data as WaInstance[]
@@ -888,7 +900,10 @@ export default function WhatsApp() {
           const rowJid = row.remote_jid as string
 
           if (jid && (rowJid === jid || rowJid === jid.replace('@s.whatsapp.net', '') + '@s.whatsapp.net')) {
-            setTimeout(() => queryClient.invalidateQueries({ queryKey: messagesQueryKey }), 400)
+            setTimeout(async () => {
+              await queryClient.refetchQueries({ queryKey: messagesQueryKey })
+              mergeLocalSrcs()
+            }, 400)
           }
           queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations', instanceName] })
 
@@ -909,13 +924,16 @@ export default function WhatsApp() {
     mutationFn: async (text: string) => {
       if (!selectedChat) throw new Error('Nenhum chat selecionado')
       if (!instanceToken) throw new Error('Conecte um número em Configurações.')
+      let sentMsgId: string | null = null
       if (replyTo) {
-        await evolutionApi.sendTextWithQuote(instanceToken, selectedChat.phoneNumber, text, {
+        const result = await evolutionApi.sendTextWithQuote(instanceToken, selectedChat.phoneNumber, text, {
           keyId: replyTo.keyId, fromMe: replyTo.fromMe,
           remoteJid: selectedChat.remoteJid, content: replyTo.content,
         })
+        sentMsgId = (result?.messageid as string) ?? (result?.id as string) ?? null
       } else {
-        await evolutionApi.sendText(instanceToken, selectedChat.phoneNumber, text)
+        const result = await evolutionApi.sendText(instanceToken, selectedChat.phoneNumber, text)
+        sentMsgId = (result?.messageid as string) ?? (result?.id as string) ?? null
       }
       await supabase.from('whatsapp_messages').insert({
         store_id: store!.id, instance_name: instanceName,
@@ -923,6 +941,8 @@ export default function WhatsApp() {
         type: 'text', content: text, status: 'sent', from_me: true,
         contact_phone: selectedChat.phoneNumber,
         message_ts: Math.floor(Date.now() / 1000),
+        message_id: sentMsgId,
+        key_id: sentMsgId,
       })
     },
     onMutate: async (text) => {
@@ -966,24 +986,149 @@ export default function WhatsApp() {
     sendMutation.mutate(message.trim())
   }
 
-  // ── envio de imagem ───────────────────────────────────────────────────────
+  // ── helper: adiciona mensagem otimista ao cache ───────────────────────────
+  const addOptimisticMedia = (
+    mediaType: EvoMessage['mediaType'],
+    localSrc: string,
+    fileName?: string,
+    mimeType?: string,
+  ): string => {
+    const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const optimistic: EvoMessage = {
+      id: tempId, keyId: tempId, fromMe: true, content: '',
+      type: mediaType ?? 'unknown', mediaType, mimeType, fileName, localSrc,
+      timestamp: Math.floor(Date.now() / 1000), pending: true,
+    }
+    queryClient.setQueryData<EvoMessage[]>(messagesQueryKey, old => [...(old ?? []), optimistic])
+    return tempId
+  }
+
+  // ── helper: propaga localSrc de mensagens pendentes para as reais após refetch ─
+  // Chamado após cada refetchQueries para não perder a prévia da mídia enviada.
+  const mergeLocalSrcs = () => {
+    queryClient.setQueryData<EvoMessage[]>(messagesQueryKey, (msgs) => {
+      if (!msgs) return msgs
+      const pending = msgs.filter(m => m.pending && m.localSrc)
+      if (!pending.length) return msgs
+      const real = msgs.filter(m => !m.pending)
+      // Enriquece mensagens reais com localSrc da mensagem pendente correspondente
+      const enriched = real.map(msg => {
+        if (!msg.fromMe || !msg.mediaType || msg.localSrc) return msg
+        const match = pending.find(p =>
+          p.mediaType === msg.mediaType && Math.abs(p.timestamp - msg.timestamp) < 20
+        )
+        return match ? { ...msg, localSrc: match.localSrc } : msg
+      })
+      // Mantém pendentes que ainda não têm mensagem real correspondente
+      const orphans = pending.filter(p =>
+        !enriched.some(m => m.fromMe && m.mediaType === p.mediaType && Math.abs(m.timestamp - p.timestamp) < 20)
+      )
+      return [...enriched, ...orphans]
+    })
+  }
+
+  // ── helper: upload p/ Supabase Storage → retorna URL pública ────────────
+  const uploadToStorage = async (file: File): Promise<string | null> => {
+    try {
+      const ext  = file.name.split('.').pop() ?? 'bin'
+      const path = `${store!.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+      const { error } = await supabase.storage.from('whatsapp-media').upload(path, file, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: file.type,
+      })
+      if (error) { console.error('[uploadToStorage]', error); return null }
+      const { data } = supabase.storage.from('whatsapp-media').getPublicUrl(path)
+      return data.publicUrl
+    } catch (e) {
+      console.error('[uploadToStorage]', e)
+      return null
+    }
+  }
+
+  // ── helper: envia mídia ───────────────────────────────────────────────────
+  // Vídeos e documentos grandes: upload Storage → URL → UazapiGO baixa direto
+  // Imagens e áudios pequenos: base64 via proxy
+  const sendFileAsMedia = async (
+    file: File,
+    type: 'image' | 'video' | 'audio' | 'document',
+    caption = '',
+  ) => {
+    if (!selectedChat || !instanceToken) return
+
+    const MAX_MB = 200
+    if (file.size > MAX_MB * 1024 * 1024) {
+      toast.error(`Arquivo muito grande`, `Máximo ${MAX_MB}MB.`)
+      return
+    }
+
+    const useStorage = type === 'video' || type === 'document' || file.size > 3 * 1024 * 1024
+    let ok = false
+
+    if (useStorage) {
+      // Upload primeiro → usa publicUrl persistente como localSrc (blob seria revogado)
+      const publicUrl = await uploadToStorage(file)
+      if (!publicUrl) {
+        toast.error(`Erro ao enviar ${type === 'video' ? 'vídeo' : 'arquivo'}`, 'Falha no upload.')
+        return
+      }
+      addOptimisticMedia(type, publicUrl, file.name, file.type)
+      ok = await evolutionApi.sendMediaUrl(instanceToken, selectedChat.phoneNumber, publicUrl, type, caption || (type === 'document' ? file.name : ''))
+    } else {
+      await new Promise<void>(resolve => {
+        const reader = new FileReader()
+        reader.onloadend = async () => {
+          const dataUrl = reader.result as string
+          // dataUrl é persistente (não precisa revogar)
+          addOptimisticMedia(type, dataUrl, file.name, file.type)
+          if (type === 'image') {
+            ok = await evolutionApi.sendImageBase64(instanceToken, selectedChat!.phoneNumber, dataUrl, caption)
+          } else {
+            ok = await evolutionApi.sendAudio(instanceToken, selectedChat!.phoneNumber, dataUrl)
+          }
+          resolve()
+        }
+        reader.readAsDataURL(file)
+      })
+    }
+
+    if (ok) {
+      setTimeout(async () => {
+        await queryClient.refetchQueries({ queryKey: messagesQueryKey })
+        mergeLocalSrcs()
+      }, 3000)
+    } else {
+      toast.error(`Erro ao enviar ${type === 'image' ? 'imagem' : type === 'video' ? 'vídeo' : type === 'audio' ? 'áudio' : 'documento'}`)
+    }
+  }
+
+  // ── envio de fotos e vídeos ───────────────────────────────────────────────
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || !selectedChat || !instanceToken) return
     e.target.value = ''
-    const reader = new FileReader()
-    reader.onloadend = async () => {
-      const base64 = (reader.result as string).split(',')[1]
-      if (!base64) return
-      if (file.type.startsWith('image/')) {
-        const ok = await evolutionApi.sendImageBase64(instanceToken, selectedChat.phoneNumber, base64)
-        if (ok) { setTimeout(() => queryClient.invalidateQueries({ queryKey: messagesQueryKey }), 2000) }
-        else toast.error('Erro ao enviar imagem')
-      } else {
-        toast.info('Tipo não suportado', 'Apenas imagens por enquanto.')
-      }
-    }
-    reader.readAsDataURL(file)
+    setShowAttachMenu(false)
+    if (file.type.startsWith('image/')) await sendFileAsMedia(file, 'image')
+    else if (file.type.startsWith('video/')) await sendFileAsMedia(file, 'video')
+    else toast.info('Tipo não suportado', 'Use a opção Documento para outros arquivos.')
+  }
+
+  // ── envio de documento ────────────────────────────────────────────────────
+  const handleDocChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !selectedChat || !instanceToken) return
+    e.target.value = ''
+    setShowAttachMenu(false)
+    await sendFileAsMedia(file, 'document')
+  }
+
+  // ── envio de arquivo de áudio ─────────────────────────────────────────────
+  const handleAudioFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !selectedChat || !instanceToken) return
+    e.target.value = ''
+    setShowAttachMenu(false)
+    await sendFileAsMedia(file, 'audio')
   }
 
   // ── gravação de áudio ─────────────────────────────────────────────────────
@@ -991,20 +1136,37 @@ export default function WhatsApp() {
     if (!selectedChat || !instanceToken) return
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/ogg;codecs=opus'
+      // Detecta o MIME type suportado e o usa consistentemente
+      const mimeType =
+        MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' :
+        MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')  ? 'audio/ogg;codecs=opus'  :
+        MediaRecorder.isTypeSupported('audio/webm')             ? 'audio/webm'             :
+        'audio/ogg'
       const recorder = new MediaRecorder(stream, { mimeType })
       audioChunksRef.current = []
       recorder.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
       recorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop())
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/ogg' })
+        const blob = new Blob(audioChunksRef.current, { type: mimeType })
+        // Mostra otimista imediatamente com blob URL (temporário)
+        const blobUrl = URL.createObjectURL(blob)
+        addOptimisticMedia('audio', blobUrl, undefined, mimeType)
         const reader = new FileReader()
         reader.onloadend = async () => {
-          const b64 = (reader.result as string).split(',')[1]
-          if (!b64) return
-          const ok = await evolutionApi.sendAudio(instanceToken, selectedChat.phoneNumber, b64)
-          if (ok) setTimeout(() => queryClient.invalidateQueries({ queryKey: messagesQueryKey }), 3000)
-          else toast.error('Erro ao enviar áudio')
+          const dataUrl = reader.result as string
+          if (!dataUrl) return
+          // Troca blob URL (temporário) pelo dataUrl (persistente) antes de revogar
+          queryClient.setQueryData<EvoMessage[]>(messagesQueryKey, msgs =>
+            (msgs ?? []).map(m => m.localSrc === blobUrl ? { ...m, localSrc: dataUrl } : m)
+          )
+          URL.revokeObjectURL(blobUrl)
+          const ok = await evolutionApi.sendAudio(instanceToken, selectedChat!.phoneNumber, dataUrl)
+          if (ok) {
+            setTimeout(async () => {
+              await queryClient.refetchQueries({ queryKey: messagesQueryKey })
+              mergeLocalSrcs()
+            }, 3000)
+          } else toast.error('Erro ao enviar áudio')
         }
         reader.readAsDataURL(blob)
       }
@@ -1012,7 +1174,7 @@ export default function WhatsApp() {
       mediaRecorderRef.current = recorder
       setIsRecording(true); setRecordingSecs(0)
       recordingTimerRef.current = setInterval(() => setRecordingSecs(s => s + 1), 1000)
-    } catch { toast.error('Microfone indisponível', 'Permita acesso ao microfone.') }
+    } catch { toast.error('Microfone indisponível', 'Permita acesso ao microfone nas configurações do navegador.') }
   }
 
   const stopRecording = (cancel = false) => {
@@ -1077,48 +1239,79 @@ export default function WhatsApp() {
           {/* Seletor de instância */}
           {instanceList.length > 0 ? (
             <div style={{ position: 'relative', marginBottom: 8 }}>
+              {/* Botão principal — mostra instância ativa */}
               <button onClick={() => setShowInstanceMenu(v => !v)}
                 style={{
                   width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '6px 10px', borderRadius: 8, cursor: 'pointer',
+                  padding: '7px 10px', borderRadius: 8, cursor: 'pointer',
                   background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.08)',
-                  color: 'var(--t)', fontSize: 12, fontWeight: 500, fontFamily: 'var(--fn)',
+                  color: 'var(--t)', fontFamily: 'var(--fn)', gap: 8,
                 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#25d366', flexShrink: 0 }} />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {instanceLabel || 'Selecionar número'}
-                  </span>
+                {/* Avatar */}
+                {(() => {
+                  const ci = instanceList.find(i => i.instance_name === instanceName)
+                  const initials = (ci?.label ?? ci?.phone_number ?? '?').slice(0, 2).toUpperCase()
+                  return ci?.profile_pic_url
+                    ? <img src={ci.profile_pic_url} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                    : <span style={{
+                        width: 28, height: 28, borderRadius: '50%', background: '#2a3942',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 10, fontWeight: 700, color: '#8696a0', flexShrink: 0,
+                      }}>{initials}</span>
+                })()}
+                {/* Textos */}
+                <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--t)' }}>
+                    {curInstance?.label || 'Vendedor'}
+                  </div>
+                  <div style={{ fontSize: 10, color: '#8696a0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#25d366', flexShrink: 0, display: 'inline-block' }} />
+                    {curInstance?.phone_number ? `+${curInstance.phone_number}` : 'Conectado'}
+                  </div>
                 </div>
-                {instanceList.length > 1 && (
-                  <ChevronDown size={13} style={{ flexShrink: 0, marginLeft: 4, transform: showInstanceMenu ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
-                )}
+                <ChevronDown size={13} style={{ flexShrink: 0, color: 'var(--t3)', transform: showInstanceMenu ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
               </button>
 
-              {showInstanceMenu && instanceList.length > 1 && (
+              {showInstanceMenu && (
                 <div style={{
                   position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: 3,
                   background: '#1f2c34', border: '1px solid rgba(255,255,255,.1)', borderRadius: 8,
                   boxShadow: '0 8px 24px rgba(0,0,0,.5)', overflow: 'hidden',
                 }}>
                   {instanceList.map(inst => {
-                    const label = inst.phone_number ? `+${inst.phone_number}` : inst.label ?? inst.instance_name
                     const isActive = inst.instance_name === instanceName
+                    const initials = (inst.label ?? inst.phone_number ?? '?').slice(0, 2).toUpperCase()
                     return (
-                      <button key={inst.instance_name} onClick={() => handleSelectInstance(inst.instance_name)}
+                      <button key={inst.instance_name}
+                        onClick={() => { handleSelectInstance(inst.instance_name); setShowInstanceMenu(false) }}
                         style={{
                           width: '100%', padding: '9px 12px', textAlign: 'left',
-                          background: isActive ? 'rgba(37,211,102,.1)' : 'transparent',
+                          background: isActive ? 'rgba(37,211,102,.08)' : 'transparent',
                           border: 'none', borderBottom: '1px solid rgba(255,255,255,.05)',
-                          color: isActive ? '#25d366' : 'var(--t2)',
-                          fontSize: 12, fontWeight: isActive ? 600 : 400,
                           cursor: 'pointer', fontFamily: 'var(--fn)',
-                          display: 'flex', alignItems: 'center', gap: 8,
+                          display: 'flex', alignItems: 'center', gap: 10,
                         }}
                         onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,.05)' }}
-                        onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}>
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#25d366', flexShrink: 0 }} />
-                        {label}
+                        onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = isActive ? 'rgba(37,211,102,.08)' : 'transparent' }}>
+                        {/* Avatar no dropdown */}
+                        {inst.profile_pic_url
+                          ? <img src={inst.profile_pic_url} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                          : <span style={{
+                              width: 32, height: 32, borderRadius: '50%', background: '#2a3942',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: 11, fontWeight: 700, color: '#8696a0', flexShrink: 0,
+                            }}>{initials}</span>
+                        }
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: isActive ? '#25d366' : 'var(--t)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {inst.label || 'Vendedor'}
+                          </div>
+                          <div style={{ fontSize: 10, color: '#8696a0', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#25d366', flexShrink: 0, display: 'inline-block' }} />
+                            {inst.phone_number ? `+${inst.phone_number}` : inst.instance_name}
+                          </div>
+                        </div>
+                        {isActive && <Check size={13} style={{ color: '#25d366', flexShrink: 0 }} />}
                       </button>
                     )
                   })}
@@ -1357,13 +1550,51 @@ export default function WhatsApp() {
                 <Smile size={20} />
               </button>
 
-              <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileChange} />
-              <button onClick={() => fileInputRef.current?.click()} title="Enviar imagem"
-                style={{ color: '#8696a0', background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}
-                onMouseEnter={e => (e.currentTarget.style.color = '#e9edef')}
-                onMouseLeave={e => (e.currentTarget.style.color = '#8696a0')}>
-                <Paperclip size={20} />
-              </button>
+              {/* ── inputs de arquivo ocultos ── */}
+              <input ref={fileInputRef}      type="file" accept="image/*,video/*"  style={{ display: 'none' }} onChange={handleFileChange} />
+              <input ref={docInputRef}       type="file" accept="*/*"              style={{ display: 'none' }} onChange={handleDocChange} />
+              <input ref={audioFileInputRef} type="file" accept="audio/*"          style={{ display: 'none' }} onChange={handleAudioFileChange} />
+              <input ref={videoInputRef}     type="file" accept="video/*"          style={{ display: 'none' }} onChange={handleFileChange} />
+
+              {/* ── menu de anexos ── */}
+              <div style={{ position: 'relative' }}>
+                {showAttachMenu && (
+                  <>
+                    {/* overlay para fechar ao clicar fora */}
+                    <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setShowAttachMenu(false)} />
+                    <div style={{
+                      position: 'absolute', bottom: 44, left: '50%', transform: 'translateX(-50%)',
+                      background: '#233138', borderRadius: 14, padding: '10px 6px',
+                      boxShadow: '0 4px 24px rgba(0,0,0,.5)', zIndex: 100,
+                      display: 'flex', flexDirection: 'column', gap: 2, minWidth: 180,
+                    }}>
+                      {[
+                        { label: 'Fotos e vídeos', icon: <ImageIcon size={18} />, color: '#7b68ee', onClick: () => { setShowAttachMenu(false); fileInputRef.current?.click() } },
+                        { label: 'Vídeo',          icon: <Film size={18} />,      color: '#5b8dee', onClick: () => { setShowAttachMenu(false); videoInputRef.current?.click() } },
+                        { label: 'Câmera',         icon: <Camera size={18} />,    color: '#e05c8a', onClick: () => { setShowAttachMenu(false); const i = document.createElement('input'); i.type='file'; i.accept='image/*'; i.capture='environment'; i.onchange=handleFileChange as never; i.click() } },
+                        { label: 'Áudio',          icon: <Music2 size={18} />,    color: '#f0924d', onClick: () => { setShowAttachMenu(false); audioFileInputRef.current?.click() } },
+                        { label: 'Documento',      icon: <FileText size={18} />,  color: '#5fa8e8', onClick: () => { setShowAttachMenu(false); docInputRef.current?.click() } },
+                      ].map(item => (
+                        <button key={item.label} onClick={item.onClick}
+                          style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 9, width: '100%', textAlign: 'left', color: '#e9edef', fontSize: 13 }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,.06)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+                          <span style={{ width: 36, height: 36, borderRadius: '50%', background: item.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#fff' }}>
+                            {item.icon}
+                          </span>
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+                <button onClick={() => setShowAttachMenu(v => !v)} title="Anexar"
+                  style={{ color: showAttachMenu ? '#25d366' : '#8696a0', background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = '#e9edef')}
+                  onMouseLeave={e => (e.currentTarget.style.color = showAttachMenu ? '#25d366' : '#8696a0')}>
+                  <Paperclip size={20} />
+                </button>
+              </div>
 
               <input ref={inputRef} type="text"
                 placeholder={isRecording ? 'Gravando áudio…' : 'Digite uma mensagem'}

@@ -340,12 +340,13 @@ export const evolutionApi = {
     }
   },
 
+  // UazapiGO send/media usa: { number, type, file: '<base64_ou_dataUrl>' }
   sendAudio: async (instanceToken: string, number: string, audioBase64: string): Promise<boolean> => {
     try {
       const res = await fetch(`${BASE}/send/media?${tqs(instanceToken)}`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ number, type: 'audio', base64: audioBase64, encoding: true }),
+        body: JSON.stringify({ number, type: 'audio', file: audioBase64 }),
       })
       return res.ok
     } catch {
@@ -358,7 +359,7 @@ export const evolutionApi = {
       const res = await fetch(`${BASE}/send/media?${tqs(instanceToken)}`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ number, type: 'image', base64, caption }),
+        body: JSON.stringify({ number, type: 'image', file: base64, caption }),
       })
       return res.ok
     } catch {
@@ -377,7 +378,7 @@ export const evolutionApi = {
       const res = await fetch(`${BASE}/send/media?${tqs(instanceToken)}`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ number, type: mediaType, url: mediaUrl, caption }),
+        body: JSON.stringify({ number, type: mediaType, file: mediaUrl, caption }),
       })
       return res.ok
     } catch {
@@ -394,17 +395,21 @@ export const evolutionApi = {
   // ── Mídia ────────────────────────────────────────────────────────────────────
 
   getMediaBase64: async (
-    instanceToken: string,
+    _instanceToken: string,
     key: { id: string; fromMe: boolean; remoteJid: string },
   ): Promise<string | null> => {
     try {
-      // UazapiGO usa GET para /media/download com o id da mensagem como query param
+      // UazapiGO não tem endpoint /media/download.
+      // Usa a edge function whatsapp-media que descriptografa o arquivo via mediaKey do DB.
+      const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL ?? '').replace(/\/$/, '')
+      const anonKey    = import.meta.env.VITE_SUPABASE_ANON_KEY ?? ''
+      if (!supabaseUrl || !anonKey) return null
       const res = await fetch(
-        `${BASE}/media/download?${tqs(instanceToken)}&id=${encodeURIComponent(key.id)}`,
-        { method: 'GET', headers },
+        `${supabaseUrl}/functions/v1/whatsapp-media?message_id=${encodeURIComponent(key.id)}`,
+        { headers: { 'Authorization': `Bearer ${anonKey}` } },
       )
       if (!res.ok) return null
-      const data = await safeJson(res)
+      const data = await safeJson(res) as Record<string, unknown> | null
       return (data?.base64 as string) ?? null
     } catch {
       return null
