@@ -209,7 +209,7 @@ export interface Automation {
 }
 
 export interface AutomationAction {
-  type: 'send_whatsapp' | 'send_email' | 'create_task' | 'change_stage' | 'change_temperature'
+  type: 'send_whatsapp' | 'send_email' | 'create_task' | 'change_stage' | 'change_temperature' | 'archive_lead'
   delay_days?: number
   config: Record<string, unknown>
 }

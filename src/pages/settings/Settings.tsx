@@ -614,23 +614,61 @@ function WhatsAppSection() {
 
 export default function Settings() {
   const { store, setStore } = useAuthStore()
+  const [savingStore, setSavingStore] = useState(false)
+  const [logoPreview, setLogoPreview] = useState<string | null>(store?.logo_url ?? null)
+  const logoInputRef = useRef<HTMLInputElement>(null)
+
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !store) return
+    if (file.size > 2 * 1024 * 1024) { toast.error('Imagem muito grande', 'Máximo 2MB.'); return }
+    const reader = new FileReader()
+    reader.onloadend = () => setLogoPreview(reader.result as string)
+    reader.readAsDataURL(file)
+  }
 
   const saveStoreInfo = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!store) return
-    const fd = new FormData(e.currentTarget)
-    const patch = {
-      name:  (fd.get('name')  as string).trim(),
-      cnpj:  (fd.get('cnpj')  as string).trim(),
-      phone: (fd.get('phone') as string).trim(),
-      email: (fd.get('email') as string).trim(),
-      city:  (fd.get('city')  as string).trim(),
+    setSavingStore(true)
+    try {
+      const fd = new FormData(e.currentTarget)
+      let logo_url = store.logo_url ?? null
+
+      // Upload logo se selecionou novo arquivo
+      const logoFile = logoInputRef.current?.files?.[0]
+      if (logoFile) {
+        const ext  = logoFile.name.split('.').pop() ?? 'png'
+        const path = `logos/${store.id}.${ext}`
+        const { error: upErr } = await supabase.storage
+          .from('whatsapp-media')
+          .upload(path, logoFile, { upsert: true, contentType: logoFile.type })
+        if (!upErr) {
+          const { data: urlData } = supabase.storage.from('whatsapp-media').getPublicUrl(path)
+          logo_url = urlData.publicUrl
+        }
+      }
+
+      const patch = {
+        name:     (fd.get('name')    as string).trim(),
+        cnpj:     (fd.get('cnpj')    as string).trim(),
+        phone:    (fd.get('phone')   as string).trim(),
+        email:    (fd.get('email')   as string).trim(),
+        address:  (fd.get('address') as string).trim(),
+        city:     (fd.get('city')    as string).trim(),
+        state:    (fd.get('state')   as string).trim(),
+        logo_url,
+      }
+      const { data, error } = await supabase.from('stores').update(patch).eq('id', store.id).select().single()
+      if (error) { toast.error('Erro ao salvar', error.message); return }
+      if (data) setStore(data as Parameters<typeof setStore>[0])
+      toast.success('Dados da loja salvos!')
+    } finally {
+      setSavingStore(false)
     }
-    const { data, error } = await supabase.from('stores').update(patch).eq('id', store.id).select().single()
-    if (error) { toast.error('Erro ao salvar', error.message); return }
-    if (data) setStore(data as Parameters<typeof setStore>[0])
-    toast.success('Dados da loja salvos!')
   }
+
+  const BR_STATES = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 640 }}>
@@ -646,18 +684,56 @@ export default function Settings() {
         </CardHeader>
         <CardContent style={{ padding: '14px 16px 16px' }}>
           <form onSubmit={saveStoreInfo} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Input label="Nome da Loja" name="name" defaultValue={store?.name} />
-              <Input label="CNPJ" name="cnpj" defaultValue={store?.cnpj ?? ''} />
-              <Input label="Telefone" name="phone" defaultValue={store?.phone ?? ''} />
-              <Input label="Email" name="email" defaultValue={store?.email ?? ''} />
-              <div style={{ gridColumn: '1 / -1' }}>
-                <Input label="Cidade" name="city" defaultValue={store?.city ?? ''} />
+
+            {/* Logo */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div
+                onClick={() => logoInputRef.current?.click()}
+                style={{
+                  width: 64, height: 64, borderRadius: 10, flexShrink: 0,
+                  background: 'var(--el)', border: '2px dashed var(--b)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', overflow: 'hidden', position: 'relative',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--nb)')}
+                onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--b)')}>
+                {logoPreview
+                  ? <img src={logoPreview} alt="logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : <span style={{ fontSize: 22 }}>🏪</span>}
+              </div>
+              <div>
+                <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--t)', marginBottom: 3 }}>Logo da loja</p>
+                <p style={{ fontSize: 11, color: 'var(--t3)', marginBottom: 6 }}>PNG ou JPG, máximo 2MB. Aparece no sistema e nos relatórios.</p>
+                <button type="button" onClick={() => logoInputRef.current?.click()}
+                  style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, border: '1px solid var(--b)', background: 'var(--el)', color: 'var(--t2)', cursor: 'pointer' }}>
+                  Escolher imagem
+                </button>
+                <input ref={logoInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleLogoChange} />
               </div>
             </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Input label="Nome da Loja" name="name" defaultValue={store?.name} />
+              <Input label="CNPJ" name="cnpj" defaultValue={store?.cnpj ?? ''} placeholder="00.000.000/0001-00" />
+              <Input label="Telefone" name="phone" defaultValue={store?.phone ?? ''} placeholder="(11) 99999-9999" />
+              <Input label="Email" name="email" defaultValue={store?.email ?? ''} placeholder="contato@loja.com" />
+              <div style={{ gridColumn: '1 / -1' }}>
+                <Input label="Endereço (rua e número)" name="address" defaultValue={store?.address ?? ''} placeholder="Av. Paulista, 1234" />
+              </div>
+              <Input label="Cidade" name="city" defaultValue={store?.city ?? ''} placeholder="São Paulo" />
+              <div>
+                <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.06em', display: 'block', marginBottom: 4 }}>Estado</label>
+                <select name="state" defaultValue={store?.state ?? 'SP'}
+                  style={{ width: '100%', height: 36, padding: '0 10px', background: 'var(--el)', border: '1px solid var(--b)', borderRadius: 7, color: 'var(--t)', fontSize: 13, outline: 'none', fontFamily: 'var(--fn)', cursor: 'pointer' }}>
+                  {BR_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            </div>
+
             <div>
-              <Button size="sm" type="submit">
-                <Save size={13} /> Salvar Alterações
+              <Button size="sm" type="submit" disabled={savingStore}>
+                {savingStore ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={13} />}
+                {savingStore ? 'Salvando…' : 'Salvar Alterações'}
               </Button>
             </div>
           </form>
