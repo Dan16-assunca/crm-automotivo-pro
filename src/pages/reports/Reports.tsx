@@ -326,7 +326,7 @@ export default function Reports() {
                   <XAxis dataKey="month" tick={{ fill: 'var(--t3)', fontSize: 10 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: 'var(--t3)', fontSize: 10 }} axisLine={false} tickLine={false}
                     tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
-                  <Tooltip {...tt} formatter={(v: number) => [formatCurrency(v), 'Faturamento']} />
+                  <Tooltip {...tt} formatter={(v) => [formatCurrency(v as number), 'Faturamento']} />
                   <Line type="monotone" dataKey="revenue" stroke="var(--neon)" strokeWidth={2} dot={{ fill: 'var(--neon)', r: 3 }} name="Faturamento" />
                 </LineChart>
               </ResponsiveContainer>
@@ -424,7 +424,7 @@ export default function Reports() {
               <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--t)', marginBottom: 14 }}>Volume por Origem</p>
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
-                  <Pie data={sourceStats} dataKey="total" nameKey="source" cx="50%" cy="50%" outerRadius={80} label={({ source, percent }) => `${source} ${(percent * 100).toFixed(0)}%`} labelLine={false}>
+                  <Pie data={sourceStats} dataKey="total" nameKey="source" cx="50%" cy="50%" outerRadius={80} label={(props) => `${(props as unknown as Record<string, unknown>).source} ${(((props.percent) ?? 0) * 100).toFixed(0)}%`} labelLine={false}>
                     {sourceStats.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                   </Pie>
                   <Tooltip {...tt} />
@@ -438,7 +438,7 @@ export default function Reports() {
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--b)" vertical={false} />
                   <XAxis dataKey="source" tick={{ fill: 'var(--t3)', fontSize: 10 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: 'var(--t3)', fontSize: 10 }} axisLine={false} tickLine={false} unit="%" />
-                  <Tooltip {...tt} formatter={(v: number) => [`${v}%`, 'Taxa de conversão']} />
+                  <Tooltip {...tt} formatter={(v) => [`${v}%`, 'Taxa de conversão']} />
                   <Bar dataKey="rate" fill="var(--neon)" radius={[4,4,0,0]} name="Conversão %" />
                 </BarChart>
               </ResponsiveContainer>
