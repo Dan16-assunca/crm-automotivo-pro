@@ -52,6 +52,11 @@ function WhatsAppSection() {
   const { store } = useAuthStore()
   const queryClient = useQueryClient()
   const [adding, setAdding]         = useState(false)
+  const [showLabelForm, setShowLabelForm] = useState(false)
+  const [pendingLabel, setPendingLabel]   = useState('')
+  const [editingLabel, setEditingLabel]   = useState<string | null>(null) // inst.id sendo editado
+  const [editLabelVal, setEditLabelVal]   = useState('')
+  const [savingLabel, setSavingLabel]     = useState(false)
   const [qrBase64, setQrBase64]     = useState<string | null>(null)
   const [qrSecs, setQrSecs]         = useState(QR_TTL)
   const [loadingQr, setLoadingQr]   = useState(false)
@@ -168,8 +173,22 @@ function WhatsAppSection() {
     return () => { supabase.removeChannel(channel) }
   }, [store?.id, refetch, queryClient])
 
-  const handleAddNumber = async () => {
+  const handleSaveLabel = async (inst: WaInstance) => {
+    if (!editLabelVal.trim()) return
+    setSavingLabel(true)
+    try {
+      await supabase.from('whatsapp_instances').update({ label: editLabelVal.trim() }).eq('id', inst.id)
+      refetch()
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-instances-db'] })
+      setEditingLabel(null)
+    } finally {
+      setSavingLabel(false)
+    }
+  }
+
+  const handleAddNumber = async (label: string) => {
     if (!store?.id) return
+    setShowLabelForm(false)
     setAdding(true)
     setQrBase64(null)
     setLoadingQr(true)
@@ -234,6 +253,7 @@ function WhatsAppSection() {
         instance_token: token,
         uazapi_id: uazapiId,
         status: 'connecting',
+        ...(label.trim() ? { label: label.trim() } : {}),
       },
       { onConflict: 'instance_name' },
     )
@@ -479,7 +499,7 @@ function WhatsAppSection() {
 
                   {/* Info */}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                       <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--t)' }}>
                         {formatPhone(inst.phone_number) ?? inst.label ?? 'Aguardando conexão…'}
                       </span>
@@ -490,11 +510,58 @@ function WhatsAppSection() {
                         {isConnected ? 'Online' : isConnecting ? 'Conectando…' : 'Offline'}
                       </span>
                     </div>
-                    {inst.label && (
-                      <p style={{ fontSize: 10, color: 'var(--t3)' }}>{inst.label}</p>
+
+                    {/* Label editável inline */}
+                    {editingLabel === inst.id ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4 }}>
+                        <input
+                          autoFocus
+                          type="text"
+                          value={editLabelVal}
+                          onChange={e => setEditLabelVal(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') handleSaveLabel(inst)
+                            if (e.key === 'Escape') setEditingLabel(null)
+                          }}
+                          style={{
+                            height: 26, padding: '0 8px',
+                            background: 'var(--el)', border: '1px solid var(--nb)',
+                            borderRadius: 5, color: 'var(--t)', fontSize: 11,
+                            outline: 'none', fontFamily: 'var(--fn)', width: 140,
+                          }}
+                        />
+                        <button
+                          onClick={() => handleSaveLabel(inst)}
+                          disabled={savingLabel}
+                          style={{ padding: '3px 8px', borderRadius: 5, border: 'none', background: 'var(--neon)', color: '#000', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}
+                        >
+                          {savingLabel ? '…' : 'OK'}
+                        </button>
+                        <button
+                          onClick={() => setEditingLabel(null)}
+                          style={{ padding: '3px 6px', borderRadius: 5, border: '1px solid var(--bs)', background: 'transparent', color: 'var(--t3)', fontSize: 10, cursor: 'pointer' }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => { setEditingLabel(inst.id); setEditLabelVal(inst.label ?? '') }}
+                        style={{
+                          background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', gap: 4, marginTop: 2,
+                        }}
+                        title="Clique para editar o nome"
+                      >
+                        <p style={{ fontSize: 10, color: inst.label ? 'var(--t3)' : 'var(--t3)', fontStyle: inst.label ? 'normal' : 'italic' }}>
+                          {inst.label ?? 'Sem nome — clique para adicionar'}
+                        </p>
+                        <span style={{ fontSize: 9, color: 'var(--nb)', opacity: 0.7 }}>✏️</span>
+                      </button>
                     )}
+
                     {inst.connected_at && (
-                      <p style={{ fontSize: 9, color: 'var(--t3)', fontFamily: 'var(--fm)' }}>
+                      <p style={{ fontSize: 9, color: 'var(--t3)', fontFamily: 'var(--fm)', marginTop: 2 }}>
                         Conectado em {new Date(inst.connected_at).toLocaleDateString('pt-BR')}
                       </p>
                     )}
@@ -534,6 +601,46 @@ function WhatsAppSection() {
                 </div>
               )
             })}
+          </div>
+        )}
+
+        {/* Form de label antes do QR */}
+        {showLabelForm && !adding && (
+          <div style={{
+            display: 'flex', flexDirection: 'column', gap: 12,
+            padding: '16px', background: 'var(--ng)',
+            border: '1px solid var(--nb)', borderRadius: 10,
+          }}>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--t)', marginBottom: 4 }}>
+                Identificar este número
+              </p>
+              <p style={{ fontSize: 11, color: 'var(--t3)' }}>
+                Dê um nome para identificar a quem pertence este WhatsApp (ex: "João Silva", "Vendas")
+              </p>
+            </div>
+            <input
+              type="text"
+              autoFocus
+              placeholder="Ex: João Silva ou Suporte"
+              value={pendingLabel}
+              onChange={e => setPendingLabel(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleAddNumber(pendingLabel) }}
+              style={{
+                width: '100%', height: 36, padding: '0 11px',
+                background: 'var(--el)', border: '1px solid var(--nb)',
+                borderRadius: 7, color: 'var(--t)', fontSize: 13,
+                outline: 'none', fontFamily: 'var(--fn)', boxSizing: 'border-box',
+              }}
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button size="sm" variant="secondary" onClick={() => { setShowLabelForm(false); setPendingLabel('') }} style={{ flex: 1 }}>
+                Cancelar
+              </Button>
+              <Button size="sm" variant="primary" onClick={() => handleAddNumber(pendingLabel)} style={{ flex: 1 }}>
+                <QrCode size={13} /> Gerar QR Code
+              </Button>
+            </div>
           </div>
         )}
 
@@ -600,8 +707,8 @@ function WhatsAppSection() {
         )}
 
         {/* Botão adicionar */}
-        {!adding && (
-          <Button size="sm" onClick={handleAddNumber} style={{ alignSelf: 'flex-start' }}>
+        {!adding && !showLabelForm && (
+          <Button size="sm" onClick={() => { setPendingLabel(''); setShowLabelForm(true) }} style={{ alignSelf: 'flex-start' }}>
             <Plus size={13} /> Adicionar número
           </Button>
         )}

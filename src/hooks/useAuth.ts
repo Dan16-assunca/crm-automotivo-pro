@@ -43,6 +43,11 @@ export function useAuth() {
   useEffect(() => {
     let mounted = true
 
+    // Se há tokens no hash da URL (ex: redirecionamento pós-cadastro), o Supabase
+    // processa esses tokens via detectSessionInUrl e dispara onAuthStateChange(SIGNED_IN).
+    // Nesse caso, não chamamos logout() no getSession() — esperamos o evento chegar.
+    const hashHasTokens = window.location.hash.includes('access_token=')
+
     // Get initial session — always re-fetches profile from DB to ensure fresh role/store data
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!mounted) return
@@ -56,14 +61,16 @@ export function useAuth() {
             // Profile query returned nothing — clear stale cache to avoid wrong role
             logout()
           }
-        } else {
-          // No valid session — clear any stale persisted user so ProtectedRoute redirects to login
+        } else if (!hashHasTokens) {
+          // No valid session and no hash tokens incoming — clear stale cache
           logout()
         }
+        // If hashHasTokens and no session yet: stay loading, onAuthStateChange(SIGNED_IN) will arrive
       } catch (e) {
         console.error('[useAuth] Failed to load profile:', e)
       } finally {
-        if (mounted) setLoading(false)
+        // Don't clear loading if we're still waiting for hash token processing
+        if (mounted && !hashHasTokens) setLoading(false)
       }
     }).catch((e) => {
       console.error('[useAuth] getSession error:', e)

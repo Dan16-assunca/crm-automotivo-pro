@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
+import { getSlugFromHost, redirectToTenant } from '@/hooks/useTenant'
 import type { UserRole } from '@/types'
 
 interface ProtectedRouteProps {
@@ -19,6 +20,15 @@ export function ProtectedRoute({ children, roles }: ProtectedRouteProps) {
     const timer = setTimeout(() => setLoading(false), 8000)
     return () => clearTimeout(timer)
   }, [isLoading, setLoading])
+
+  // Se o usuário está autenticado mas no subdomínio errado, redireciona para o correto.
+  // Isso garante isolamento total: cada cliente só acessa o CRM da sua própria loja.
+  const storeSlug = (useAuthStore.getState().store as unknown as { slug?: string } | null)?.slug
+  const currentSlug = getSlugFromHost()
+  if (!isLoading && user && storeSlug && currentSlug && storeSlug !== currentSlug) {
+    redirectToTenant(storeSlug, '/dashboard')
+    return null
+  }
 
   if (isLoading) {
     return (

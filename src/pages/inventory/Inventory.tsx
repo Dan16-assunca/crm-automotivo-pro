@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Search, Grid, List, Car, Clock, Edit, X,
-  ChevronLeft, ChevronRight, Camera, Trash2, Save,
+  ChevronLeft, ChevronRight, Camera, Trash2, Save, ImageIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
@@ -12,6 +12,8 @@ import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { formatCurrency, computeDaysInStock } from '@/utils/format'
 import { toast } from '@/components/ui/Toast'
+import { useIsMobile } from '@/hooks/useIsMobile'
+import { useVehicleCamera } from '@/hooks/useVehicleCamera'
 import type { Vehicle } from '@/types'
 
 // ─── Form constants ───────────────────────────────────────────────────────────
@@ -41,6 +43,8 @@ function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onCl
   const queryClient = useQueryClient()
   const isEdit = !!vehicle
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const isMobileForm = useIsMobile()
+  const { takePhoto, pickFromGallery, isNative } = useVehicleCamera()
 
   // Photos
   const [photos, setPhotos]       = useState<string[]>(vehicle?.photos ?? [])
@@ -99,6 +103,33 @@ function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onCl
       setPhotoIdx(clampIdx(updated, updated.length - 1))
       return updated
     })
+    setUploading(false)
+  }
+
+  // Captura via Capacitor Camera (nativo) ou galeria
+  const handleCameraCapture = async () => {
+    if (photos.length >= 10) return
+    const photo = isNative ? await takePhoto() : await pickFromGallery()
+    if (!photo) return
+    setUploading(true)
+    const path = `${store!.id}/${Date.now()}.${photo.filename.split('.').pop() ?? 'jpg'}`
+    const { error } = await supabase.storage.from('vehicle-photos').upload(path, photo.blob, { upsert: false })
+    if (error) { toast.error('Erro ao enviar foto', error.message); setUploading(false); return }
+    const { data } = supabase.storage.from('vehicle-photos').getPublicUrl(path)
+    setPhotos(p => { const updated = [...p, data.publicUrl]; setPhotoIdx(updated.length - 1); return updated })
+    setUploading(false)
+  }
+
+  const handleGalleryPick = async () => {
+    if (photos.length >= 10) return
+    const photo = await pickFromGallery()
+    if (!photo) return
+    setUploading(true)
+    const path = `${store!.id}/${Date.now()}.${photo.filename.split('.').pop() ?? 'jpg'}`
+    const { error } = await supabase.storage.from('vehicle-photos').upload(path, photo.blob, { upsert: false })
+    if (error) { toast.error('Erro ao enviar foto', error.message); setUploading(false); return }
+    const { data } = supabase.storage.from('vehicle-photos').getPublicUrl(path)
+    setPhotos(p => { const updated = [...p, data.publicUrl]; setPhotoIdx(updated.length - 1); return updated })
     setUploading(false)
   }
 
@@ -257,20 +288,47 @@ function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onCl
             )}
           </div>
 
-          {/* Adicionar fotos bar */}
+          {/* Adicionar fotos bar — câmera nativa no mobile */}
           <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--b)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading || photos.length >= 10}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 7, border: '1px solid var(--b)', background: 'var(--el)', color: 'var(--t2)', fontSize: 12, cursor: 'pointer', opacity: (uploading || photos.length >= 10) ? 0.5 : 1, fontWeight: 600 }}
-            >
-              <Camera size={12} />
-              {uploading ? 'Enviando...' : 'Adicionar fotos'}
-            </button>
-            {photos.length >= 10 && <span style={{ fontSize: 10, color: 'var(--t3)' }}>Limite de 10 fotos atingido</span>}
-            <input ref={fileInputRef} type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif" style={{ display: 'none' }}
-              onChange={e => { if (e.target.files?.length) handleFiles(e.target.files); e.target.value = '' }} />
+            {isMobileForm ? (
+              <>
+                {/* Tirar foto (câmera nativa no app, fallback web) */}
+                <button
+                  type="button"
+                  onClick={handleCameraCapture}
+                  disabled={uploading || photos.length >= 10}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: '1.5px solid var(--neon)', background: 'var(--ng)', color: 'var(--neon)', fontSize: 12, cursor: 'pointer', opacity: (uploading || photos.length >= 10) ? 0.4 : 1, fontWeight: 700, flex: 1, justifyContent: 'center' }}
+                >
+                  <Camera size={14} />
+                  {uploading ? 'Enviando...' : isNative ? 'Tirar Foto' : 'Câmera'}
+                </button>
+                {/* Galeria */}
+                <button
+                  type="button"
+                  onClick={handleGalleryPick}
+                  disabled={uploading || photos.length >= 10}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: '1px solid var(--b)', background: 'var(--el)', color: 'var(--t2)', fontSize: 12, cursor: 'pointer', opacity: (uploading || photos.length >= 10) ? 0.4 : 1, fontWeight: 600, flex: 1, justifyContent: 'center' }}
+                >
+                  <ImageIcon size={14} />
+                  Galeria
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading || photos.length >= 10}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 7, border: '1px solid var(--b)', background: 'var(--el)', color: 'var(--t2)', fontSize: 12, cursor: 'pointer', opacity: (uploading || photos.length >= 10) ? 0.5 : 1, fontWeight: 600 }}
+                >
+                  <Camera size={12} />
+                  {uploading ? 'Enviando...' : 'Adicionar fotos'}
+                </button>
+                <input ref={fileInputRef} type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif" style={{ display: 'none' }}
+                  onChange={e => { if (e.target.files?.length) handleFiles(e.target.files); e.target.value = '' }} />
+              </>
+            )}
+            {photos.length >= 10 && <span style={{ fontSize: 10, color: 'var(--t3)' }}>Limite de 10 fotos</span>}
           </div>
 
           {/* ── Scrollable form body ─────────────────────────────────────── */}
@@ -600,6 +658,7 @@ const selStyle: React.CSSProperties = {
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function Inventory() {
   const { store } = useAuthStore()
+  const isMobile = useIsMobile()
   const [view, setView]           = useState<'grid' | 'list'>('grid')
   const [search, setSearch]       = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -640,28 +699,34 @@ export default function Inventory() {
   const reserved  = vehicles?.filter(v => v.status === 'reserved').length ?? 0
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 10 : 14 }}>
 
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--t)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Estoque</h1>
-          <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>({total} veículo{total !== 1 ? 's' : ''})</p>
+      {/* Header — simplificado no mobile (botão "+" está na MobileTopbar) */}
+      {!isMobile && (
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--t)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Estoque</h1>
+            <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>({total} veículo{total !== 1 ? 's' : ''})</p>
+          </div>
+          <Button size="sm" onClick={() => setShowAddModal(true)}><Plus size={13} /> Cadastrar</Button>
         </div>
-        <Button size="sm" onClick={() => setShowAddModal(true)}><Plus size={13} /> Cadastrar</Button>
-      </div>
+      )}
+
+      {isMobile && (
+        <p style={{ fontSize: 11, color: 'var(--t3)' }}>{total} veículo{total !== 1 ? 's' : ''}</p>
+      )}
 
       {/* Filters row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: isMobile ? 'nowrap' : 'wrap' }}>
         {/* Search */}
-        <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: isMobile ? 0 : 200 }}>
           <Search size={12} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)', pointerEvents: 'none' }} />
           <input
-            type="text"
-            placeholder="Buscar por marca, modelo, placa..."
+            type="search"
+            placeholder={isMobile ? 'Buscar...' : 'Buscar por marca, modelo, placa...'}
             value={search}
             onChange={e => setSearch(e.target.value)}
-            style={{ width: '100%', height: 34, paddingLeft: 28, paddingRight: 10, background: 'var(--el)', border: '1px solid var(--b)', borderRadius: 7, color: 'var(--t)', fontSize: 12, outline: 'none', fontFamily: 'var(--fn)', boxSizing: 'border-box' }}
+            style={{ width: '100%', height: isMobile ? 44 : 34, paddingLeft: 28, paddingRight: 10, background: 'var(--el)', border: '1px solid var(--b)', borderRadius: isMobile ? 10 : 7, color: 'var(--t)', fontSize: 16, outline: 'none', fontFamily: 'var(--fn)', boxSizing: 'border-box' }}
             onFocus={e => (e.currentTarget.style.borderColor = 'var(--nb)')}
             onBlur={e => (e.currentTarget.style.borderColor = 'var(--b)')}
           />
@@ -682,21 +747,25 @@ export default function Inventory() {
           ))}
         </div>
 
-        {/* Brand filter */}
-        <select value={filterBrand} onChange={e => setFilterBrand(e.target.value)} style={selStyle}>
-          <option value="">Todas as marcas</option>
-          {BRANDS_LIST.map(b => <option key={b} value={b}>{b}</option>)}
-        </select>
+        {/* Brand filter — oculto no mobile (espaço limitado) */}
+        {!isMobile && (
+          <select value={filterBrand} onChange={e => setFilterBrand(e.target.value)} style={selStyle}>
+            <option value="">Todas as marcas</option>
+            {BRANDS_LIST.map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
+        )}
 
-        {/* View toggle */}
-        <div style={{ display: 'flex', gap: 2, background: 'var(--el)', border: '1px solid var(--b)', borderRadius: 7, padding: 3 }}>
-          {(['grid', 'list'] as const).map(v => (
-            <button key={v} onClick={() => setView(v)}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 5, border: 'none', background: view === v ? 'var(--ng)' : 'transparent', color: view === v ? 'var(--neon)' : 'var(--t3)', cursor: 'pointer', transition: 'all .12s' }}>
-              {v === 'grid' ? <Grid size={13} /> : <List size={13} />}
-            </button>
-          ))}
-        </div>
+        {/* View toggle — oculto no mobile (sempre grid) */}
+        {!isMobile && (
+          <div style={{ display: 'flex', gap: 2, background: 'var(--el)', border: '1px solid var(--b)', borderRadius: 7, padding: 3 }}>
+            {(['grid', 'list'] as const).map(v => (
+              <button key={v} onClick={() => setView(v)}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 5, border: 'none', background: view === v ? 'var(--ng)' : 'transparent', color: view === v ? 'var(--neon)' : 'var(--t3)', cursor: 'pointer', transition: 'all .12s' }}>
+                {v === 'grid' ? <Grid size={13} /> : <List size={13} />}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Stats row */}
@@ -713,13 +782,13 @@ export default function Inventory() {
         ))}
       </div>
 
-      {/* Grid */}
+      {/* Grid — 2 colunas no mobile, auto-fill no desktop */}
       {isLoading ? (
-        <div style={{ display: 'grid', gridTemplateColumns: view === 'grid' ? 'repeat(auto-fill, minmax(230px, 1fr))' : '1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : (view === 'grid' ? 'repeat(auto-fill, minmax(230px, 1fr))' : '1fr'), gap: isMobile ? 8 : 12 }}>
           {[...Array(6)].map((_, i) => (
             <div key={i} style={{ borderRadius: 10, overflow: 'hidden', background: 'var(--card)', border: '1px solid var(--bs)' }}>
-              <Skeleton style={{ height: 170, borderRadius: 0 }} />
-              <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <Skeleton style={{ height: isMobile ? 120 : 170, borderRadius: 0 }} />
+              <div style={{ padding: isMobile ? 8 : 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <Skeleton style={{ height: 10, width: '60%' }} />
                 <Skeleton style={{ height: 14, width: '80%' }} />
                 <Skeleton style={{ height: 9, width: '45%' }} />
@@ -735,11 +804,40 @@ export default function Inventory() {
           <Button style={{ marginTop: 16 }} size="sm" onClick={() => setShowAddModal(true)}><Plus size={13} /> Cadastrar agora</Button>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: view === 'grid' ? 'repeat(auto-fill, minmax(230px, 1fr))' : '1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : (view === 'grid' ? 'repeat(auto-fill, minmax(230px, 1fr))' : '1fr'), gap: isMobile ? 8 : 12 }}>
           {vehicles?.map(v => (
             <VehicleCard key={v.id} vehicle={v} onEdit={() => setEditingVehicle(v)} />
           ))}
         </div>
+      )}
+
+      {/* FAB Cadastrar — mobile only */}
+      {isMobile && (
+        <button
+          onClick={() => setShowAddModal(true)}
+          style={{
+            position:     'fixed',
+            bottom:       'calc(72px + var(--safe-bottom) + 16px)',
+            right:        20,
+            height:       48,
+            padding:      '0 20px',
+            borderRadius: 24,
+            background:   'var(--neon)',
+            border:       'none',
+            boxShadow:    '0 4px 20px rgba(61,247,16,.4)',
+            cursor:       'pointer',
+            display:      'flex',
+            alignItems:   'center',
+            gap:          8,
+            zIndex:       50,
+            fontSize:     13,
+            fontWeight:   800,
+            color:        '#000',
+          }}
+        >
+          <Camera size={16} style={{ color: '#000' }} />
+          Cadastrar veículo
+        </button>
       )}
 
       {showAddModal   && <VehicleFormModal onClose={() => setShowAddModal(false)} />}

@@ -623,6 +623,7 @@ export default function WhatsApp() {
   const messagesEndRef    = useRef<HTMLDivElement>(null)
   const bulkUpsertedRef   = useRef<Record<string, boolean>>({})
   const sendingRef        = useRef(false)
+  const picCacheRef       = useRef<Record<string, string | null>>({})
   const fileInputRef      = useRef<HTMLInputElement>(null)
   const videoInputRef     = useRef<HTMLInputElement>(null)
   const docInputRef       = useRef<HTMLInputElement>(null)
@@ -727,12 +728,27 @@ export default function WhatsApp() {
     staleTime: 30_000,
   })
 
+  // ── fotos de perfil (cache local + lazy load via API) ────────────────────
+  const [picMap, setPicMap] = useState<Record<string, string>>({})
+
+  const fetchPicForPhone = useCallback(async (phone: string) => {
+    if (!instanceToken || phone in picCacheRef.current) return
+    picCacheRef.current[phone] = null // marca como "buscando" para não re-buscar
+    try {
+      const url = await evolutionApi.fetchProfilePicture(instanceToken, phone)
+      if (url) {
+        picCacheRef.current[phone] = url
+        setPicMap(prev => ({ ...prev, [phone]: url }))
+      }
+    } catch { /* ignora */ }
+  }, [instanceToken])
+
   // ── lista de conversas ────────────────────────────────────────────────────
   const { data: conversations, isLoading } = useQuery({
     queryKey: ['whatsapp-conversations', instanceName],
     queryFn: async () => {
       if (!instanceToken || !store?.id) return []
-      // UazapiGO não tem endpoint /chats — lê do Supabase (populado pelo webhook)
+      // Lê todas as mensagens do Supabase (populado pelo webhook)
       const { data } = await supabase
         .from('whatsapp_messages')
         .select('remote_jid, push_name, content, message_ts, from_me, type, contact_phone, created_at')
@@ -742,17 +758,27 @@ export default function WhatsApp() {
         .not('remote_jid', 'like', '%@broadcast%')
         .order('message_ts', { ascending: false })
 
-      // Agrupa por remote_jid — mantém apenas a última mensagem de cada contato
+      // Agrupa por remote_jid:
+      // - Usa a 1ª mensagem de cada jid para lastMessage (DESC order)
+      // - Para o nome, prefere push_name de mensagens INBOUND (where push_name != null)
       const byJid = new Map<string, EvoChat>()
+      const bestName = new Map<string, string>() // jid → melhor push_name inbound
+
       for (const msg of data ?? []) {
-        if (msg.remote_jid.includes('status@') || msg.remote_jid.includes('@broadcast')) continue
-        if (!byJid.has(msg.remote_jid)) {
-          const phone = (msg.contact_phone as string) || extractPhone(msg.remote_jid as string)
-          const rawName = (msg.push_name as string) || ''
-          byJid.set(msg.remote_jid, {
-            remoteJid: msg.remote_jid as string,
+        const jid = msg.remote_jid as string
+        if (jid.includes('status@') || jid.includes('@broadcast')) continue
+
+        // Coleta o melhor nome disponível (prioriza inbound com push_name preenchido)
+        if (!bestName.has(jid) || (!bestName.get(jid) && !(msg.from_me as boolean) && msg.push_name)) {
+          if ((msg.push_name as string | null)) bestName.set(jid, msg.push_name as string)
+        }
+
+        if (!byJid.has(jid)) {
+          const phone = (msg.contact_phone as string) || extractPhone(jid)
+          byJid.set(jid, {
+            remoteJid: jid,
             phoneNumber: phone,
-            pushName: resolveName(phone, rawName, contactsMap, leadsMap),
+            pushName: '', // preenchido abaixo
             lastMessageContent: (msg.content as string) || (msg.type !== 'text' ? `[${msg.type}]` : ''),
             lastMessageTs: (msg.message_ts as number) || Math.floor(new Date(msg.created_at as string).getTime() / 1000),
             lastFromMe: (msg.from_me as boolean) || false,
@@ -760,12 +786,40 @@ export default function WhatsApp() {
           })
         }
       }
-      return Array.from(byJid.values())
+
+      // Resolve nomes com o melhor push_name encontrado + contactsMap + leadsMap
+      const result = Array.from(byJid.entries()).map(([jid, chat]) => {
+        const best = bestName.get(jid) ?? ''
+        return {
+          ...chat,
+          pushName: resolveName(chat.phoneNumber, best, contactsMap, leadsMap),
+          profilePicUrl: picCacheRef.current[chat.phoneNumber] ?? undefined,
+        }
+      })
+
+      return result
     },
     enabled: !!instanceToken && !!store?.id,
     staleTime: 5000,
     refetchInterval: 10000,
   })
+
+  // Dispara busca de foto para cada conversa nova (throttled: 1 por vez, 200ms de intervalo)
+  useEffect(() => {
+    if (!conversations?.length || !instanceToken) return
+    const phones = conversations
+      .map(c => c.phoneNumber)
+      .filter(p => p && !(p in picCacheRef.current))
+    if (!phones.length) return
+
+    let i = 0
+    const next = () => {
+      if (i >= phones.length) return
+      fetchPicForPhone(phones[i++]).finally(() => setTimeout(next, 300))
+    }
+    next()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversations?.length, instanceToken])
 
   // ── auto-criar leads a partir das conversas ───────────────────────────────
   useEffect(() => {
@@ -1381,7 +1435,7 @@ export default function WhatsApp() {
                   }}
                   onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#202c33' }}
                   onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}>
-                  <Avatar src={chat.profilePicUrl} name={chat.pushName} size={46} />
+                  <Avatar src={picMap[chat.phoneNumber] ?? chat.profilePicUrl} name={chat.pushName} size={46} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, marginBottom: 3 }}>
                       <span style={{ fontSize: 13, fontWeight: 500, color: '#e9edef', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1427,7 +1481,7 @@ export default function WhatsApp() {
             background: '#202c33', flexShrink: 0,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <Avatar src={selectedChat.profilePicUrl} name={selectedChat.pushName} size={38} />
+              <Avatar src={picMap[selectedChat.phoneNumber] ?? selectedChat.profilePicUrl} name={selectedChat.pushName} size={38} />
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 14, fontWeight: 600, color: '#e9edef' }}>{selectedChat.pushName}</span>

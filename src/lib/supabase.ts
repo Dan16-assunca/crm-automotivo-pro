@@ -5,10 +5,16 @@ const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)
 const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)
   ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVha2R5d211ZXd2dXp5cWZwY3BsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3MjQ5MTgsImV4cCI6MjA5MDMwMDkxOH0.EeUINhQUomMKqhfkjGnkDpO3aO5NZ4Yqd15qof-mB20'
 
+// Chave de storage isolada por subdomínio — garante que cada loja
+// tenha sessão completamente separada no localStorage do browser.
+const storageKey = `sb-${window.location.hostname.replace(/\./g, '-')}-auth`
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storageKey,
     lock: async (_name, _acquireTimeout, fn) => fn(),
   },
   realtime: {

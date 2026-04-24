@@ -330,9 +330,10 @@ Deno.serve(async (req: Request) => {
 
         if (insertErr) console.error('[whatsapp-webhook] insert error:', insertErr)
 
-        // Auto-cria lead quando cliente envia mensagem
+        // Quando cliente envia mensagem: cria lead se não existe + atualiza last_contact_at
         if (!fromMe && contactPhone) {
           await upsertLeadFromWhatsApp(db, storeId, contactPhone, pushName ?? '')
+          await updateLeadLastContact(db, storeId, contactPhone)
         }
 
       } else {
@@ -383,6 +384,7 @@ Deno.serve(async (req: Request) => {
 
           if (!fromMe && contactPhone) {
             await upsertLeadFromWhatsApp(db, storeId, contactPhone, msg.pushName as string ?? '')
+            await updateLeadLastContact(db, storeId, contactPhone)
           }
         }
       }
@@ -411,6 +413,35 @@ Deno.serve(async (req: Request) => {
     return json({ ok: false, error: String(err) }, 500)
   }
 })
+
+// ─── Atualiza last_contact_at do lead quando cliente responde ────────────────
+// Chamada toda vez que uma mensagem INBOUND chega.
+// Garante que o trigger "no_contact" das automações reflita a realidade.
+
+async function updateLeadLastContact(
+  // deno-lint-ignore no-explicit-any
+  db: any,
+  storeId: string,
+  phone: string,
+) {
+  try {
+    const last8 = phone.slice(-8)
+    const now   = new Date().toISOString()
+
+    // Atualiza todos os leads com esse telefone nessa loja
+    const { error } = await db
+      .from('leads')
+      .update({ last_contact_at: now })
+      .eq('store_id', storeId)
+      .ilike('client_phone', `%${last8}`)
+      .eq('status', 'active')
+
+    if (error) console.warn('[whatsapp-webhook] updateLeadLastContact error:', error.message)
+    else console.log(`[whatsapp-webhook] last_contact_at atualizado para phone …${last8}`)
+  } catch (err) {
+    console.warn('[whatsapp-webhook] updateLeadLastContact exception:', err)
+  }
+}
 
 // ─── Auto-criação de lead quando cliente envia primeira mensagem ─────────────
 

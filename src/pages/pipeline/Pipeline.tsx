@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -25,6 +25,7 @@ import { Input } from '@/components/ui/Input'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { toast } from '@/components/ui/Toast'
 import { formatCurrency, daysInStage } from '@/utils/format'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import type { Lead, PipelineStage } from '@/types'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -455,8 +456,14 @@ function KanbanColumn({ stage, leads, onLeadClick, onAddLead, selectedLeadId, is
   // Make the column itself droppable (for empty columns)
   const { setNodeRef: setDropRef } = useDroppable({ id: `col-${stage.id}` })
 
+  const isMobileCol = window.innerWidth <= 767
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: 210, flexShrink: 0 }}>
+    <div style={{
+      display: 'flex', flexDirection: 'column', flexShrink: 0,
+      width: isMobileCol ? 'min(260px, 85vw)' : 210,
+      // Scroll-snap: cada coluna trava no lugar
+      scrollSnapAlign: isMobileCol ? 'start' : 'none',
+    }}>
       {/* Header */}
       <div style={{
         background: 'var(--bg2)', borderRadius: 9, padding: '9px 10px', marginBottom: 6,
@@ -621,6 +628,7 @@ export default function Pipeline() {
   const { store, user } = useAuthStore()
   const queryClient = useQueryClient()
   const { openLeadPanel } = useLeadPanelStore()
+  const isMobile = useIsMobile()
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [overStageId, setOverStageId] = useState<string | null>(null)
 
@@ -966,7 +974,14 @@ export default function Pipeline() {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 12, height: '100%' }}>
+          <div style={{
+            display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 12, height: '100%',
+            // Scroll-snap no mobile: exibe uma coluna por vez com peek da próxima
+            ...(isMobile ? {
+              scrollSnapType:    'x mandatory',
+              WebkitOverflowScrolling: 'touch',
+            } : {}),
+          }}>
             {stages?.map(stage => (
               <KanbanColumn
                 key={stage.id}

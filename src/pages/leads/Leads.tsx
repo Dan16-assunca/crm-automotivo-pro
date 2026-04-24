@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, Users, Download } from 'lucide-react'
+import { Plus, Search, Users, Download, Phone, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { useLeadPanelStore } from '@/store/leadPanelStore'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { QuickAddLeadSheet } from '@/components/mobile/QuickAddLeadSheet'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import { timeAgo } from '@/utils/format'
 import type { Lead } from '@/types'
 
@@ -21,9 +23,11 @@ export default function Leads() {
   const queryClient = useQueryClient()
   const { openLeadPanel } = useLeadPanelStore()
   const navigate = useNavigate()
+  const isMobile = useIsMobile()
   const [search, setSearch] = useState('')
   const [filterTemp, setFilterTemp] = useState('')
   const [filterSource, setFilterSource] = useState('')
+  const [sheetOpen, setSheetOpen] = useState(false)
 
   useEffect(() => {
     if (!store?.id) return
@@ -65,6 +69,178 @@ export default function Leads() {
     appearance: 'none' as const,
   }
 
+  // ── MOBILE VIEW ─────────────────────────────────────────────────────────────
+  if (isMobile) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+        {/* Search + filtros chips */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+          <div style={{ position: 'relative' }}>
+            <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)', pointerEvents: 'none' }} />
+            <input
+              type="search"
+              placeholder="Buscar nome, telefone..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{
+                width: '100%', height: 44, paddingLeft: 34, paddingRight: 12,
+                background: 'var(--el)', border: '1px solid var(--b)',
+                borderRadius: 10, color: 'var(--t)', fontSize: 16,
+                outline: 'none', fontFamily: 'var(--fn)', boxSizing: 'border-box',
+              }}
+            />
+          </div>
+          {/* Filter chips */}
+          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' }}>
+            {[
+              { val: '', label: 'Todos' },
+              { val: 'hot', label: '🔥 Quente' },
+              { val: 'warm', label: '⚡ Morno' },
+              { val: 'cold', label: '❄️ Frio' },
+            ].map(chip => (
+              <button
+                key={chip.val}
+                onClick={() => setFilterTemp(chip.val)}
+                style={{
+                  flexShrink:   0,
+                  height:       32,
+                  padding:      '0 14px',
+                  borderRadius: 20,
+                  border:       filterTemp === chip.val ? '1.5px solid var(--neon)' : '1px solid var(--b)',
+                  background:   filterTemp === chip.val ? 'var(--ng)' : 'var(--el)',
+                  color:        filterTemp === chip.val ? 'var(--neon)' : 'var(--t2)',
+                  fontSize:     12,
+                  fontWeight:   filterTemp === chip.val ? 700 : 500,
+                  cursor:       'pointer',
+                  whiteSpace:   'nowrap',
+                }}
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+          <p style={{ fontSize: 11, color: 'var(--t3)' }}>{leads?.length ?? 0} leads</p>
+        </div>
+
+        {/* Card list */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {isLoading
+            ? [...Array(6)].map((_, i) => (
+                <div key={i} style={{ height: 72, borderRadius: 12, background: 'var(--card)', border: '1px solid var(--bs)' }}>
+                  <Skeleton style={{ height: '100%', borderRadius: 12 }} />
+                </div>
+              ))
+            : leads?.map(lead => {
+                const tc = TEMP_CONFIG[lead.temperature]
+                const initials = lead.client_name.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()
+                return (
+                  <div
+                    key={lead.id}
+                    onClick={() => openLeadPanel(lead.id)}
+                    style={{
+                      display:       'flex',
+                      alignItems:    'center',
+                      gap:           12,
+                      padding:       '12px 14px',
+                      background:    'var(--card)',
+                      border:        '1px solid var(--bs)',
+                      borderRadius:  12,
+                      cursor:        'pointer',
+                      minHeight:     72,
+                    }}
+                  >
+                    {/* Avatar */}
+                    <div style={{
+                      width:          44, height: 44, borderRadius: '50%', flexShrink: 0,
+                      background:     tc?.bg ?? 'var(--el)',
+                      border:         `2px solid ${tc?.color ?? 'var(--b)'}`,
+                      display:        'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize:       13, fontWeight: 800, color: tc?.color ?? 'var(--t2)',
+                    }}>
+                      {initials}
+                    </div>
+
+                    {/* Info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--t)', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {lead.client_name}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {lead.client_phone && (
+                          <span style={{ fontSize: 11, color: 'var(--t3)', fontFamily: 'var(--fm)' }}>
+                            {lead.client_phone}
+                          </span>
+                        )}
+                        {lead.vehicle_interest && (
+                          <span style={{ fontSize: 11, color: 'var(--t3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            · {lead.vehicle_interest}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {tc && (
+                          <span style={{
+                            fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 20,
+                            background: tc.bg, color: tc.color, border: `1px solid ${tc.border}`,
+                          }}>
+                            {tc.label}
+                          </span>
+                        )}
+                        <span style={{ fontSize: 10, color: 'var(--t3)' }}>
+                          {lead.last_contact_at ? timeAgo(lead.last_contact_at) : timeAgo(lead.created_at)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <ChevronRight size={16} style={{ color: 'var(--t3)', flexShrink: 0 }} />
+                  </div>
+                )
+              })
+          }
+
+          {!isLoading && leads?.length === 0 && (
+            <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--t3)' }}>
+              <Users size={40} style={{ margin: '0 auto 12px', opacity: .15 }} />
+              <p style={{ fontSize: 13 }}>Nenhum lead encontrado</p>
+              <button
+                onClick={() => setSheetOpen(true)}
+                style={{ marginTop: 16, padding: '10px 24px', borderRadius: 10, background: 'var(--neon)', border: 'none', color: '#000', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              >
+                Cadastrar primeiro lead
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* FAB "+" */}
+        <button
+          onClick={() => setSheetOpen(true)}
+          style={{
+            position:     'fixed',
+            bottom:       'calc(72px + var(--safe-bottom) + 16px)',
+            right:        20,
+            width:        52,
+            height:       52,
+            borderRadius: '50%',
+            background:   'var(--neon)',
+            border:       'none',
+            boxShadow:    '0 4px 20px rgba(61,247,16,.4)',
+            cursor:       'pointer',
+            display:      'flex',
+            alignItems:   'center',
+            justifyContent: 'center',
+            zIndex:       50,
+          }}
+        >
+          <Plus size={22} style={{ color: '#000' }} />
+        </button>
+
+        <QuickAddLeadSheet open={sheetOpen} onClose={() => setSheetOpen(false)} />
+      </div>
+    )
+  }
+
+  // ── DESKTOP VIEW ─────────────────────────────────────────────────────────────
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {/* Header */}

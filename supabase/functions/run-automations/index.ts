@@ -10,7 +10,8 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 )
 
-const WHATSAPP_PROXY = Deno.env.get('VITE_EVOLUTION_API_URL') ?? ''
+const UAZAPI_BASE_URL    = (Deno.env.get('UAZAPI_BASE_URL') ?? '').replace(/\/$/, '')
+const UAZAPI_ADMIN_TOKEN = Deno.env.get('UAZAPI_ADMIN_TOKEN') ?? ''
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -50,26 +51,63 @@ function daysSince(dateStr: string | null): number {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000)
 }
 
+function hoursSince(dateStr: string | null): number {
+  if (!dateStr) return 9999
+  return (Date.now() - new Date(dateStr).getTime()) / 3_600_000
+}
+
 function interpolate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? `{{${k}}}`)
 }
 
-// Envia mensagem via UazapiGO (via proxy Vercel)
+// Verifica se o lead respondeu recentemente (últimas 24h).
+// Se sim, não envia mensagem automática — o vendedor está no controle da conversa.
+async function leadRepliedRecently(lead: Lead, windowHours = 24): Promise<boolean> {
+  if (!lead.client_phone) return false
+
+  // Checa o last_contact_at primeiro (mais rápido)
+  if (hoursSince(lead.last_contact_at) < windowHours) {
+    // Confirma que foi uma mensagem INBOUND (cliente → loja), não outbound (automação → cliente)
+    const last8 = lead.client_phone.slice(-8)
+    const cutoff = new Date(Date.now() - windowHours * 3_600_000).toISOString()
+
+    const { count } = await supabase
+      .from('whatsapp_messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('store_id', lead.store_id)
+      .eq('direction', 'inbound')
+      .ilike('contact_phone', `%${last8}`)
+      .gte('created_at', cutoff)
+
+    return (count ?? 0) > 0
+  }
+  return false
+}
+
+// Envia mensagem via UazapiGO (direto do servidor — sem proxy)
 async function sendWhatsApp(
   instanceToken: string,
   phone: string,
   message: string,
 ): Promise<boolean> {
-  if (!WHATSAPP_PROXY || !instanceToken || !phone) return false
+  if (!UAZAPI_BASE_URL || !instanceToken || !phone) return false
   try {
     const res = await fetch(
-      `${WHATSAPP_PROXY}/send/text?token=${encodeURIComponent(instanceToken)}`,
+      `${UAZAPI_BASE_URL}/message/text`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type':  'application/json',
+          'admintoken':    UAZAPI_ADMIN_TOKEN,
+          'instancetoken': instanceToken,
+        },
         body: JSON.stringify({ number: phone.replace(/\D/g, ''), text: message }),
       },
     )
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      console.error(`[run-automations] sendWhatsApp upstream ${res.status}:`, body.slice(0, 200))
+    }
     return res.ok
   } catch (e) {
     console.error('[run-automations] sendWhatsApp error:', e)
@@ -82,7 +120,7 @@ async function sendWhatsApp(
 async function executeAction(
   action: AutomationAction,
   lead: Lead,
-  storeVars: { loja: string; vendedor: string; instanceToken: string },
+  storeVars: { loja: string; vendedor: string; instanceToken: string; adminUserId: string },
 ): Promise<{ ok: boolean; error?: string }> {
   const vars: Record<string, string> = {
     nome:     lead.client_name,
@@ -103,11 +141,14 @@ async function executeAction(
 
       // Registra atividade no banco
       await supabase.from('activities').insert({
-        lead_id:   lead.id,
-        store_id:  lead.store_id,
-        type:      'whatsapp',
-        content:   `[Automação] ${message.slice(0, 120)}`,
-        created_at: new Date().toISOString(),
+        lead_id:     lead.id,
+        store_id:    lead.store_id,
+        user_id:     storeVars.adminUserId,
+        type:        'whatsapp',
+        title:       'Automação — WhatsApp',
+        description: `[Automação] ${message.slice(0, 120)}`,
+        metadata:    {},
+        created_at:  new Date().toISOString(),
       })
       return { ok: true }
     }
@@ -118,11 +159,14 @@ async function executeAction(
       const { error } = await supabase.from('leads').update({ temperature: temp }).eq('id', lead.id)
       if (error) return { ok: false, error: error.message }
       await supabase.from('activities').insert({
-        lead_id:  lead.id,
-        store_id: lead.store_id,
-        type:     'note',
-        content:  `[Automação] Temperatura alterada para ${temp}`,
-        created_at: new Date().toISOString(),
+        lead_id:     lead.id,
+        store_id:    lead.store_id,
+        user_id:     storeVars.adminUserId,
+        type:        'note',
+        title:       'Automação — Temperatura',
+        description: `[Automação] Temperatura alterada para ${temp}`,
+        metadata:    {},
+        created_at:  new Date().toISOString(),
       })
       return { ok: true }
     }
@@ -138,11 +182,14 @@ async function executeAction(
     case 'create_task': {
       const title = interpolate((action.config.title as string) ?? 'Follow-up automático', vars)
       await supabase.from('activities').insert({
-        lead_id:  lead.id,
-        store_id: lead.store_id,
-        type:     'task',
-        content:  title,
-        created_at: new Date().toISOString(),
+        lead_id:     lead.id,
+        store_id:    lead.store_id,
+        user_id:     storeVars.adminUserId,
+        type:        'note',
+        title:       `[Tarefa] ${title}`,
+        description: title,
+        metadata:    {},
+        created_at:  new Date().toISOString(),
       })
       return { ok: true }
     }
@@ -151,11 +198,14 @@ async function executeAction(
       const { error } = await supabase.from('leads').update({ status: 'archived' }).eq('id', lead.id)
       if (error) return { ok: false, error: error.message }
       await supabase.from('activities').insert({
-        lead_id:  lead.id,
-        store_id: lead.store_id,
-        type:     'note',
-        content:  '[Automação] Lead arquivado automaticamente por inatividade.',
-        created_at: new Date().toISOString(),
+        lead_id:     lead.id,
+        store_id:    lead.store_id,
+        user_id:     storeVars.adminUserId,
+        type:        'system',
+        title:       'Lead arquivado',
+        description: '[Automação] Lead arquivado automaticamente por inatividade.',
+        metadata:    {},
+        created_at:  new Date().toISOString(),
       })
       return { ok: true }
     }
@@ -211,7 +261,7 @@ Deno.serve(async (req) => {
 
       const { data: adminUser } = await supabase
         .from('users')
-        .select('full_name')
+        .select('id, full_name')
         .eq('store_id', auto.store_id)
         .eq('role', 'admin')
         .limit(1)
@@ -221,6 +271,7 @@ Deno.serve(async (req) => {
         loja:          storeData?.name ?? 'Nossa loja',
         vendedor:      adminUser?.full_name ?? 'Vendedor',
         instanceToken: instanceData?.instance_token ?? '',
+        adminUserId:   adminUser?.id ?? '',
       }
 
       // 2b. Busca leads elegíveis de acordo com o trigger
@@ -278,6 +329,24 @@ Deno.serve(async (req) => {
             .maybeSingle()
 
           if (existing) continue // já executou
+
+          // Se a ação é envio de WhatsApp, verifica se o lead respondeu recentemente.
+          // Pausar automação quando cliente está em conversa ativa — evita spam.
+          if (action.type === 'send_whatsapp') {
+            const replied = await leadRepliedRecently(lead)
+            if (replied) {
+              console.log(`[run-automations] Pulando WhatsApp para ${lead.client_name} — respondeu nas últimas 24h`)
+              results.push({
+                automation: auto.name,
+                lead:       lead.client_name,
+                action:     action.type,
+                actionIdx,
+                ok:         true,
+                skipped:    'cliente_respondeu_recentemente',
+              })
+              continue
+            }
+          }
 
           // Executa!
           const result = await executeAction(action, lead, storeVars)

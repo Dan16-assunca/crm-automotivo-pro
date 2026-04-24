@@ -38,7 +38,8 @@ export default defineConfig(({ mode }) => {
           description: 'O CRM mais completo para concessionárias premium',
           theme_color: '#0A0A0A',
           background_color: '#0A0A0A',
-          display: 'standalone',
+          display: 'fullscreen',
+          orientation: 'portrait',
           icons: [
             { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
             { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
@@ -51,7 +52,12 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, './src'),
       },
     },
+    build: {
+      target: 'es2015',   // compatibilidade com WebView do Android
+    },
     server: {
+      host: true,          // necessário para `npx cap run android --livereload`
+      port: 5173,
       // Proxy de desenvolvimento: /api/whatsapp → Uazapi
       // Em produção, o Vercel usa o serverless function em api/whatsapp/[...path].js
       proxy: {

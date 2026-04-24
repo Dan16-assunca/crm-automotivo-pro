@@ -112,31 +112,48 @@ export default function Register() {
       const SUPA_ANON = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ?? ''
       const fnUrl = `${SUPA_URL}/functions/v1/create-store-and-user`
 
-      const res = await fetch(fnUrl, {
-        method:  'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPA_ANON,
-          'Authorization': `Bearer ${SUPA_ANON}`,
-        },
-        body: JSON.stringify({
-          full_name:  data.full_name,
-          store_name: data.store_name,
-          slug,
-          email:      data.email,
-          password:   data.password,
-        }),
-      })
+      // Timeout de 30s para evitar loading eterno caso o servidor demore
+      const controller = new AbortController()
+      const timeoutId  = setTimeout(() => controller.abort(), 30_000)
+
+      let res: Response
+      try {
+        res = await fetch(fnUrl, {
+          method:  'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPA_ANON,
+            'Authorization': `Bearer ${SUPA_ANON}`,
+          },
+          body: JSON.stringify({
+            full_name:  data.full_name,
+            store_name: data.store_name,
+            slug,
+            email:      data.email,
+            password:   data.password,
+          }),
+          signal: controller.signal,
+        })
+      } catch (fetchErr) {
+        if (fetchErr instanceof Error && fetchErr.name === 'AbortError') {
+          toast.error('Tempo esgotado', 'O servidor demorou para responder. Tente novamente.')
+        } else {
+          toast.error('Erro de conexão', fetchErr instanceof Error ? fetchErr.message : 'Verifique sua conexão e tente novamente')
+        }
+        return
+      } finally {
+        clearTimeout(timeoutId)
+      }
 
       const result = await res.json()
 
       if (!res.ok || result.error) {
-        const isAlreadyRegistered = result.error?.toLowerCase().includes('cadastrado')
-        if (isAlreadyRegistered) {
+        const msg = (result.error ?? '') as string
+        if (msg.toLowerCase().includes('cadastrado')) {
           toast.error('Email já cadastrado', 'Este email já possui uma conta. Clique em "Fazer login".')
           navigate('/login')
         } else {
-          toast.error('Erro no cadastro', result.error ?? 'Tente novamente')
+          toast.error('Erro no cadastro', msg || 'Tente novamente')
         }
         return
       }
@@ -146,17 +163,32 @@ export default function Register() {
         return
       }
 
-      // Injeta sessão no cliente Supabase
-      await supabase.auth.setSession({
-        access_token:  result.session.access_token,
-        refresh_token: result.session.refresh_token,
-      })
-
       toast.success('Conta criada!', `Bem-vindo, ${data.full_name.split(' ')[0]}! Redirecionando…`)
 
-      // Redireciona para o subdomínio da loja
-      const finalSlug = result.slug ?? slug
-      setTimeout(() => redirectToTenant(finalSlug, '/dashboard'), 800)
+      // ── Transferência de sessão entre subdomínios ─────────────────────────
+      // NÃO usar supabase.auth.setSession() aqui: o storageKey é isolado por
+      // hostname (sb-app-...-auth), então a sessão não seria encontrada no
+      // subdomínio do tenant (sb-{slug}-...-auth).
+      // Solução: passar os tokens no hash da URL — o cliente Supabase do tenant
+      // detecta automaticamente (detectSessionInUrl: true) e salva sob o key certo.
+      const finalSlug = (result.slug ?? slug) as string
+      const { access_token, refresh_token } = result.session as { access_token: string; refresh_token: string }
+      const hash = `access_token=${access_token}&refresh_token=${refresh_token}&token_type=bearer&type=signup`
+
+      const hostname = window.location.hostname
+      const isLocal  = hostname === 'localhost' || hostname === '127.0.0.1'
+
+      setTimeout(() => {
+        if (isLocal) {
+          const url = new URL(window.location.href)
+          url.searchParams.set('tenant', finalSlug)
+          url.pathname = '/onboarding'
+          url.hash     = hash
+          window.location.href = url.toString()
+        } else {
+          window.location.href = `https://${finalSlug}.${ROOT_DOMAIN}/onboarding#${hash}`
+        }
+      }, 800)
 
     } catch (err) {
       toast.error('Erro ao criar conta', err instanceof Error ? err.message : 'Tente novamente')

@@ -308,9 +308,11 @@ interface LeadPanelProps {
   initialPosition?: { top: number; right: number }
   mode?: 'view' | 'create'
   initialData?: Partial<Lead> | null
+  /** No mobile, ocupa a tela inteira (fullscreen) em vez do painel flutuante */
+  fullScreen?: boolean
 }
 
-export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'view', initialData }: LeadPanelProps) {
+export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'view', initialData, fullScreen = false }: LeadPanelProps) {
   const { store, user } = useAuthStore()
   const queryClient = useQueryClient()
   const instanceName = (store?.settings as Record<string, string>)?.whatsapp_instance ?? ''
@@ -549,6 +551,7 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
 
   // ── Drag (mouse) ───────────────────────────────────────────────────────────
   const onMouseDown = (e: React.MouseEvent) => {
+    if (fullScreen) return // sem drag no mobile fullscreen
     if ((e.target as HTMLElement).closest('button, input, select, textarea, a')) return
     e.preventDefault()
     dragStart.current = { x: e.clientX, y: e.clientY, top: pos.top, right: pos.right }
@@ -603,12 +606,29 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
     if (tab === 'chat') setTimeout(() => chatEndRef.current?.scrollIntoView(), 200)
   }, [tab, messages])
 
+  // Estilo posicional — fullscreen no mobile, flutuante no desktop
+  const panelPositionStyle = fullScreen
+    ? {
+        inset:        0,
+        width:        '100%',
+        maxHeight:    '100dvh',
+        borderRadius: 0,
+        top:          'unset',
+        right:        'unset',
+        left:         'unset',
+      }
+    : {
+        top:   pos.top,
+        right: pos.right,
+        left:  'auto',
+      }
+
   // ── Create mode ───────────────────────────────────────────────────────────
   if (mode === 'create') {
     return (
       <div
         ref={panelRef}
-        style={{ ...S.panel, top: pos.top, right: pos.right, left: 'auto' }}
+        style={{ ...S.panel, ...panelPositionStyle }}
       >
         <CreateForm initialData={initialData ?? {}} onClose={onClose} />
       </div>
@@ -627,7 +647,7 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
   return (
     <div
       ref={panelRef}
-      style={{ ...S.panel, top: pos.top, right: pos.right, left: 'auto', cursor: dragging ? 'grabbing' : 'auto' }}
+      style={{ ...S.panel, ...panelPositionStyle, cursor: dragging ? 'grabbing' : 'auto' }}
     >
       {/* ── Header (drag handle) ───────────────────────────────────────────── */}
       <div

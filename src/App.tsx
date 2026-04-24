@@ -6,10 +6,13 @@ import { useUIStore } from '@/store/uiStore'
 import { Layout } from '@/components/layout/Layout'
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute'
 import { ToastContainer } from '@/components/ui/Toast'
+import { isOnTenantSubdomain } from '@/hooks/useTenant'
 
 // Lazy pages
+const Landing = lazy(() => import('@/pages/landing/Landing'))
 const Login = lazy(() => import('@/pages/auth/Login'))
 const Register = lazy(() => import('@/pages/auth/Register'))
+const Onboarding = lazy(() => import('@/pages/onboarding/Onboarding'))
 const InviteAccept = lazy(() => import('@/pages/auth/InviteAccept'))
 const ResetPassword = lazy(() => import('@/pages/auth/ResetPassword'))
 const Dashboard = lazy(() => import('@/pages/dashboard/Dashboard'))
@@ -65,6 +68,12 @@ function AppInner() {
           <Route path="/registro" element={<Register />} />
           <Route path="/convite" element={<InviteAccept />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+
+          {/* Landing page — exibida no domínio raiz (não em subdomínios de tenant) */}
+          {!isOnTenantSubdomain() && (
+            <Route path="/" element={<Landing />} />
+          )}
+
           <Route
             path="/"
             element={
@@ -94,6 +103,7 @@ function AppInner() {
             } />
             <Route path="calculadora" element={<Calculator />} />
             <Route path="integracoes" element={<Integrations />} />
+            <Route path="onboarding" element={<Onboarding />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>

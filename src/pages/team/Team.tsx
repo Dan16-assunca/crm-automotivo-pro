@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Check, Trash2, UserCog, Clock, MailCheck } from 'lucide-react'
+import { Plus, Check, Trash2, UserCog, Clock, MailCheck, MessageCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -242,6 +242,19 @@ export default function Team() {
     onError: () => toast.error('Erro ao alterar cargo'),
   })
 
+  // Salvar whatsapp_number
+  const saveWhatsappMutation = useMutation({
+    mutationFn: async ({ memberId, whatsapp_number }: { memberId: string; whatsapp_number: string }) => {
+      const { error } = await supabase.from('users').update({ whatsapp_number: whatsapp_number || null }).eq('id', memberId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['team', store?.id] })
+      toast.success('WhatsApp salvo')
+    },
+    onError: () => toast.error('Erro ao salvar WhatsApp'),
+  })
+
   // Desativar membro
   const toggleActiveMutation = useMutation({
     mutationFn: async ({ memberId, active }: { memberId: string; active: boolean }) => {
@@ -305,8 +318,12 @@ export default function Team() {
               member={member}
               isCurrentUser={member.id === user?.id}
               canManage={isAdmin && member.id !== user?.id}
+              canEditOwn={member.id === user?.id}
               onChangeRole={(role) => changeRoleMutation.mutate({ memberId: member.id, role })}
               onToggleActive={(active) => toggleActiveMutation.mutate({ memberId: member.id, active })}
+              onSaveWhatsapp={async (memberId, whatsapp_number) =>
+                saveWhatsappMutation.mutateAsync({ memberId, whatsapp_number })
+              }
             />
           ))}
         </div>
@@ -345,15 +362,30 @@ export default function Team() {
 
 // ─── Card de membro ───────────────────────────────────────────────────────────
 function MemberCard({
-  member, isCurrentUser, canManage, onChangeRole, onToggleActive,
+  member, isCurrentUser, canManage, canEditOwn, onChangeRole, onToggleActive, onSaveWhatsapp,
 }: {
   member: User
   isCurrentUser: boolean
   canManage: boolean
+  canEditOwn: boolean
   onChangeRole: (role: string) => void
   onToggleActive: (active: boolean) => void
+  onSaveWhatsapp: (memberId: string, number: string) => Promise<void>
 }) {
   const [editRole, setEditRole] = useState(false)
+  const [editWa, setEditWa] = useState(false)
+  const [waVal, setWaVal] = useState(member.whatsapp_number ?? '')
+  const [savingWa, setSavingWa] = useState(false)
+
+  const handleSaveWa = async () => {
+    setSavingWa(true)
+    try {
+      await onSaveWhatsapp(member.id, waVal.trim())
+      setEditWa(false)
+    } finally {
+      setSavingWa(false)
+    }
+  }
 
   return (
     <div style={{
@@ -410,6 +442,61 @@ function MemberCard({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: 'var(--t3)', marginBottom: 10 }}>
         <p style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.email}</p>
         {member.phone && <p>{member.phone}</p>}
+
+        {/* WhatsApp pessoal */}
+        {editWa ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+            <input
+              autoFocus
+              type="text"
+              placeholder="5511999999999"
+              value={waVal}
+              onChange={e => setWaVal(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleSaveWa()
+                if (e.key === 'Escape') setEditWa(false)
+              }}
+              style={{
+                flex: 1, height: 26, padding: '0 7px',
+                background: 'var(--el)', border: '1px solid var(--nb)',
+                borderRadius: 5, color: 'var(--t)', fontSize: 10,
+                outline: 'none', fontFamily: 'var(--fn)', minWidth: 0,
+              }}
+            />
+            <button
+              onClick={handleSaveWa}
+              disabled={savingWa}
+              style={{ padding: '3px 7px', borderRadius: 5, border: 'none', background: 'var(--neon)', color: '#000', fontSize: 9, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
+            >
+              {savingWa ? '…' : 'OK'}
+            </button>
+            <button
+              onClick={() => setEditWa(false)}
+              style={{ padding: '3px 5px', borderRadius: 5, border: '1px solid var(--bs)', background: 'transparent', color: 'var(--t3)', fontSize: 9, cursor: 'pointer', flexShrink: 0 }}
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => (canManage || canEditOwn) ? setEditWa(true) : undefined}
+            style={{
+              background: 'none', border: 'none', padding: 0,
+              cursor: (canManage || canEditOwn) ? 'pointer' : 'default',
+              display: 'flex', alignItems: 'center', gap: 4, marginTop: 1,
+              textAlign: 'left',
+            }}
+            title={(canManage || canEditOwn) ? 'Clique para editar o WhatsApp' : undefined}
+          >
+            <MessageCircle size={10} style={{ color: member.whatsapp_number ? '#25d366' : 'var(--t3)', flexShrink: 0 }} />
+            <span style={{ fontSize: 10, color: member.whatsapp_number ? 'var(--t2)' : 'var(--t3)', fontStyle: member.whatsapp_number ? 'normal' : 'italic' }}>
+              {member.whatsapp_number
+                ? `+${member.whatsapp_number.replace(/\D/g, '')}`
+                : (canManage || canEditOwn) ? 'Adicionar WhatsApp' : 'Sem WhatsApp'}
+            </span>
+            {(canManage || canEditOwn) && <span style={{ fontSize: 8, color: 'var(--nb)', opacity: 0.6 }}>✏️</span>}
+          </button>
+        )}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

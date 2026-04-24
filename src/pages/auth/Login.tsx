@@ -10,7 +10,7 @@ import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { toast } from '@/components/ui/Toast'
-import { redirectToTenant, isOnTenantSubdomain } from '@/hooks/useTenant'
+import { redirectToTenant, getSlugFromHost } from '@/hooks/useTenant'
 
 const schema = z.object({
   email: z.string().email('Email inválido'),
@@ -85,9 +85,12 @@ export default function Login() {
 
           toast.success('Bem-vindo!', `Olá, ${profile.full_name?.split(' ')[0]}`)
 
-          // Se a loja tem slug e não estamos no subdomínio correto, redireciona
+          // Sempre redireciona para o subdomínio correto da loja.
+          // Se o usuário está em qualquer outro subdomínio (ou no domínio raiz),
+          // o redirecionamento garante que ele caia na loja certa.
           const slug = storeData?.slug
-          if (slug && !isOnTenantSubdomain()) {
+          const currentSlug = getSlugFromHost()
+          if (slug && slug !== currentSlug) {
             redirectToTenant(slug, '/dashboard')
           } else {
             navigate('/dashboard', { replace: true })
