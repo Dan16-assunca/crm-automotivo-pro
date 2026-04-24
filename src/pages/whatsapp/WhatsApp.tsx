@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import {
   Send, Search, Phone, MoreVertical, Paperclip, Check, CheckCheck,
   Clock, MessageCircleOff, UserPlus, ExternalLink, User, ChevronDown,
@@ -605,11 +606,14 @@ function DateSeparator({ label }: { label: string }) {
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function WhatsApp() {
+  const isMobile = useIsMobile()
   const { store, user } = useAuthStore()
   const navigate = useNavigate()
   const { openLeadPanel, openLeadPanelCreate } = useLeadPanelStore()
   const queryClient = useQueryClient()
 
+  // Mobile: controla se mostra lista ou chat
+  const [mobileView, setMobileView] = useState<'list' | 'chat'>('list')
   const [selectedChat, setSelectedChat] = useState<EvoChat | null>(null)
   const [message, setMessage] = useState('')
   const [search, setSearch] = useState('')
@@ -885,6 +889,7 @@ export default function WhatsApp() {
     setSelectedChat(updatedChat)
     setShowInstanceMenu(false)
     setReplyTo(null)
+    setMobileView('chat')
     upsertLeadMutation.mutate(updatedChat)
     if (chat.unreadCount > 0 && instanceToken)
       evolutionApi.markAsRead(instanceToken, chat.remoteJid).catch(() => {})
@@ -1272,13 +1277,26 @@ export default function WhatsApp() {
 
   return (
     <div style={{
-      display: 'flex', height: 'calc(100vh - 78px)',
-      borderRadius: 9, overflow: 'hidden',
-      border: '1px solid var(--bs)', background: 'var(--card)',
+      display: 'flex',
+      height: isMobile
+        ? `calc(100dvh - 60px - var(--safe-bottom) - var(--safe-top))`
+        : 'calc(100vh - 78px)',
+      borderRadius: isMobile ? 0 : 9,
+      overflow: 'hidden',
+      border: isMobile ? 'none' : '1px solid var(--bs)',
+      background: 'var(--card)',
+      position: isMobile ? 'relative' : undefined,
     }}>
 
       {/* ── Lista de conversas ── */}
-      <div style={{ width: 280, flexShrink: 0, borderRight: '1px solid var(--bs)', display: 'flex', flexDirection: 'column', background: '#111b21' }}>
+      <div style={{
+        width: isMobile ? '100%' : 280,
+        flexShrink: 0,
+        borderRight: isMobile ? 'none' : '1px solid var(--bs)',
+        display: isMobile && mobileView === 'chat' ? 'none' : 'flex',
+        flexDirection: 'column',
+        background: '#111b21',
+      }}>
 
         {/* Header */}
         <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid rgba(255,255,255,.06)' }}>
@@ -1472,7 +1490,11 @@ export default function WhatsApp() {
 
       {/* ── Área de chat ── */}
       {selectedChat ? (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: '#0b141a' }}>
+        <div style={{
+          flex: 1, display: isMobile && mobileView === 'list' ? 'none' : 'flex',
+          flexDirection: 'column', minWidth: 0, background: '#0b141a',
+          width: isMobile ? '100%' : undefined,
+        }}>
 
           {/* Header */}
           <div style={{
@@ -1481,6 +1503,15 @@ export default function WhatsApp() {
             background: '#202c33', flexShrink: 0,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {/* Botão voltar no mobile */}
+              {isMobile && (
+                <button onClick={() => { setMobileView('list'); setSelectedChat(null) }}
+                  style={{ background: 'none', border: 'none', color: '#25d366', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px 0', marginRight: 2 }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 18 9 12 15 6"/>
+                  </svg>
+                </button>
+              )}
               <Avatar src={picMap[selectedChat.phoneNumber] ?? selectedChat.profilePicUrl} name={selectedChat.pushName} size={38} />
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1692,7 +1723,7 @@ export default function WhatsApp() {
             </div>
           </div>
         </div>
-      ) : (
+      ) : !isMobile ? (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0b141a', flexDirection: 'column', gap: 16 }}>
           <div style={{
             width: 80, height: 80, borderRadius: '50%',
@@ -1712,7 +1743,7 @@ export default function WhatsApp() {
             </button>
           )}
         </div>
-      )}
+      ) : null}
     </div>
   )
 }

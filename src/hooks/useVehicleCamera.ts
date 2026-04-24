@@ -56,12 +56,12 @@ export function useVehicleCamera() {
     if (isNative) {
       return getPhotoFromCapacitor(CameraSource.Photos)
     }
-    // Web fallback: programmatically trigger a file input
+    // Web fallback: programmatically trigger a file input (sem capture= para abrir galeria)
     return new Promise((resolve) => {
       const input = document.createElement('input')
       input.type = 'file'
       input.accept = 'image/jpeg,image/png,image/webp'
-      input.capture = 'environment'
+      // NÃO definir input.capture aqui — isso abriria a câmera em vez da galeria
       input.onchange = () => {
         const file = input.files?.[0]
         if (!file) { resolve(null); return }
