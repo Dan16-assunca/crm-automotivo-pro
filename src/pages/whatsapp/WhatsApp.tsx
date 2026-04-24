@@ -1281,13 +1281,13 @@ export default function WhatsApp() {
     <div style={{
       display: 'flex',
       height: isMobile
-        ? `calc(100dvh - 60px - var(--safe-bottom) - var(--safe-top))`
+        ? `calc(100dvh - 44px - var(--safe-top) - 58px - var(--safe-bottom))`
         : 'calc(100vh - 78px)',
       borderRadius: isMobile ? 0 : 9,
       overflow: 'hidden',
       border: isMobile ? 'none' : '1px solid var(--bs)',
       background: 'var(--card)',
-      position: isMobile ? 'relative' : undefined,
+      position: 'relative',
     }}>
 
       {/* ── Lista de conversas ── */}
@@ -1295,9 +1295,16 @@ export default function WhatsApp() {
         width: isMobile ? '100%' : 280,
         flexShrink: 0,
         borderRight: isMobile ? 'none' : '1px solid var(--bs)',
-        display: isMobile && mobileView === 'chat' ? 'none' : 'flex',
+        display: 'flex',
         flexDirection: 'column',
         background: '#111b21',
+        // Animação slide: lista desliza para esquerda ao abrir chat
+        ...(isMobile ? {
+          position: 'absolute', inset: 0, zIndex: 1,
+          transform: mobileView === 'chat' ? 'translateX(-100%)' : 'translateX(0)',
+          transition: 'transform .28s cubic-bezier(.4,0,.2,1)',
+          pointerEvents: mobileView === 'chat' ? 'none' : 'auto',
+        } : {}),
       }}>
 
         {/* Header */}
@@ -1313,11 +1320,11 @@ export default function WhatsApp() {
           {/* Seletor de instância */}
           {instanceList.length > 0 ? (
             <div style={{ position: 'relative', marginBottom: 8 }}>
-              {/* Botão principal — mostra instância ativa */}
+              {/* Botão principal — compacto no mobile, completo no desktop */}
               <button onClick={() => setShowInstanceMenu(v => !v)}
                 style={{
                   width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '7px 10px', borderRadius: 8, cursor: 'pointer',
+                  padding: isMobile ? '5px 8px' : '7px 10px', borderRadius: 8, cursor: 'pointer',
                   background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.08)',
                   color: 'var(--t)', fontFamily: 'var(--fn)', gap: 8,
                 }}>
@@ -1493,9 +1500,16 @@ export default function WhatsApp() {
       {/* ── Área de chat ── */}
       {selectedChat ? (
         <div style={{
-          flex: 1, display: isMobile && mobileView === 'list' ? 'none' : 'flex',
+          flex: 1, display: 'flex',
           flexDirection: 'column', minWidth: 0, background: '#0b141a',
           width: isMobile ? '100%' : undefined,
+          // Animação slide: chat desliza da direita ao abrir
+          ...(isMobile ? {
+            position: 'absolute', inset: 0, zIndex: 2,
+            transform: mobileView === 'list' ? 'translateX(100%)' : 'translateX(0)',
+            transition: 'transform .28s cubic-bezier(.4,0,.2,1)',
+            pointerEvents: mobileView === 'list' ? 'none' : 'auto',
+          } : {}),
         }}>
 
           {/* Header */}
@@ -1740,9 +1754,19 @@ export default function WhatsApp() {
           <VehiclePickerSheet
             open={showVehiclePicker}
             onClose={() => setShowVehiclePicker(false)}
-            onSend={(msg) => {
+            onSend={async (msg, photoUrls) => {
               setShowVehiclePicker(false)
+              // 1. Envia o texto da ficha
               sendMutation.mutate(msg)
+              // 2. Envia cada foto em sequência (aguarda 600ms entre cada)
+              if (photoUrls.length > 0 && instanceToken && selectedChat) {
+                for (const url of photoUrls) {
+                  await new Promise(r => setTimeout(r, 600))
+                  await evolutionApi.sendMediaUrl(instanceToken, selectedChat.phoneNumber, url, 'image')
+                }
+                // Atualiza histórico de mensagens após enviar fotos
+                setTimeout(() => queryClient.refetchQueries({ queryKey: messagesQueryKey }), 1500)
+              }
             }}
           />
         </div>
