@@ -6,7 +6,7 @@ import {
   Send, Search, Phone, MoreVertical, Paperclip, Check, CheckCheck,
   Clock, MessageCircleOff, UserPlus, ExternalLink, User, ChevronDown,
   Mic, MicOff, Image as ImageIcon, FileText, Play, Pause, X, Download,
-  Video, Smile, Reply, CornerUpLeft, Settings, Camera, Music2, Film,
+  Video, Smile, Reply, CornerUpLeft, Settings, Camera, Music2, Film, Car,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
@@ -15,6 +15,7 @@ import { evolutionApi } from '@/services/whatsapp'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { toast } from '@/components/ui/Toast'
+import { VehiclePickerSheet } from '@/components/whatsapp/VehiclePickerSheet'
 
 // ─── tipos ────────────────────────────────────────────────────────────────────
 
@@ -623,6 +624,7 @@ export default function WhatsApp() {
   const [replyTo, setReplyTo] = useState<EvoMessage | null>(null)
   const [showEmoji, setShowEmoji] = useState(false)
   const [showAttachMenu, setShowAttachMenu] = useState(false)
+  const [showVehiclePicker, setShowVehiclePicker] = useState(false)
 
   const messagesEndRef    = useRef<HTMLDivElement>(null)
   const bulkUpsertedRef   = useRef<Record<string, boolean>>({})
@@ -1673,6 +1675,17 @@ export default function WhatsApp() {
                     </div>
                   </>
                 )}
+                {/* Botão: enviar ficha de veículo */}
+                <button
+                  onClick={() => { setShowVehiclePicker(true); setShowAttachMenu(false) }}
+                  title="Enviar ficha de veículo"
+                  style={{ color: '#8696a0', background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = '#25d366')}
+                  onMouseLeave={e => (e.currentTarget.style.color = '#8696a0')}
+                >
+                  <Car size={20} />
+                </button>
+
                 <button onClick={() => setShowAttachMenu(v => !v)} title="Anexar"
                   style={{ color: showAttachMenu ? '#25d366' : '#8696a0', background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}
                   onMouseEnter={e => (e.currentTarget.style.color = '#e9edef')}
@@ -1722,6 +1735,16 @@ export default function WhatsApp() {
               )}
             </div>
           </div>
+
+          {/* Vehicle Picker Sheet */}
+          <VehiclePickerSheet
+            open={showVehiclePicker}
+            onClose={() => setShowVehiclePicker(false)}
+            onSend={(msg) => {
+              setShowVehiclePicker(false)
+              sendMutation.mutate(msg)
+            }}
+          />
         </div>
       ) : !isMobile ? (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0b141a', flexDirection: 'column', gap: 16 }}>
