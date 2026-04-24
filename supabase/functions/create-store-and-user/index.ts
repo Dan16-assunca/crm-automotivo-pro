@@ -37,6 +37,74 @@ async function ensureUniqueSlug(admin: ReturnType<typeof createClient>, base: st
   return `${base}-${Date.now().toString(36).slice(-4)}`
 }
 
+// ─── Email de boas-vindas ──────────────────────────────────────────────────────
+
+function buildWelcomeEmail(name: string, storeName: string, loginUrl: string, slug: string): string {
+  const firstName = name.split(' ')[0]
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#111;border-radius:16px;border:1px solid #1e1e1e;overflow:hidden;">
+        <!-- Header -->
+        <tr><td style="background:linear-gradient(135deg,#111 0%,#0f1a0f 100%);padding:32px 40px;text-align:center;border-bottom:1px solid #1e1e1e;">
+          <div style="font-size:28px;font-weight:900;color:#3df710;letter-spacing:-0.5px;">CRM<span style="color:#fff;">Auto</span></div>
+          <div style="font-size:11px;color:#555;margin-top:4px;letter-spacing:2px;text-transform:uppercase;">Automotivo Pro</div>
+        </td></tr>
+        <!-- Body -->
+        <tr><td style="padding:40px;">
+          <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 8px;">Bem-vindo, ${firstName}! 🚗</h1>
+          <p style="color:#888;font-size:14px;line-height:1.6;margin:0 0 24px;">
+            Sua conta da <strong style="color:#fff;">${storeName}</strong> foi criada com sucesso.
+            Você tem <strong style="color:#3df710;">14 dias de trial gratuito</strong> com acesso completo à plataforma.
+          </p>
+          <!-- CTA -->
+          <div style="text-align:center;margin:32px 0;">
+            <a href="${loginUrl}" style="background:#3df710;color:#000;font-size:15px;font-weight:800;padding:14px 32px;border-radius:10px;text-decoration:none;display:inline-block;letter-spacing:0.3px;">
+              Acessar minha conta →
+            </a>
+          </div>
+          <!-- Steps -->
+          <div style="background:#0f0f0f;border-radius:10px;border:1px solid #1e1e1e;padding:20px;margin-bottom:24px;">
+            <p style="color:#3df710;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 14px;">Próximos passos</p>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <span style="background:#3df71020;color:#3df710;border-radius:6px;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">1</span>
+                <span style="color:#ccc;font-size:13px;">Conecte seu WhatsApp em <strong style="color:#fff;">Configurações → WhatsApp</strong></span>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;">
+                <span style="background:#3df71020;color:#3df710;border-radius:6px;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">2</span>
+                <span style="color:#ccc;font-size:13px;">Cadastre seu primeiro veículo no <strong style="color:#fff;">Estoque</strong></span>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;">
+                <span style="background:#3df71020;color:#3df710;border-radius:6px;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">3</span>
+                <span style="color:#ccc;font-size:13px;">Crie sua primeira automação de follow-up</span>
+              </div>
+            </div>
+          </div>
+          <!-- Subdomain info -->
+          <div style="background:#0a1200;border:1px solid #3df71030;border-radius:8px;padding:12px 16px;margin-bottom:8px;">
+            <p style="color:#3df710;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 4px;">Seu link de acesso exclusivo</p>
+            <p style="color:#fff;font-size:13px;font-family:monospace;margin:0;">${loginUrl}</p>
+            <p style="color:#555;font-size:10px;margin:4px 0 0;">Subdomínio: ${slug}.crmautomotivopro.com</p>
+          </div>
+          <p style="color:#555;font-size:11px;line-height:1.5;margin-top:24px;">
+            Em caso de dúvidas, responda este email. Estamos aqui para ajudar!
+          </p>
+        </td></tr>
+        <!-- Footer -->
+        <tr><td style="padding:20px 40px;border-top:1px solid #1e1e1e;text-align:center;">
+          <p style="color:#333;font-size:11px;margin:0;">© ${new Date().getFullYear()} CRM Automotivo Pro. Todos os direitos reservados.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+}
+
 Deno.serve(async (req: Request) => {
   // CORS preflight
   if (req.method === 'OPTIONS') {
@@ -144,6 +212,25 @@ Deno.serve(async (req: Request) => {
         password,
       })
       if (signInErr) throw new Error('Conta criada mas erro ao entrar: ' + signInErr.message)
+
+      // ── 7. Email de boas-vindas (Resend) — não bloqueia o retorno ──────────
+      const resendKey = Deno.env.get('RESEND_API_KEY')
+      if (resendKey) {
+        const loginUrl = `https://${finalSlug}.crmautomotivopro.com/login`
+        fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${resendKey}`,
+          },
+          body: JSON.stringify({
+            from: 'CRM Automotivo Pro <noreply@crmautomotivopro.com>',
+            to:   [email.trim().toLowerCase()],
+            subject: `Bem-vindo ao CRM Automotivo Pro, ${full_name.trim().split(' ')[0]}!`,
+            html: buildWelcomeEmail(full_name.trim(), store_name.trim(), loginUrl, finalSlug!),
+          }),
+        }).catch(err => console.warn('[welcome-email] failed:', err))
+      }
 
       return json({ session: signIn.session, user: signIn.user, slug: finalSlug })
 

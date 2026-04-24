@@ -28,6 +28,8 @@ export interface Store {
   status?: 'active' | 'suspended' | 'trial' | 'cancelled'
   trial_ends_at?: string | null
   custom_domain?: string | null
+  stripe_customer_id?: string | null
+  stripe_session_id?: string | null
   created_at: string
   updated_at: string
 }

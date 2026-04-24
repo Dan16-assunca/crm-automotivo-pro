@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Save, Loader2, Lock, Eye, EyeOff,
-  QrCode, LogOut, RefreshCw, Plus, Trash2,
-  CheckCircle2, XCircle, Wifi, WifiOff, Smartphone,
+  QrCode, LogOut, Plus, Trash2,
+  Smartphone, CreditCard, Star, Zap, Building2,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
@@ -717,6 +717,217 @@ function WhatsAppSection() {
   )
 }
 
+// ─── Seção de Billing ─────────────────────────────────────────────────────────
+
+const PLANS = [
+  {
+    id: 'starter',
+    label: 'Starter',
+    price: 'R$ 197/mês',
+    icon: Zap,
+    color: '#3B82F6',
+    features: ['1 usuário', '500 leads/mês', 'WhatsApp integrado', 'Automações básicas'],
+  },
+  {
+    id: 'pro',
+    label: 'Pro',
+    price: 'R$ 397/mês',
+    icon: Star,
+    color: '#3DF710',
+    features: ['5 usuários', 'Leads ilimitados', 'Multi-WhatsApp', 'Automações avançadas', 'Relatórios completos'],
+    recommended: true,
+  },
+  {
+    id: 'enterprise',
+    label: 'Enterprise',
+    price: 'R$ 797/mês',
+    icon: Building2,
+    color: '#F97316',
+    features: ['Usuários ilimitados', 'Multi-lojas', 'API exclusiva', 'Suporte prioritário', 'Onboarding dedicado'],
+  },
+] as const
+
+function BillingSection() {
+  const { store } = useAuthStore()
+  const [upgrading, setUpgrading] = useState<string | null>(null)
+  const { data: sessionData } = useQuery({
+    queryKey: ['session'],
+    queryFn: async () => {
+      const { data } = await supabase.auth.getSession()
+      return data
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+  const session = sessionData?.session
+
+  const plan        = store?.plan ?? 'free'
+  const status      = store?.status ?? 'trial'
+  const trialEndsAt = store?.trial_ends_at ?? null
+
+  const trialDaysLeft = trialEndsAt
+    ? Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / 86_400_000))
+    : null
+
+  const isActive = status === 'active'
+  const isTrial  = status === 'trial'
+  const isSuspended = status === 'suspended' || status === 'cancelled'
+
+  async function handleUpgrade(planId: string) {
+    if (!session?.access_token) { toast.error('Sessão expirada', 'Faça login novamente'); return }
+    setUpgrading(planId)
+    try {
+      const res = await fetch(
+        'https://eakdywmuewvuzyqfpcpl.supabase.co/functions/v1/stripe-checkout',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ plan: planId }),
+        },
+      )
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Erro ao criar sessão de pagamento')
+      window.location.href = data.url
+    } catch (err) {
+      toast.error('Erro ao abrir checkout', err instanceof Error ? err.message : 'Tente novamente')
+    } finally {
+      setUpgrading(null)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader style={{ padding: '14px 16px 0' }}>
+        <CardTitle>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <CreditCard size={16} style={{ color: 'var(--neon)' }} />
+            Plano e Faturamento
+          </div>
+        </CardTitle>
+        <Badge variant={isActive ? 'neon' : isTrial ? 'warning' : 'danger'} dot>
+          {isActive ? plan.charAt(0).toUpperCase() + plan.slice(1) : isTrial ? 'Trial' : 'Suspenso'}
+        </Badge>
+      </CardHeader>
+
+      <CardContent style={{ padding: '14px 16px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* Status atual */}
+        {isTrial && trialDaysLeft !== null && (
+          <div style={{
+            background: trialDaysLeft <= 3 ? 'rgba(239,68,68,.08)' : 'rgba(61,247,16,.06)',
+            border: `1px solid ${trialDaysLeft <= 3 ? 'rgba(239,68,68,.25)' : 'rgba(61,247,16,.2)'}`,
+            borderRadius: 10, padding: '12px 14px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+          }}>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 700, color: trialDaysLeft <= 3 ? '#EF4444' : 'var(--neon)', margin: 0 }}>
+                {trialDaysLeft > 0
+                  ? `${trialDaysLeft} ${trialDaysLeft === 1 ? 'dia' : 'dias'} restantes no trial`
+                  : 'Trial encerrado'}
+              </p>
+              <p style={{ fontSize: 11, color: 'var(--t3)', margin: '3px 0 0' }}>
+                Assine agora para continuar usando sem interrupções
+              </p>
+            </div>
+          </div>
+        )}
+
+        {isSuspended && (
+          <div style={{
+            background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.25)',
+            borderRadius: 10, padding: '12px 14px',
+          }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: '#EF4444', margin: 0 }}>Conta suspensa</p>
+            <p style={{ fontSize: 11, color: 'var(--t3)', margin: '3px 0 0' }}>
+              Regularize o pagamento para reativar sua conta.
+            </p>
+          </div>
+        )}
+
+        {isActive && (
+          <p style={{ fontSize: 12, color: 'var(--t2)', margin: 0 }}>
+            Você está no plano <strong style={{ color: 'var(--neon)' }}>
+              {plan.charAt(0).toUpperCase() + plan.slice(1)}
+            </strong> com acesso total à plataforma.
+          </p>
+        )}
+
+        {/* Cards de planos */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {PLANS.map(p => {
+            const Icon    = p.icon
+            const current = plan === p.id && isActive
+            const loading = upgrading === p.id
+            return (
+              <div key={p.id} style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '12px 14px', borderRadius: 10,
+                background: current ? `${p.color}0d` : 'var(--el)',
+                border: `1px solid ${current ? p.color + '40' : 'var(--bs)'}`,
+                position: 'relative',
+              }}>
+                {p.recommended && !current && (
+                  <div style={{
+                    position: 'absolute', top: -1, right: 12,
+                    background: 'var(--neon)', color: '#000',
+                    fontSize: 9, fontWeight: 800, padding: '2px 8px',
+                    borderRadius: '0 0 6px 6px', letterSpacing: '.05em', textTransform: 'uppercase',
+                  }}>Recomendado</div>
+                )}
+                <div style={{
+                  width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+                  background: `${p.color}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Icon size={16} style={{ color: p.color }} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--t)' }}>{p.label}</span>
+                    <span style={{ fontSize: 12, color: p.color, fontWeight: 600 }}>{p.price}</span>
+                  </div>
+                  <p style={{ fontSize: 10, color: 'var(--t3)', margin: '2px 0 0', lineHeight: 1.4 }}>
+                    {p.features.join(' · ')}
+                  </p>
+                </div>
+                {current ? (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, color: p.color,
+                    background: `${p.color}1a`, padding: '4px 10px',
+                    borderRadius: 20, flexShrink: 0,
+                  }}>Ativo</span>
+                ) : (
+                  <button
+                    onClick={() => handleUpgrade(p.id)}
+                    disabled={loading || upgrading !== null}
+                    style={{
+                      fontSize: 11, fontWeight: 700, padding: '6px 14px',
+                      borderRadius: 8, border: `1px solid ${p.color}60`,
+                      background: 'transparent', color: p.color,
+                      cursor: loading || upgrading !== null ? 'not-allowed' : 'pointer',
+                      opacity: upgrading !== null && !loading ? 0.5 : 1,
+                      flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5,
+                      transition: 'all .15s',
+                    }}
+                  >
+                    {loading
+                      ? <><Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> Abrindo...</>
+                      : (isTrial || isSuspended ? 'Assinar' : 'Mudar')}
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        <p style={{ fontSize: 10, color: 'var(--t3)', textAlign: 'center' }}>
+          Pagamento seguro via Stripe · Cancele a qualquer momento
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
 // ─── Página principal de Configurações ───────────────────────────────────────
 
 export default function Settings() {
@@ -850,18 +1061,8 @@ export default function Settings() {
       {/* WhatsApp */}
       <WhatsAppSection />
 
-      {/* Plano */}
-      <Card neon>
-        <CardHeader style={{ padding: '14px 16px 0' }}>
-          <CardTitle>Plano Atual</CardTitle>
-          <Badge variant="neon" dot>Pro</Badge>
-        </CardHeader>
-        <CardContent style={{ padding: '10px 16px 16px' }}>
-          <p style={{ fontSize: 12, color: 'var(--t2)' }}>
-            Você está no plano <strong style={{ color: 'var(--neon)' }}>Pro</strong> com acesso a todos os recursos da plataforma.
-          </p>
-        </CardContent>
-      </Card>
+      {/* Plano / Billing */}
+      <BillingSection />
 
       {/* Segurança */}
       <PasswordCard />
