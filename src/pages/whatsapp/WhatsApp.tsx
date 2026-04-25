@@ -1280,9 +1280,11 @@ export default function WhatsApp() {
   return (
     <div style={{
       display: 'flex',
-      height: isMobile
-        ? `calc(100dvh - 44px - var(--safe-top) - 58px - var(--safe-bottom))`
-        : 'calc(100vh - 78px)',
+      // Mobile: herda altura do flex parent (MobileLayout main com overflow:hidden)
+      // Desktop: subtrai topbar + padding
+      flex: isMobile ? 1 : undefined,
+      height: isMobile ? '100%' : 'calc(100vh - 78px)',
+      minHeight: 0,
       borderRadius: isMobile ? 0 : 9,
       overflow: 'hidden',
       border: isMobile ? 'none' : '1px solid var(--bs)',

@@ -580,7 +580,7 @@ function ScoreBar({ label, value, color = 'var(--neon)' }: { label: string; valu
 
 // ─── Inline Lead Panel ─────────────────────────────────────────────────────────
 // ─── KPI Bar (6 metrics) ───────────────────────────────────────────────────────
-function PipelineKPIs({ leads }: { leads: Lead[] }) {
+function PipelineKPIs({ leads, isMobile }: { leads: Lead[]; isMobile: boolean }) {
   const active = leads.filter(l => l.status === 'active')
   const hot = active.filter(l => l.temperature === 'hot').length
   const totalValue = active.reduce((s, l) => s + (l.budget_max ?? 0), 0)
@@ -593,13 +593,30 @@ function PipelineKPIs({ leads }: { leads: Lead[] }) {
   const cpl = active.length > 0 ? Math.round(totalValue / active.length / 1000) : 0
 
   const kpis = [
-    { label: 'Leads ativos', value: active.length.toString(), sub: `${hot} quentes`, color: 'var(--neon)' },
-    { label: 'Pipeline total', value: `R$ ${Math.round(totalValue / 1000)}k`, sub: 'valor estimado', color: 'var(--blue)' },
-    { label: 'Visitas agend.', value: withFollowup.toString(), sub: 'com follow-up', color: 'var(--amber)' },
-    { label: 'Propostas', value: proposals > 0 ? proposals.toString() : active.filter(l => l.payment_type).length.toString(), sub: 'em negociação', color: 'var(--amber)' },
-    { label: 'Fechados/mês', value: closedMonth.toString(), sub: 'conversões', color: 'var(--neon)' },
-    { label: 'Ticket médio', value: `R$ ${cpl}k`, sub: 'por lead', color: 'var(--text3)' },
+    { label: 'Leads ativos',   value: active.length.toString(),              sub: `${hot} quentes`,       color: 'var(--neon)' },
+    { label: 'Pipeline',       value: `R$ ${Math.round(totalValue / 1000)}k`, sub: 'valor estimado',      color: 'var(--blu)' },
+    { label: 'Follow-ups',     value: withFollowup.toString(),                sub: 'agendados',            color: 'var(--yel)' },
+    { label: 'Propostas',      value: (proposals > 0 ? proposals : active.filter(l => l.payment_type).length).toString(), sub: 'em negociação', color: 'var(--yel)' },
+    { label: 'Fechamentos',    value: closedMonth.toString(),                 sub: 'conversões',           color: 'var(--neon)' },
+    { label: 'Ticket médio',   value: `R$ ${cpl}k`,                          sub: 'por lead',             color: 'var(--t3)' },
   ]
+
+  if (isMobile) {
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
+        {kpis.map((k, i) => (
+          <div key={i} style={{
+            background: 'var(--card)', border: '1px solid var(--bs)',
+            borderRadius: 12, padding: '10px 12px',
+          }}>
+            <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 4 }}>{k.label}</p>
+            <p style={{ fontSize: 18, fontWeight: 800, color: k.color, lineHeight: 1, letterSpacing: '-.02em' }}>{k.value}</p>
+            <p style={{ fontSize: 9, color: 'var(--t3)', marginTop: 3 }}>{k.sub}</p>
+          </div>
+        ))}
+      </div>
+    )
+  }
 
   return (
     <div style={{ display: 'flex', gap: 1, background: 'var(--border)', borderRadius: 10, overflow: 'hidden', marginBottom: 14 }}>
@@ -887,7 +904,7 @@ export default function Pipeline() {
       </div>
 
       {/* KPI bar */}
-      {leads && <PipelineKPIs leads={leads} />}
+      {leads && <PipelineKPIs leads={leads} isMobile={isMobile} />}
 
       {/* Filter bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>

@@ -352,22 +352,23 @@ export default function Dashboard() {
 
         {/* ── KPIs secundários ── */}
         {kpisLoading ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-            {[...Array(3)].map((_, i) => <Skeleton key={i} style={{ height: 72, borderRadius: 14 }} />)}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {[...Array(4)].map((_, i) => <Skeleton key={i} style={{ height: 76, borderRadius: 14 }} />)}
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {[
-              { label: 'Leads', value: String(kpis?.totalLeads ?? 0) },
+              { label: 'Total Leads', value: String(kpis?.totalLeads ?? 0) },
+              { label: 'Fechamentos', value: String(kpis?.wonCount ?? 0) },
               { label: 'Ticket Médio', value: kpis ? formatCurrency(kpis.avgTicket) : '—' },
-              { label: 'Quentes', value: String(kpis?.hotLeads ?? 0), hot: true },
+              { label: 'CPL', value: kpis && kpis.totalLeads > 0 ? formatCurrency((kpis.revenue || 0) / kpis.totalLeads) : '—' },
             ].map(k => (
               <div key={k.label} style={{
-                background: 'var(--card)', border: `1px solid ${k.hot ? 'rgba(244,63,94,.25)' : 'var(--bs)'}`,
-                borderRadius: 14, padding: '12px',
+                background: 'var(--card)', border: '1px solid var(--bs)',
+                borderRadius: 14, padding: '14px',
               }}>
-                <p style={{ fontSize: 9, fontWeight: 700, color: k.hot ? 'var(--red)' : 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{k.label}</p>
-                <p style={{ fontSize: 20, fontWeight: 800, color: k.hot ? 'var(--red)' : 'var(--t)', marginTop: 4, lineHeight: 1 }}>{k.value}</p>
+                <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.06em' }}>{k.label}</p>
+                <p style={{ fontSize: 22, fontWeight: 800, color: 'var(--t)', marginTop: 5, lineHeight: 1, letterSpacing: '-.02em' }}>{k.value}</p>
               </div>
             ))}
           </div>

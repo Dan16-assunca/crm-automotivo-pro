@@ -1,4 +1,4 @@
-import { Outlet, useNavigate } from 'react-router-dom'
+import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { Suspense, lazy } from 'react'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
@@ -8,6 +8,9 @@ import { ToastContainer } from '@/components/ui/Toast'
 import { useLeadPanelStore } from '@/store/leadPanelStore'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useAuthStore } from '@/store/authStore'
+
+// Páginas que precisam ser full-screen no mobile (sem padding lateral, sem scroll externo)
+const FULLSCREEN_ROUTES = ['/whatsapp']
 
 const LeadPanel = lazy(() => import('@/components/LeadPanel'))
 
@@ -87,6 +90,9 @@ function GlobalLeadPanel({ fullScreen }: { fullScreen: boolean }) {
 }
 
 function MobileLayout() {
+  const location = useLocation()
+  const isFullScreen = FULLSCREEN_ROUTES.some(r => location.pathname.startsWith(r))
+
   return (
     <div style={{
       display:    'flex',
@@ -100,11 +106,19 @@ function MobileLayout() {
       <main
         className="scroll-touch"
         style={{
-          flex:        1,
-          overflowY:   'auto',
-          padding:     '12px 14px',
-          paddingBottom: 'calc(72px + var(--safe-bottom))',
-          background:  'var(--bg)',
+          flex:          1,
+          overflowY:     isFullScreen ? 'hidden' : 'auto',
+          overflow:      isFullScreen ? 'hidden' : undefined,
+          padding:       isFullScreen ? 0 : '12px 14px',
+          // Full-screen: só reserva espaço do BottomTabBar (position:fixed)
+          // Normal: reserva BottomTabBar + padding extra
+          paddingBottom: isFullScreen
+            ? 'calc(56px + var(--safe-bottom))'
+            : 'calc(72px + var(--safe-bottom))',
+          background:    'var(--bg)',
+          display:       isFullScreen ? 'flex' : undefined,
+          flexDirection: isFullScreen ? 'column' : undefined,
+          minHeight:     0,
         }}
       >
         <Outlet />
