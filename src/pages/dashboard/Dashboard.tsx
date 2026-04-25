@@ -302,76 +302,167 @@ export default function Dashboard() {
 
   // ── Mobile Dashboard ──────────────────────────────────────────────────────────
   if (isMobile) {
-    const kpiCards = [
-      { label: 'Conversão', value: `${(kpis?.convRate ?? 0).toFixed(1)}%`, color: 'var(--neon)' },
-      { label: 'Faturamento', value: kpis ? formatCurrency(kpis.revenue) : '—', color: 'var(--t)' },
-      { label: 'Ticket Médio', value: kpis ? formatCurrency(kpis.avgTicket) : '—', color: 'var(--t)' },
-      { label: 'Leads', value: String(kpis?.totalLeads ?? 0), color: 'var(--t)' },
-    ]
+    const overdueCount = followUps?.filter(f => f.overdue).length ?? 0
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 8 }}>
 
-        {/* Period pills — scroll horizontal */}
-        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2, WebkitOverflowScrolling: 'touch' as any }}>
-          {pills.map(p => (
-            <button key={p.val} onClick={() => { setPeriod(p.val); setCustomFrom(''); setCustomTo('') }}
-              style={{
-                flexShrink: 0, padding: '6px 14px', fontSize: 12, borderRadius: 20, cursor: 'pointer',
-                border: '1px solid ' + (period === p.val && !customFrom ? 'var(--nb)' : 'var(--b)'),
-                background: period === p.val && !customFrom ? 'var(--ng)' : 'var(--el)',
-                color: period === p.val && !customFrom ? 'var(--neon)' : 'var(--t2)',
-                fontWeight: period === p.val ? 700 : 400,
-              }}>
-              {p.label}
-            </button>
-          ))}
+        {/* ── Período ── */}
+        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
+          {pills.map(p => {
+            const active = period === p.val && !customFrom
+            return (
+              <button key={p.val} onClick={() => { setPeriod(p.val); setCustomFrom(''); setCustomTo('') }}
+                style={{
+                  flexShrink: 0, height: 32, padding: '0 14px', fontSize: 12, fontWeight: active ? 700 : 500,
+                  borderRadius: 16, cursor: 'pointer', border: 'none',
+                  background: active ? 'var(--neon)' : 'var(--el)',
+                  color: active ? '#000' : 'var(--t3)',
+                  transition: 'all .15s',
+                }}>
+                {p.label}
+              </button>
+            )
+          })}
         </div>
 
-        {/* KPIs — 2 colunas */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          {kpisLoading ? [...Array(4)].map((_, i) => <Skeleton key={i} style={{ height: 80, borderRadius: 12 }} />) :
-            kpiCards.map(k => (
+        {/* ── KPI hero — Faturamento em destaque ── */}
+        {kpisLoading ? (
+          <Skeleton style={{ height: 96, borderRadius: 16 }} />
+        ) : (
+          <div style={{
+            background: 'var(--ng)', border: '1px solid var(--nb)',
+            borderRadius: 18, padding: '18px 20px',
+            display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0,
+          }}>
+            <div style={{ borderRight: '1px solid var(--nb)', paddingRight: 16 }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--neon)', textTransform: 'uppercase', letterSpacing: '.08em', opacity: .7 }}>Faturamento</p>
+              <p style={{ fontSize: 26, fontWeight: 900, color: 'var(--neon)', marginTop: 4, lineHeight: 1, letterSpacing: '-.02em' }}>
+                {kpis ? formatCurrency(kpis.revenue) : '—'}
+              </p>
+            </div>
+            <div style={{ paddingLeft: 16 }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.08em' }}>Conversão</p>
+              <p style={{ fontSize: 26, fontWeight: 900, color: 'var(--t)', marginTop: 4, lineHeight: 1, letterSpacing: '-.02em' }}>
+                {(kpis?.convRate ?? 0).toFixed(1)}%
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ── KPIs secundários ── */}
+        {kpisLoading ? (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            {[...Array(3)].map((_, i) => <Skeleton key={i} style={{ height: 72, borderRadius: 14 }} />)}
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            {[
+              { label: 'Leads', value: String(kpis?.totalLeads ?? 0) },
+              { label: 'Ticket Médio', value: kpis ? formatCurrency(kpis.avgTicket) : '—' },
+              { label: 'Quentes', value: String(kpis?.hotLeads ?? 0), hot: true },
+            ].map(k => (
               <div key={k.label} style={{
-                background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 14,
-                padding: '14px 16px',
+                background: 'var(--card)', border: `1px solid ${k.hot ? 'rgba(244,63,94,.25)' : 'var(--bs)'}`,
+                borderRadius: 14, padding: '12px',
               }}>
-                <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.07em' }}>{k.label}</p>
-                <p style={{ fontSize: 22, fontWeight: 800, color: k.color, marginTop: 6, fontFamily: 'var(--fn)', lineHeight: 1 }}>{k.value}</p>
+                <p style={{ fontSize: 9, fontWeight: 700, color: k.hot ? 'var(--red)' : 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{k.label}</p>
+                <p style={{ fontSize: 20, fontWeight: 800, color: k.hot ? 'var(--red)' : 'var(--t)', marginTop: 4, lineHeight: 1 }}>{k.value}</p>
               </div>
-            ))
-          }
-        </div>
+            ))}
+          </div>
+        )}
 
-        {/* Funil Comercial */}
+        {/* ── Follow-ups urgentes ── */}
+        {followUps && followUps.length > 0 && (
+          <div style={{
+            background: 'var(--card)', border: overdueCount > 0 ? '1px solid rgba(239,68,68,.3)' : '1px solid var(--bs)',
+            borderRadius: 16, overflow: 'hidden',
+          }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '12px 14px 10px',
+              borderBottom: '1px solid var(--bs)',
+            }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--t)', textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                Follow-ups
+              </p>
+              {overdueCount > 0 && (
+                <span style={{
+                  fontSize: 10, fontWeight: 800, color: '#fff',
+                  background: 'var(--red)', padding: '3px 8px', borderRadius: 20,
+                }}>
+                  {overdueCount} atrasado{overdueCount > 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            {followUps.slice(0, 5).map((f, idx) => (
+              <div key={f.id} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '11px 14px',
+                borderBottom: idx < Math.min(followUps.length, 5) - 1 ? '1px solid var(--bs)' : 'none',
+                background: f.overdue ? 'rgba(239,68,68,.03)' : 'transparent',
+              }}>
+                <div style={{
+                  width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+                  background: f.overdue ? 'rgba(239,68,68,.12)' : 'var(--ng)',
+                  border: `1px solid ${f.overdue ? 'rgba(239,68,68,.3)' : 'var(--nb)'}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 12, fontWeight: 800, color: f.overdue ? 'var(--red)' : 'var(--neon)',
+                }}>
+                  {f.client_name.slice(0, 2).toUpperCase()}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--t)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {f.client_name}
+                  </p>
+                  <p style={{ fontSize: 11, color: 'var(--t3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
+                    {f.vehicle_interest ?? 'Sem veículo'}
+                  </p>
+                </div>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, flexShrink: 0, padding: '4px 10px', borderRadius: 20,
+                  background: f.overdue ? 'rgba(239,68,68,.15)' : f.isToday ? 'rgba(234,179,8,.12)' : 'var(--el)',
+                  color: f.overdue ? 'var(--red)' : f.isToday ? 'var(--yel)' : 'var(--t3)',
+                  minHeight: 'unset',
+                }}>
+                  {f.overdue ? 'ATRASADO' : f.isToday ? 'HOJE' : timeAgo(f.next_followup_at!)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Funil Comercial ── */}
         <div>
           <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 10 }}>
             Funil Comercial
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {funnelLoading || !stages ? [...Array(6)].map((_, i) => (
-              <Skeleton key={i} style={{ height: 80, borderRadius: 12 }} />
+              <Skeleton key={i} style={{ height: 76, borderRadius: 14 }} />
             )) : stages.filter(s => !s.is_final).map((stage, i) => {
               const count = funnelCounts?.[stage.id] ?? 0
-              const prevCount = i > 0 && stages ? (funnelCounts?.[stages.filter(s => !s.is_final)[i-1]?.id] ?? 0) : 0
+              const nonFinal = stages.filter(s => !s.is_final)
+              const prevCount = i > 0 ? (funnelCounts?.[nonFinal[i-1]?.id] ?? 0) : 0
               const convPct = i > 0 && prevCount > 0 ? Math.round((count / prevCount) * 100) : null
               return (
                 <div key={stage.id} style={{
                   background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 14,
-                  padding: '14px 16px', position: 'relative', overflow: 'hidden',
+                  padding: '12px 14px', position: 'relative', overflow: 'hidden',
                 }}>
                   <div style={{
                     position: 'absolute', top: 0, left: 0, right: 0, height: 3,
-                    borderRadius: '14px 14px 0 0', background: stage.color || 'var(--neon)',
+                    background: stage.color || 'var(--neon)',
                   }} />
-                  <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>
-                    {String(i + 1).padStart(2, '0')} {stage.name}
+                  <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {stage.name}
                   </p>
-                  <p style={{ fontSize: 30, fontWeight: 800, color: 'var(--t)', lineHeight: 1.2, marginTop: 4, fontFamily: 'var(--fn)' }}>
+                  <p style={{ fontSize: 28, fontWeight: 900, color: 'var(--t)', lineHeight: 1.15, marginTop: 3, letterSpacing: '-.02em' }}>
                     {count}
                   </p>
                   {convPct !== null && (
-                    <p style={{ fontSize: 10, color: 'var(--neon)', marginTop: 2 }}>conv: {convPct}%</p>
+                    <p style={{ fontSize: 9, color: 'var(--neon)', marginTop: 1, fontWeight: 600 }}>{convPct}% conv.</p>
                   )}
                 </div>
               )
@@ -379,117 +470,66 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Follow-ups urgentes */}
-        {!!followUps?.length && (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.1em' }}>
-                Follow-ups
-              </p>
-              {followUps.filter(f => f.overdue).length > 0 && (
-                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--red)', background: 'rgba(239,68,68,.12)', padding: '3px 8px', borderRadius: 8 }}>
-                  {followUps.filter(f => f.overdue).length} atrasados
+        {/* ── Leads por dia ── */}
+        <div style={{ background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 16, padding: '14px 4px 10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 10px' }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--t)' }}>Leads por dia</p>
+            <span style={{ fontSize: 10, color: 'var(--t3)' }}>14 dias</span>
+          </div>
+          <ResponsiveContainer width="100%" height={120}>
+            <AreaChart data={leadsPerDay ?? []} margin={{ top: 2, right: 6, bottom: 0, left: -30 }}>
+              <defs>
+                <linearGradient id="lgm" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--neon)" stopOpacity={0.18} />
+                  <stop offset="95%" stopColor="var(--neon)" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--b)" vertical={false} />
+              <XAxis dataKey="name" tick={{ fill: 'var(--t3)', fontSize: 8 }} axisLine={false} tickLine={false} interval={3} />
+              <YAxis tick={{ fill: 'var(--t3)', fontSize: 8 }} axisLine={false} tickLine={false} />
+              <Tooltip content={<CustomTooltip />} />
+              <Area type="monotone" dataKey="leads" name="Leads" stroke="var(--neon)" strokeWidth={2}
+                fill="url(#lgm)" dot={{ fill: 'var(--neon)', r: 2.5, strokeWidth: 0 }} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* ── Ranking vendedores ── */}
+        {!!vendorRanking?.length && (
+          <div style={{ background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 16, overflow: 'hidden' }}>
+            <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--bs)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--t)' }}>Ranking de vendedores</p>
+              <span style={{ fontSize: 10, color: 'var(--t3)' }}>Mês atual</span>
+            </div>
+            {vendorRanking.map((v, i) => (
+              <div key={v.id} style={{
+                display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
+                borderBottom: i < vendorRanking.length - 1 ? '1px solid var(--bs)' : 'none',
+                background: i === 0 ? 'var(--ng)' : 'transparent',
+              }}>
+                <span style={{ fontSize: 15, fontWeight: 900, color: i === 0 ? 'var(--neon)' : 'var(--t3)', width: 20, flexShrink: 0, textAlign: 'center' }}>
+                  {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`}
                 </span>
-              )}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {followUps.slice(0, 4).map(f => (
-                <div key={f.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 12,
-                  background: 'var(--card)', border: `1px solid ${f.overdue ? 'rgba(239,68,68,.3)' : 'var(--bs)'}`,
-                  borderRadius: 12, padding: '12px 14px',
+                <div style={{
+                  width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                  background: i === 0 ? 'rgba(61,247,16,.2)' : 'var(--el)',
+                  border: `1px solid ${i === 0 ? 'var(--nb)' : 'var(--b)'}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 12, fontWeight: 800, color: i === 0 ? 'var(--neon)' : 'var(--t2)',
                 }}>
-                  <div style={{
-                    width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-                    background: f.overdue ? 'rgba(239,68,68,.15)' : 'var(--ng)',
-                    border: `1px solid ${f.overdue ? 'rgba(239,68,68,.4)' : 'var(--nb)'}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 11, fontWeight: 700, color: f.overdue ? 'var(--red)' : 'var(--neon)',
-                  }}>
-                    {f.client_name.slice(0, 2).toUpperCase()}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--t)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {f.client_name}
-                    </p>
-                    <p style={{ fontSize: 11, color: 'var(--t3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {f.vehicle_interest ?? '—'}
-                    </p>
-                  </div>
-                  <span style={{
-                    fontSize: 10, fontWeight: 700, flexShrink: 0, padding: '4px 8px', borderRadius: 8,
-                    background: f.overdue ? 'rgba(239,68,68,.15)' : f.isToday ? 'rgba(255,159,10,.15)' : 'var(--el)',
-                    color: f.overdue ? 'var(--red)' : f.isToday ? 'var(--yel)' : 'var(--t3)',
-                  }}>
-                    {f.overdue ? 'ATRASADO' : f.isToday ? 'HOJE' : timeAgo(f.next_followup_at!)}
-                  </span>
+                  {v.initials}
                 </div>
-              ))}
-            </div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--t)' }}>{v.name.split(' ')[0]}</p>
+                </div>
+                <span style={{ fontSize: 13, fontFamily: 'var(--fm)', color: i === 0 ? 'var(--neon)' : 'var(--t2)', fontWeight: 700 }}>
+                  {v.won}<span style={{ color: 'var(--t3)', fontWeight: 400 }}>/{v.goal || '—'}</span>
+                </span>
+              </div>
+            ))}
           </div>
         )}
 
-        {/* Leads por dia — gráfico compacto */}
-        <Card>
-          <CardHeader style={{ padding: '14px 16px 0' }}>
-            <CardTitle>Leads por dia</CardTitle>
-            <span style={{ fontSize: 10, color: 'var(--t3)' }}>14 dias</span>
-          </CardHeader>
-          <CardContent style={{ padding: '8px 4px 12px' }}>
-            <ResponsiveContainer width="100%" height={140}>
-              <AreaChart data={leadsPerDay ?? []} margin={{ top: 4, right: 4, bottom: 0, left: -32 }}>
-                <defs>
-                  <linearGradient id="lgm" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--neon)" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="var(--neon)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--b)" vertical={false} />
-                <XAxis dataKey="name" tick={{ fill: 'var(--t3)', fontSize: 9 }} axisLine={false} tickLine={false} interval={3} />
-                <YAxis tick={{ fill: 'var(--t3)', fontSize: 9 }} axisLine={false} tickLine={false} />
-                <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="leads" name="Leads" stroke="var(--neon)" strokeWidth={2}
-                  fill="url(#lgm)" dot={{ fill: 'var(--neon)', r: 3, strokeWidth: 0 }} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Ranking vendedores */}
-        {!!vendorRanking?.length && (
-          <Card>
-            <CardHeader style={{ padding: '14px 16px 0' }}>
-              <CardTitle>Ranking vendedores</CardTitle>
-              <span style={{ fontSize: 10, color: 'var(--t3)' }}>Mês atual</span>
-            </CardHeader>
-            <CardContent style={{ padding: '10px 16px 14px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {vendorRanking.map((v, i) => (
-                  <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: i === 0 ? 'var(--neon)' : 'var(--t3)', width: 18, flexShrink: 0 }}>
-                      {i + 1}
-                    </span>
-                    <div style={{
-                      width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
-                      background: i === 0 ? 'var(--ng)' : 'var(--el)',
-                      border: `1px solid ${i === 0 ? 'var(--nb)' : 'var(--b)'}`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 11, fontWeight: 700, color: i === 0 ? 'var(--neon)' : 'var(--t2)',
-                    }}>
-                      {v.initials}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--t)' }}>{v.name.split(' ')[0]}</p>
-                    </div>
-                    <span style={{ fontSize: 13, fontFamily: 'var(--fm)', color: 'var(--t2)', fontWeight: 700 }}>
-                      {v.won} / {v.goal || '—'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
     )
   }

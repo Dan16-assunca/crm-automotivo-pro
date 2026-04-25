@@ -256,11 +256,29 @@ body { overscroll-behavior: none; }
 /* Momentum scrolling em contêineres com overflow */
 .scroll-touch { -webkit-overflow-scrolling: touch; }
 
-@media (max-width: 767px) {
+@media (max-width: 1024px) {
   /* Garante que inputs não disparem zoom no iOS (font < 16px causa zoom) */
   input, textarea, select { font-size: 16px !important; }
 
   /* Tap targets mínimos (iOS HIG: 44px) */
   button, [role="button"], a { min-height: 44px; }
+
+  /* Sidebar nunca aparece no mobile */
+  [data-sidebar] { display: none !important; }
+
+  /* Topbar desktop nunca aparece no mobile */
+  [data-topbar] { display: none !important; }
+}
+
+/* ─── Micro-interações mobile ─── */
+@media (hover: none) and (pointer: coarse) {
+  /* Remove hover states em touch devices */
+  button:hover { opacity: 1 !important; }
+}
+
+/* ─── Scrollbar invisível no mobile ─── */
+@media (max-width: 1024px) {
+  ::-webkit-scrollbar { display: none; }
+  * { scrollbar-width: none; }
 }
 
