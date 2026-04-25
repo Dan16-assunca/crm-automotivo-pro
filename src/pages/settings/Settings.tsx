@@ -867,7 +867,7 @@ function BillingSection() {
                 border: `1px solid ${current ? p.color + '40' : 'var(--bs)'}`,
                 position: 'relative',
               }}>
-                {p.recommended && !current && (
+                {('recommended' in p) && (p as { recommended?: boolean }).recommended && !current && (
                   <div style={{
                     position: 'absolute', top: -1, right: 12,
                     background: 'var(--neon)', color: '#000',

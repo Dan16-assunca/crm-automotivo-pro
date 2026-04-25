@@ -115,7 +115,6 @@ export function QuickAddLeadSheet({ open, onClose }: Props) {
         })
         .select()
         .single()
-        .abortSignal(controller.signal)
 
       if (error) throw error
 
