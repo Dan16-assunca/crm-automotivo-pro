@@ -95,11 +95,12 @@ function MobileLayout() {
 
   return (
     <div style={{
-      display:    'flex',
-      flexDirection: 'column',
-      height:     '100dvh',
-      background: 'var(--bg)',
-      overflow:   'hidden',
+      display:        'flex',
+      flexDirection:  'column',
+      height:         '100dvh',
+      background:     'var(--bg)',
+      // Não usar overflow:hidden aqui — bloqueia touch scroll nos filhos em iOS/Android.
+      // O conteúdo não vaza porque o layout é exato (topbar + main:flex-1 + bottomTab:fixed).
     }}>
       <MobileTopbar />
       <TrialBanner />

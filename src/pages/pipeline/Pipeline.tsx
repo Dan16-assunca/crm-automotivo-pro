@@ -460,8 +460,8 @@ function KanbanColumn({ stage, leads, onLeadClick, onAddLead, selectedLeadId, is
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', flexShrink: 0,
-      width: isMobileCol ? 'min(260px, 85vw)' : 210,
-      // Scroll-snap: cada coluna trava no lugar
+      // Mobile: 80vw para ver a próxima coluna como "peek" (indica que tem mais)
+      width: isMobileCol ? 'min(280px, 80vw)' : 210,
       scrollSnapAlign: isMobileCol ? 'start' : 'none',
     }}>
       {/* Header */}
@@ -651,7 +651,8 @@ export default function Pipeline() {
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
+    // Delay menor = drag começa mais rápido no touch. Tolerance maior = distingue melhor scroll de drag.
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 10 } })
   )
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
@@ -993,10 +994,13 @@ export default function Pipeline() {
         >
           <div style={{
             display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 12, height: '100%',
-            // Scroll-snap no mobile: exibe uma coluna por vez com peek da próxima
+            WebkitOverflowScrolling: 'touch',
+            // Mobile: scroll-snap suave (proximity = não força snap, só ajuda a parar numa coluna)
+            // overscrollBehaviorX evita que o scroll do kanban propague para a página
             ...(isMobile ? {
-              scrollSnapType:    'x mandatory',
-              WebkitOverflowScrolling: 'touch',
+              scrollSnapType:       'x proximity',
+              overscrollBehaviorX:  'contain',
+              scrollPaddingLeft:    '14px',
             } : {}),
           }}>
             {stages?.map(stage => (
