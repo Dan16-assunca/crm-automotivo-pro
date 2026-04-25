@@ -373,7 +373,7 @@ export function Sidebar() {
               >
                 {[
                   { label: '⚙️ Configurações', to: '/configuracoes' },
-                  { label: '👤 Meu perfil',    to: '/configuracoes' },
+                  { label: '💳 Planos & Assinatura', to: '/planos' },
                 ].map(item => (
                   <div key={item.label}
                     onClick={() => { navigate(item.to); setShowUserMenu(false) }}

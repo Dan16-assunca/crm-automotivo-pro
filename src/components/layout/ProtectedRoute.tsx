@@ -1,8 +1,11 @@
 import { useEffect } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { getSlugFromHost, redirectToTenant } from '@/hooks/useTenant'
 import type { UserRole } from '@/types'
+
+// Rotas acessíveis mesmo com trial expirado / conta suspensa
+const BILLING_WHITELIST = ['/planos', '/configuracoes', '/onboarding']
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -12,7 +15,8 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, roles }: ProtectedRouteProps) {
-  const { user, isLoading, setLoading } = useAuthStore()
+  const { user, store, isLoading, setLoading } = useAuthStore()
+  const location = useLocation()
 
   // Safety net: se loading demorar mais de 8s, força off
   useEffect(() => {
@@ -50,6 +54,17 @@ export function ProtectedRoute({ children, roles }: ProtectedRouteProps) {
 
   // Não autenticado → login
   if (!user) return <Navigate to="/login" replace />
+
+  // ── Verifica status da conta (trial expirado / suspensa / cancelada) ─────
+  const isBillingRoute = BILLING_WHITELIST.some(p => location.pathname.startsWith(p))
+  if (!isBillingRoute && store) {
+    const status = store.status ?? 'active'
+    const trialExpired = status === 'trial' && store.trial_ends_at
+      ? new Date(store.trial_ends_at) < new Date()
+      : false
+    const blocked = trialExpired || status === 'suspended' || status === 'cancelled'
+    if (blocked) return <Navigate to="/planos" replace />
+  }
 
   // Normaliza roles desconhecidos (ex: 'owner') para 'admin'
   const KNOWN_ROLES: UserRole[] = ['admin', 'manager', 'salesperson']

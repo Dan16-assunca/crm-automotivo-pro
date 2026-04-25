@@ -58,7 +58,7 @@ function TrialBanner() {
         {message}
       </span>
       <button
-        onClick={() => navigate('/settings')}
+        onClick={() => navigate('/planos')}
         style={{
           fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 6,
           background: textColor, color: isCritical ? '#fff' : '#000',

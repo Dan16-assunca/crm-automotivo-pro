@@ -4,7 +4,7 @@ import {
   Plus, Bot, Zap, Play, Pause, Trash2, Edit2, X,
   MessageSquare, Thermometer, GitBranch, CheckSquare,
   Archive, AlertCircle, Check, ArrowDown, Settings2,
-  ChevronRight,
+  ChevronRight, Library,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
@@ -34,6 +34,87 @@ const TEMP_OPTS = [
 ]
 
 const VARS = ['{{nome}}', '{{telefone}}', '{{veiculo}}', '{{vendedor}}', '{{loja}}']
+
+// ─── Templates de automação prontos ──────────────────────────────────────────
+
+interface AutomationTemplate {
+  id: string
+  name: string
+  description: string
+  emoji: string
+  color: string
+  trigger_type: 'new_lead' | 'no_contact' | 'stage_change'
+  trigger_config: Record<string, unknown>
+  actions: AutomationAction[]
+  tags: string[]
+}
+
+const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
+  {
+    id: 'whatsapp_boas_vindas',
+    name: 'Boas-vindas WhatsApp',
+    description: 'Mensagem automática para leads que chegam pelo WhatsApp',
+    emoji: '👋',
+    color: '#25d366',
+    trigger_type: 'new_lead',
+    trigger_config: {},
+    tags: ['WhatsApp', 'Novo lead'],
+    actions: [
+      { type: 'send_whatsapp', delay_days: 0, config: { message: 'Olá {{nome}}! Seja bem-vindo(a) à {{loja}} 🚗\n\nVi que você entrou em contato e quero te ajudar a encontrar o veículo ideal.\n\nQual seu interesse atual? Já tem algo em mente?' } },
+      { type: 'send_whatsapp', delay_days: 1, config: { message: 'Oi {{nome}}! Tudo bem?\nGostaria de te mostrar algumas opções do nosso estoque que podem te interessar. Posso enviar?' } },
+      { type: 'create_task',   delay_days: 2, config: { title: 'Ligar para {{nome}} — aguardando resposta' } },
+    ],
+  },
+  {
+    id: 'reengajamento_frio',
+    name: 'Reengajamento — Lead Frio',
+    description: 'Reativa leads que não respondem há mais de 7 dias',
+    emoji: '🔄',
+    color: '#f97316',
+    trigger_type: 'no_contact',
+    trigger_config: { days: 7 },
+    tags: ['Reengajamento', 'Lead frio'],
+    actions: [
+      { type: 'send_whatsapp',      delay_days: 0,  config: { message: 'Oi {{nome}}! Percebi que faz um tempinho que não conversamos. Ainda está procurando um veículo? Estou aqui para ajudar 😊' } },
+      { type: 'change_temperature', delay_days: 0,  config: { temperature: 'cold' } },
+      { type: 'send_whatsapp',      delay_days: 3,  config: { message: '{{nome}}, entramos com algumas novidades no estoque esta semana. Posso te mostrar algo especial?' } },
+      { type: 'create_task',        delay_days: 7,  config: { title: 'Decisão: arquivar ou insistir em {{nome}}' } },
+      { type: 'archive_lead',       delay_days: 14, config: {} },
+    ],
+  },
+  {
+    id: 'pos_venda',
+    name: 'Pós-venda & Indicação',
+    description: 'Nurtura cliente após a compra e solicita indicações',
+    emoji: '🏆',
+    color: '#a78bfa',
+    trigger_type: 'stage_change',
+    trigger_config: {},
+    tags: ['Pós-venda', 'Indicação'],
+    actions: [
+      { type: 'send_whatsapp', delay_days: 0,  config: { message: '{{nome}}, parabéns pela sua aquisição! 🎉 Ficamos muito felizes em ter ajudado. Qualquer dúvida sobre o veículo, estou à disposição!' } },
+      { type: 'send_whatsapp', delay_days: 7,  config: { message: 'Oi {{nome}}, tudo certo com seu novo veículo? Espero que esteja aproveitando! Qualquer ajuda é só falar 😊' } },
+      { type: 'send_whatsapp', delay_days: 30, config: { message: '{{nome}}, como está sendo a experiência com o veículo? Se conhecer alguém procurando um carro, minha indicação é sempre muito bem-vinda! Obrigado 🙏' } },
+      { type: 'create_task',   delay_days: 90, config: { title: 'Contato de relacionamento com {{nome}} — 3 meses pós-venda' } },
+    ],
+  },
+  {
+    id: 'urgencia_oferta',
+    name: 'Oferta por Tempo Limitado',
+    description: 'Cria senso de urgência para leads que não fecharam',
+    emoji: '⚡',
+    color: '#ef4444',
+    trigger_type: 'no_contact',
+    trigger_config: { days: 5 },
+    tags: ['Urgência', 'Conversão'],
+    actions: [
+      { type: 'send_whatsapp',      delay_days: 0, config: { message: '{{nome}}, tenho uma novidade importante para você! Estamos com uma condição especial de financiamento esta semana — parcelas reduzidas e entrada facilitada. Quer saber mais?' } },
+      { type: 'change_temperature', delay_days: 0, config: { temperature: 'warm' } },
+      { type: 'send_whatsapp',      delay_days: 2, config: { message: 'Oi {{nome}}! A promoção que te mencionei encerra em breve. O {{veiculo}} que você se interessou ainda está disponível. Posso reservar para você dar uma olhada?' } },
+      { type: 'create_task',        delay_days: 3, config: { title: 'Ligar URGENTE para {{nome}} — proposta expirando' } },
+    ],
+  },
+]
 
 const PRESET_21: { day: number; label: string; type: 'whatsapp' | 'system' | 'task'; actionObj: AutomationAction }[] = [
   { day: 0,  label: 'Boas-vindas',                    type: 'whatsapp', actionObj: { type: 'send_whatsapp',      delay_days: 0,  config: { message: 'Olá {{nome}}! Bem-vindo(a) à {{loja}}. Temos ótimas opções para você! Como posso ajudar?' } } },
@@ -740,6 +821,87 @@ function AutomationCard({
   )
 }
 
+// ─── Modal de templates ───────────────────────────────────────────────────────
+
+function TemplatesModal({ onClose, onImport }: {
+  onClose: () => void
+  onImport: (tpl: AutomationTemplate) => void
+}) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 200,
+      background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 16,
+    }} onClick={onClose}>
+      <div style={{
+        background: 'var(--surf)', border: '1px solid var(--bs)', borderRadius: 14,
+        width: '100%', maxWidth: 640, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+        boxShadow: '0 24px 48px rgba(0,0,0,.5)',
+      }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--bs)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--t)', margin: 0 }}>Templates de Automação</h2>
+            <p style={{ fontSize: 11, color: 'var(--t3)', margin: '3px 0 0' }}>Importe um template pronto e personalize depois</p>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', display: 'flex', padding: 4 }}>
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Lista */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {AUTOMATION_TEMPLATES.map(tpl => (
+            <div key={tpl.id} style={{
+              background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 10,
+              padding: '14px 16px', display: 'flex', alignItems: 'flex-start', gap: 14,
+              cursor: 'pointer', transition: 'border-color .15s',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = tpl.color + '60')}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--bs)')}
+              onClick={() => onImport(tpl)}
+            >
+              <div style={{
+                width: 40, height: 40, borderRadius: 10, flexShrink: 0, fontSize: 20,
+                background: tpl.color + '18', border: `1px solid ${tpl.color}30`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {tpl.emoji}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--t)', margin: 0 }}>{tpl.name}</p>
+                  <span style={{ fontSize: 8, fontWeight: 700, color: tpl.color, background: tpl.color + '18', padding: '2px 7px', borderRadius: 10, textTransform: 'uppercase', letterSpacing: '.07em' }}>
+                    {tpl.actions.length} ações
+                  </span>
+                </div>
+                <p style={{ fontSize: 11, color: 'var(--t3)', margin: '0 0 8px' }}>{tpl.description}</p>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {tpl.tags.map(tag => (
+                    <span key={tag} style={{ fontSize: 9, color: 'var(--t3)', background: 'var(--el)', border: '1px solid var(--b)', padding: '2px 7px', borderRadius: 10 }}>
+                      {tag}
+                    </span>
+                  ))}
+                  <span style={{ fontSize: 9, color: 'var(--t3)' }}>
+                    · Gatilho: {tpl.trigger_type === 'new_lead' ? 'Novo Lead' : tpl.trigger_type === 'no_contact' ? `Sem contato ${(tpl.trigger_config.days as number) ?? 7}d` : 'Mudança de etapa'}
+                  </span>
+                </div>
+              </div>
+              <button style={{
+                flexShrink: 0, padding: '6px 14px', borderRadius: 7, fontSize: 11, fontWeight: 700,
+                background: tpl.color + '18', border: `1px solid ${tpl.color}40`, color: tpl.color, cursor: 'pointer',
+              }}>
+                Importar
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function Automations() {
@@ -750,6 +912,7 @@ export default function Automations() {
   const [editTarget, setEditTarget]       = useState<Automation | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [activatingPreset, setActivatingPreset] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
 
   const { data: stages = [] } = useQuery({
     queryKey: ['pipeline-stages-simple', store?.id],
@@ -834,6 +997,17 @@ export default function Automations() {
     else createMutation.mutate(data)
   }
 
+  const importTemplate = useCallback((tpl: AutomationTemplate) => {
+    setShowTemplates(false)
+    createMutation.mutate({
+      name: tpl.name,
+      description: tpl.description,
+      trigger_type: tpl.trigger_type,
+      trigger_config: tpl.trigger_config,
+      actions: tpl.actions,
+    })
+  }, [createMutation])
+
   const totalActive  = automations.filter(a => a.active).length
   const totalPaused  = automations.filter(a => !a.active).length
   const totalActions = automations.reduce((s, a) => s + a.actions.length, 0)
@@ -847,14 +1021,24 @@ export default function Automations() {
           <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--t)' }}>Automações & Régua</h1>
           <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>Fluxos visuais de follow-up e nutrição de leads</p>
         </div>
-        <button onClick={() => { setEditTarget(null); setShowEditor(true) }}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px',
-            borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
-            background: 'var(--neon)', border: 'none', color: '#000',
-          }}>
-          <Plus size={13} /> Nova Automação
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setShowTemplates(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px',
+              borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              background: 'var(--el)', border: '1px solid var(--b)', color: 'var(--t2)',
+            }}>
+            <Library size={13} /> Templates
+          </button>
+          <button onClick={() => { setEditTarget(null); setShowEditor(true) }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px',
+              borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              background: 'var(--neon)', border: 'none', color: '#000',
+            }}>
+            <Plus size={13} /> Nova Automação
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -987,6 +1171,11 @@ export default function Automations() {
           O campo <b style={{ color: 'var(--t2)' }}>Dia</b> indica quantos dias após o gatilho a ação será disparada.
         </p>
       </div>
+
+      {/* Modal de templates */}
+      {showTemplates && (
+        <TemplatesModal onClose={() => setShowTemplates(false)} onImport={importTemplate} />
+      )}
 
       {/* Editor visual */}
       {showEditor && (

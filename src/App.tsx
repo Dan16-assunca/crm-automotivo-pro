@@ -31,6 +31,7 @@ const Calculator = lazy(() => import('@/pages/calculator/Calculator'))
 const Integrations = lazy(() => import('@/pages/integrations/Integrations'))
 const Analytics = lazy(() => import('@/pages/analytics/Analytics'))
 const Instagram = lazy(() => import('@/pages/instagram/Instagram'))
+const Planos = lazy(() => import('@/pages/planos/Planos'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -104,6 +105,7 @@ function AppInner() {
             <Route path="calculadora" element={<Calculator />} />
             <Route path="integracoes" element={<Integrations />} />
             <Route path="onboarding" element={<Onboarding />} />
+            <Route path="planos" element={<Planos />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>

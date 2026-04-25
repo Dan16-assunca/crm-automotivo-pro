@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Car, CheckCircle, MessageCircle, Users, Plus,
   ChevronRight, ArrowRight, Smartphone, QrCode,
-  UserPlus, Target, X,
+  UserPlus, ExternalLink, X, DollarSign,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
@@ -21,10 +21,10 @@ interface Step {
 }
 
 const STEPS: Step[] = [
-  { id: 'welcome',   title: 'Bem-vindo ao CRM Auto!',     subtitle: 'Sua loja foi criada com sucesso',  icon: Car,         color: '#3DF710' },
-  { id: 'whatsapp',  title: 'Conecte o WhatsApp',          subtitle: 'Centralize todas as conversas',    icon: MessageCircle, color: '#25D366' },
-  { id: 'team',      title: 'Convide sua equipe',          subtitle: 'Adicione vendedores e gerentes',   icon: Users,       color: '#6366F1' },
-  { id: 'first-lead', title: 'Adicione seu primeiro lead', subtitle: 'Comece a usar o pipeline',        icon: Target,      color: '#F59E0B' },
+  { id: 'welcome',       title: 'Bem-vindo ao CRM Auto!',       subtitle: 'Sua loja foi criada com sucesso', icon: Car,           color: '#3DF710' },
+  { id: 'whatsapp',      title: 'Conecte o WhatsApp',            subtitle: 'Centralize todas as conversas',   icon: MessageCircle, color: '#25D366' },
+  { id: 'team',          title: 'Convide sua equipe',            subtitle: 'Adicione vendedores e gerentes',  icon: Users,         color: '#6366F1' },
+  { id: 'first-vehicle', title: 'Cadastre seu primeiro veículo', subtitle: 'Coloque o estoque no sistema',    icon: Car,           color: '#F59E0B' },
 ]
 
 // ─── Sub-steps ────────────────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ function StepWelcome({ storeName }: { storeName: string }) {
         {[
           { icon: MessageCircle, label: 'Conectar WhatsApp', color: '#25D366' },
           { icon: Users,         label: 'Convidar vendedores', color: '#6366F1' },
-          { icon: Target,        label: 'Adicionar primeiro lead', color: '#F59E0B' },
+          { icon: Car,           label: 'Cadastrar primeiro veículo', color: '#F59E0B' },
         ].map((item, i) => {
           const Icon = item.icon
           return (
@@ -86,6 +86,7 @@ function StepWelcome({ storeName }: { storeName: string }) {
 }
 
 function StepWhatsApp() {
+  const navigate = useNavigate()
   return (
     <div>
       <div style={{
@@ -95,16 +96,16 @@ function StepWhatsApp() {
       }}>
         <Smartphone size={20} style={{ color: '#25D366', flexShrink: 0, marginTop: 2 }} />
         <div>
-          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--t)', marginBottom: 4 }}>Como funciona?</p>
+          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--t)', marginBottom: 4 }}>Por que conectar agora?</p>
           <p style={{ fontSize: 12, color: 'var(--t3)', lineHeight: 1.7, margin: 0 }}>
-            Conecte o número de WhatsApp da sua concessionária. Todas as conversas ficam centralizadas no CRM — sua equipe inteira responde pelo mesmo número.
+            Com o WhatsApp conectado, leads que te mandam mensagem <strong style={{ color: 'var(--t2)' }}>entram automaticamente no CRM</strong>. Sua equipe responde por aqui e tudo fica registrado.
           </p>
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 24 }}>
         {[
-          { n: '1', icon: QrCode,      label: 'Acesse Configurações → WhatsApp' },
+          { n: '1', icon: QrCode,      label: 'Clique no botão abaixo → Configurações' },
           { n: '2', icon: Smartphone,  label: 'Clique em "Adicionar número"' },
           { n: '3', icon: CheckCircle, label: 'Escaneie o QR Code com o celular' },
         ].map((step, i) => {
@@ -123,9 +124,14 @@ function StepWhatsApp() {
         })}
       </div>
 
-      <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 20, textAlign: 'center', opacity: .7 }}>
-        Você pode pular e conectar depois em Configurações
-      </p>
+      <button onClick={() => navigate('/configuracoes')} style={{
+        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        padding: '12px 0', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 700,
+        background: 'rgba(37,211,102,.12)', border: '1px solid rgba(37,211,102,.3)', color: '#25D366',
+        transition: 'all .15s',
+      }}>
+        <ExternalLink size={14} /> Ir para Configurações → WhatsApp
+      </button>
     </div>
   )
 }
@@ -238,48 +244,40 @@ function StepTeam() {
   )
 }
 
-function StepFirstLead({ onDone }: { onDone: () => void }) {
-  const { user } = useAuthStore()
-  const [form, setForm]     = useState({ name: '', phone: '', vehicle: '' })
+function StepFirstVehicle({ onDone }: { onDone: () => void }) {
+  const { store } = useAuthStore()
+  const [form, setForm]     = useState({ brand: '', model: '', year: '', price: '' })
   const [saving, setSaving] = useState(false)
   const [done, setDone]     = useState(false)
+  const [savedName, setSavedName] = useState('')
 
   const handleSave = async () => {
-    if (!form.name.trim()) return
+    if (!form.brand.trim() || !form.model.trim()) return
     setSaving(true)
     try {
-      const { data: profile } = await supabase
-        .from('users')
-        .select('store_id')
-        .eq('id', user!.id)
-        .single()
+      const priceNum = form.price ? parseFloat(form.price.replace(/\D/g, '')) : null
+      const yearNum  = form.year  ? parseInt(form.year, 10) : null
 
-      if (!profile?.store_id) throw new Error('store_id não encontrado')
-
-      // Pega a primeira etapa do pipeline
-      const { data: stages } = await supabase
-        .from('pipeline_stages')
-        .select('id')
-        .eq('store_id', profile.store_id)
-        .order('position', { ascending: true })
-        .limit(1)
-
-      const { error } = await supabase.from('leads').insert({
-        store_id:         profile.store_id,
-        assigned_to:      user!.id,
-        client_name:      form.name.trim(),
-        client_phone:     form.phone.trim() || null,
-        vehicle_interest: form.vehicle.trim() || null,
-        stage_id:         stages?.[0]?.id ?? null,
-        status:           'active',
-        temperature:      'warm',
+      const { error } = await supabase.from('vehicles').insert({
+        store_id:       store!.id,
+        brand:          form.brand.trim(),
+        model:          form.model.trim(),
+        year_model:     yearNum,
+        year_fabrication: yearNum,
+        sale_price:     priceNum,
+        status:         'available',
+        condition:      'used',
+        photos:         [],
+        optionals:      [],
       })
 
       if (error) throw error
+      const name = `${form.brand} ${form.model}`.trim()
+      setSavedName(name)
       setDone(true)
-      toast.success('Lead criado!', `${form.name} adicionado ao pipeline`)
+      toast.success('Veículo cadastrado!', `${name} adicionado ao estoque`)
     } catch (err) {
-      toast.error('Erro ao criar lead', err instanceof Error ? err.message : 'Tente novamente')
+      toast.error('Erro ao cadastrar', err instanceof Error ? err.message : 'Tente novamente')
     } finally {
       setSaving(false)
     }
@@ -302,9 +300,10 @@ function StepFirstLead({ onDone }: { onDone: () => void }) {
       <motion.div initial={{ opacity: 0, scale: .9 }} animate={{ opacity: 1, scale: 1 }}
         style={{ textAlign: 'center', padding: '24px 0' }}>
         <CheckCircle size={48} style={{ color: 'var(--neon)', margin: '0 auto 16px', display: 'block' }} />
-        <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--t)', marginBottom: 8 }}>Lead criado com sucesso!</h3>
+        <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--t)', marginBottom: 8 }}>Veículo cadastrado!</h3>
         <p style={{ fontSize: 13, color: 'var(--t3)', marginBottom: 24 }}>
-          <strong style={{ color: 'var(--t)' }}>{form.name}</strong> já está no seu pipeline.
+          <strong style={{ color: 'var(--t)' }}>{savedName}</strong> já está no seu estoque.
+          Adicione fotos e mais detalhes na página de Estoque.
         </p>
         <button onClick={onDone} style={{
           display: 'inline-flex', alignItems: 'center', gap: 8,
@@ -319,30 +318,43 @@ function StepFirstLead({ onDone }: { onDone: () => void }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div>
-        <label style={lbl}>Nome do cliente *</label>
-        <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-          placeholder="João Silva" style={inp} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div>
+          <label style={lbl}>Marca *</label>
+          <input value={form.brand} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))}
+            placeholder="Ex: Chevrolet" style={inp} />
+        </div>
+        <div>
+          <label style={lbl}>Modelo *</label>
+          <input value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))}
+            placeholder="Ex: Onix" style={inp} />
+        </div>
       </div>
-      <div>
-        <label style={lbl}>WhatsApp</label>
-        <input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-          placeholder="(11) 99999-9999" style={inp} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div>
+          <label style={lbl}>Ano</label>
+          <input value={form.year} onChange={e => setForm(f => ({ ...f, year: e.target.value }))}
+            placeholder="Ex: 2023" inputMode="numeric" style={inp} />
+        </div>
+        <div>
+          <label style={lbl}>Preço de venda</label>
+          <div style={{ position: 'relative' }}>
+            <DollarSign size={12} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)', pointerEvents: 'none' }} />
+            <input value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
+              placeholder="Ex: 65000" inputMode="numeric"
+              style={{ ...inp, paddingLeft: 26 }} />
+          </div>
+        </div>
       </div>
-      <div>
-        <label style={lbl}>Veículo de interesse</label>
-        <input value={form.vehicle} onChange={e => setForm(f => ({ ...f, vehicle: e.target.value }))}
-          placeholder="Ex: BMW X5 2024" style={inp} />
-      </div>
-      <button onClick={handleSave} disabled={saving || !form.name.trim()} style={{
+      <button onClick={handleSave} disabled={saving || !form.brand.trim() || !form.model.trim()} style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
         padding: '11px 0', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
         background: 'var(--neon)', border: 'none', color: '#000',
-        opacity: saving || !form.name.trim() ? .5 : 1, transition: 'opacity .15s',
+        opacity: saving || !form.brand.trim() || !form.model.trim() ? .5 : 1, transition: 'opacity .15s',
         marginTop: 4,
       }}>
         <Plus size={15} />
-        {saving ? 'Salvando...' : 'Adicionar ao pipeline'}
+        {saving ? 'Salvando...' : 'Adicionar ao estoque'}
       </button>
     </div>
   )
@@ -436,12 +448,12 @@ export default function Onboarding() {
               {step === 0 && <StepWelcome storeName={storeName} />}
               {step === 1 && <StepWhatsApp />}
               {step === 2 && <StepTeam />}
-              {step === 3 && <StepFirstLead onDone={() => navigate('/dashboard')} />}
+              {step === 3 && <StepFirstVehicle onDone={() => navigate('/dashboard')} />}
             </motion.div>
           </AnimatePresence>
 
-          {/* Nav buttons (hidden on last step when lead form handles it) */}
-          {!(step === 3) && (
+          {/* Nav buttons (hidden on last step when vehicle form handles it) */}
+          {!(step === STEPS.length - 1) && (
             <div style={{ display: 'flex', gap: 10, marginTop: 28 }}>
               {step > 0 && (
                 <button onClick={() => setStep(s => s - 1)} style={{
@@ -465,7 +477,7 @@ export default function Onboarding() {
             </div>
           )}
 
-          {step === 3 && (
+          {step === STEPS.length - 1 && (
             <button onClick={() => navigate('/dashboard')} style={{
               width: '100%', marginTop: 16, padding: '10px 0', borderRadius: 8,
               fontSize: 12, color: 'var(--t3)', background: 'none', border: 'none',
