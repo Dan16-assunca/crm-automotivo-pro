@@ -108,8 +108,9 @@ function MobileLayout() {
         className="scroll-touch"
         style={{
           flex:          1,
+          minHeight:     0,
           overflowY:     isFullScreen ? 'hidden' : 'auto',
-          overflow:      isFullScreen ? 'hidden' : undefined,
+          overflowX:     'hidden',
           padding:       isFullScreen ? 0 : '12px 14px',
           // Full-screen: só reserva espaço do BottomTabBar (position:fixed)
           // Normal: reserva BottomTabBar + padding extra
@@ -117,9 +118,8 @@ function MobileLayout() {
             ? 'calc(56px + var(--safe-bottom))'
             : 'calc(72px + var(--safe-bottom))',
           background:    'var(--bg)',
-          display:       isFullScreen ? 'flex' : undefined,
+          display:       isFullScreen ? 'flex' : 'block',
           flexDirection: isFullScreen ? 'column' : undefined,
-          minHeight:     0,
         }}
       >
         <Outlet />

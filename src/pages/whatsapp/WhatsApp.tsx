@@ -1764,10 +1764,15 @@ export default function WhatsApp() {
               if (photoUrls.length > 0 && instanceToken && selectedChat) {
                 for (const url of photoUrls) {
                   await new Promise(r => setTimeout(r, 600))
+                  // Adiciona mensagem otimista com a URL pública do Storage como prévia imediata
+                  addOptimisticMedia('image', url, undefined, 'image/jpeg')
                   await evolutionApi.sendMediaUrl(instanceToken, selectedChat.phoneNumber, url, 'image')
                 }
-                // Atualiza histórico de mensagens após enviar fotos
-                setTimeout(() => queryClient.refetchQueries({ queryKey: messagesQueryKey }), 1500)
+                // Atualiza histórico e propaga localSrc para mensagens reais
+                setTimeout(async () => {
+                  await queryClient.refetchQueries({ queryKey: messagesQueryKey })
+                  mergeLocalSrcs()
+                }, 1500)
               }
             }}
           />
