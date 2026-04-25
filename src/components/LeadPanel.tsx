@@ -3,8 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   X, MessageSquare, Phone, Car, DollarSign, MapPin, User, Calendar,
   ChevronRight, Clock, Send, Zap, RefreshCw,
-  TrendingUp,
+  TrendingUp, Sparkles,
 } from 'lucide-react'
+
+const SUPA_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? 'https://eakdywmuewvuzyqfpcpl.supabase.co'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { useLeadPanelStore } from '@/store/leadPanelStore'
@@ -323,7 +325,7 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
   const [dragging, setDragging] = useState(false)
   const dragStart = useRef({ x: 0, y: 0, top: 0, right: 0 })
 
-  const [tab, setTab] = useState<'info' | 'chat'>('info')
+  const [tab, setTab] = useState<'info' | 'vehicles' | 'chat'>('info')
   const [chatMsg, setChatMsg] = useState('')
   const chatEndRef = useRef<HTMLDivElement>(null)
   const [showSchedule, setShowSchedule] = useState(false)
@@ -371,6 +373,38 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
       return (data ?? []) as Activity[]
     },
     enabled: !!leadId && mode === 'view',
+  })
+
+  // ── Vehicle match (calls Edge Function) ──────────────────────────────────
+  const { data: vehicleMatches, isLoading: vehicleMatchLoading, refetch: refetchMatches } = useQuery({
+    queryKey: ['vehicle-matches', leadId],
+    queryFn: async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`${SUPA_URL}/functions/v1/match-vehicles`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token ?? ''}`,
+        },
+        body: JSON.stringify({ lead_id: leadId }),
+      })
+      const json = await res.json() as {
+        matches?: Array<{
+          vehicle: {
+            id: string; brand: string; model: string; version: string | null
+            year_model: number | null; sale_price: number | null; promotional_price: number | null
+            km: number | null; fuel: string | null; condition: string; days_in_stock: number | null
+            photos: string[] | null
+          }
+          score: number
+          reason: string
+        }>
+        message?: string
+      }
+      return json
+    },
+    enabled: !!leadId && tab === 'vehicles' && mode === 'view',
+    staleTime: 5 * 60 * 1000,
   })
 
   const { data: messages, refetch: refetchMsgs, isFetching: loadingMsgs } = useQuery({
@@ -707,25 +741,135 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 3, marginTop: 10 }}>
-          {(['info', 'chat'] as const).map(t => (
+          {([
+            { id: 'info', label: '📋 Info' },
+            { id: 'vehicles', label: '🚗 Matches' },
+            { id: 'chat', label: '💬 Chat' },
+          ] as const).map(t => (
             <button
-              key={t}
-              onClick={() => setTab(t)}
+              key={t.id}
+              onClick={() => setTab(t.id)}
               style={{
-                padding: '4px 12px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 600,
+                padding: '4px 10px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 600,
                 cursor: 'pointer', transition: 'all .15s',
-                background: tab === t ? '#3df710' : '#1a1a1a',
-                color: tab === t ? '#000' : '#9a9a9a',
+                background: tab === t.id ? '#3df710' : '#1a1a1a',
+                color: tab === t.id ? '#000' : '#9a9a9a',
               }}
             >
-              {t === 'info' ? '📋 Info' : '💬 Chat'}
+              {t.label}
             </button>
           ))}
         </div>
       </div>
 
       {/* ── Body ──────────────────────────────────────────────────────────── */}
-      {tab === 'info' ? (
+      {tab === 'vehicles' ? (
+        /* ── Vehicle Matches ──────────────────────────────────────────────── */
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', scrollbarWidth: 'thin', scrollbarColor: '#222 transparent' }}>
+          {vehicleMatchLoading && (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#505050' }}>
+              <RefreshCw size={20} style={{ margin: '0 auto 10px', display: 'block', animation: 'spin 1s linear infinite', opacity: 0.5 }} />
+              <p style={{ fontSize: 12 }}>IA analisando estoque...</p>
+              <p style={{ fontSize: 10, marginTop: 4, color: '#383838' }}>Claude está cruzando perfil do lead com veículos disponíveis</p>
+            </div>
+          )}
+          {!vehicleMatchLoading && vehicleMatches?.message && (
+            <div style={{ textAlign: 'center', padding: '30px 0', color: '#505050' }}>
+              <Car size={28} style={{ margin: '0 auto 10px', display: 'block', opacity: 0.25 }} />
+              <p style={{ fontSize: 12 }}>{vehicleMatches.message}</p>
+            </div>
+          )}
+          {!vehicleMatchLoading && !vehicleMatches && (
+            <div style={{ textAlign: 'center', padding: '30px 0', color: '#505050' }}>
+              <Sparkles size={24} style={{ margin: '0 auto 10px', display: 'block', opacity: 0.3 }} />
+              <p style={{ fontSize: 12, marginBottom: 10 }}>Veja os veículos mais compatíveis com este lead</p>
+              <button onClick={() => refetchMatches()} style={{ ...S.btnNeon, margin: '0 auto', padding: '6px 16px' }}>
+                <Sparkles size={11} /> Analisar com IA
+              </button>
+            </div>
+          )}
+          {vehicleMatches?.matches && vehicleMatches.matches.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <p style={S.sectionTitle}>Top {vehicleMatches.matches.length} compatíveis</p>
+                <button onClick={() => refetchMatches()} style={{ ...S.btnGhost, padding: '3px 8px', fontSize: 10 }}>
+                  <RefreshCw size={10} /> Atualizar
+                </button>
+              </div>
+              {vehicleMatches.matches.map((match, i) => {
+                const v = match.vehicle
+                const price = v.promotional_price ?? v.sale_price
+                const scoreColor = match.score >= 80 ? '#3df710' : match.score >= 60 ? '#F97316' : '#9a9a9a'
+                const photo = v.photos?.[0]
+                return (
+                  <div key={v.id} style={{
+                    background: '#0d0d0d', border: `1px solid ${i === 0 ? '#3df71030' : '#1a1a1a'}`,
+                    borderRadius: 9, overflow: 'hidden',
+                  }}>
+                    <div style={{ display: 'flex', gap: 10, padding: '10px 12px' }}>
+                      {/* Thumbnail */}
+                      <div style={{
+                        width: 64, height: 52, borderRadius: 6, flexShrink: 0,
+                        background: '#1a1a1a', border: '1px solid #222',
+                        overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        {photo
+                          ? <img src={photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          : <Car size={20} style={{ color: '#2a2a2a' }} />
+                        }
+                      </div>
+                      {/* Info */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6 }}>
+                          <p style={{ fontSize: 12, fontWeight: 700, color: '#f5f5f5', lineHeight: 1.2 }}>
+                            {v.brand} {v.model}{v.version ? ' ' + v.version : ''}
+                          </p>
+                          <div style={{
+                            flexShrink: 0, width: 34, height: 34, borderRadius: '50%',
+                            background: scoreColor + '20', border: `1px solid ${scoreColor}40`,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 10, fontWeight: 800, color: scoreColor,
+                          }}>
+                            {match.score}
+                          </div>
+                        </div>
+                        <p style={{ fontSize: 10, color: '#505050', marginTop: 2 }}>
+                          {v.year_model} · {v.condition === 'new' ? 'Novo' : 'Usado'}{v.km ? ` · ${v.km.toLocaleString('pt-BR')} km` : ''}
+                        </p>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: '#3df710', marginTop: 4 }}>
+                          {price ? `R$ ${price.toLocaleString('pt-BR')}` : 'Sob consulta'}
+                          {v.promotional_price && v.sale_price && v.promotional_price < v.sale_price && (
+                            <span style={{ fontSize: 10, color: '#505050', fontWeight: 400, marginLeft: 5, textDecoration: 'line-through' }}>
+                              R$ {v.sale_price.toLocaleString('pt-BR')}
+                            </span>
+                          )}
+                        </p>
+                        {(v.days_in_stock ?? 0) > 30 && (
+                          <span style={{
+                            display: 'inline-block', marginTop: 3,
+                            fontSize: 9, padding: '2px 6px', borderRadius: 6,
+                            background: (v.days_in_stock ?? 0) > 60 ? '#F43F5E20' : '#F9731620',
+                            color: (v.days_in_stock ?? 0) > 60 ? '#F43F5E' : '#F97316',
+                            fontWeight: 700,
+                          }}>
+                            {v.days_in_stock}d no estoque
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {/* AI reason */}
+                    <div style={{ padding: '6px 12px 10px', borderTop: '1px solid #1a1a1a' }}>
+                      <p style={{ fontSize: 10, color: '#9a9a9a', lineHeight: 1.4 }}>
+                        <span style={{ color: '#3df710', fontWeight: 700 }}>🤖 IA: </span>{match.reason}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      ) : tab === 'info' ? (
         <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'thin', scrollbarColor: '#222 transparent' }}>
 
           {/* Origem & Entrada */}

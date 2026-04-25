@@ -352,6 +352,29 @@ function NodeConfigPanel({ action, index, stages, onChange, onClose }: {
                 </button>
               ))}
             </div>
+            {/* AI personalize toggle */}
+            <button
+              onClick={() => onChange({ ...action, config: { ...action.config, ai_personalize: !action.config.ai_personalize } })}
+              style={{
+                marginTop: 8, display: 'flex', alignItems: 'center', gap: 7, width: '100%',
+                padding: '7px 10px', borderRadius: 7, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                border: `1px solid ${action.config.ai_personalize ? 'rgba(139,92,246,.5)' : 'var(--b)'}`,
+                background: action.config.ai_personalize ? 'rgba(139,92,246,.1)' : 'transparent',
+                color: action.config.ai_personalize ? '#BF5AF2' : 'var(--t3)',
+                transition: 'all .15s',
+              }}
+            >
+              <Bot size={12} />
+              🤖 Personalizar com IA
+              <span style={{ marginLeft: 'auto', fontSize: 9, opacity: .7 }}>
+                {action.config.ai_personalize ? 'ATIVO' : 'INATIVO'}
+              </span>
+            </button>
+            {action.config.ai_personalize && (
+              <p style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4, lineHeight: 1.4, opacity: .7 }}>
+                Claude Haiku irá reescrever esta mensagem para cada lead com base no perfil individual antes do envio.
+              </p>
+            )}
           </div>
         )}
 

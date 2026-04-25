@@ -12,6 +12,7 @@ const supabase = createClient(
 
 const UAZAPI_BASE_URL    = (Deno.env.get('UAZAPI_BASE_URL') ?? '').replace(/\/$/, '')
 const UAZAPI_ADMIN_TOKEN = Deno.env.get('UAZAPI_ADMIN_TOKEN') ?? ''
+const ANTHROPIC_API_KEY  = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -115,6 +116,58 @@ async function sendWhatsApp(
   }
 }
 
+// ─── IA: personaliza mensagem de follow-up ────────────────────────────────────
+
+async function personalizeMessage(
+  template: string,
+  lead: Lead,
+  loja: string,
+): Promise<string> {
+  if (!ANTHROPIC_API_KEY) return template // sem chave → usa template direto
+
+  try {
+    const daysSinceContact = daysSince(lead.last_contact_at)
+    const prompt = `Você é um especialista em vendas automotivas. Reescreva a mensagem de follow-up abaixo de forma mais personalizada e natural, sem alterar o objetivo.
+
+Perfil do lead:
+- Nome: ${lead.client_name}
+- Temperatura: ${lead.temperature ?? 'morno'}
+- Interesse: ${lead.vehicle_interest ?? 'não informado'}
+- Dias sem contato: ${daysSinceContact === 9999 ? 'nunca contatado' : daysSinceContact + ' dias'}
+- Loja: ${loja}
+
+Mensagem original:
+${template}
+
+Regras:
+- Mantenha o mesmo tom e objetivo
+- Use o nome do lead naturalmente
+- Máximo 3 frases
+- Não invente informações
+- Responda SOMENTE com o texto da mensagem, sem aspas ou explicações`
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 200,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    })
+    const data = await res.json() as { content?: Array<{ text: string }> }
+    const text = data?.content?.[0]?.text?.trim()
+    if (text && text.length > 10) return text
+  } catch (e) {
+    console.error('[run-automations] AI personalize error:', e)
+  }
+  return template
+}
+
 // ─── Executor de ação ─────────────────────────────────────────────────────────
 
 async function executeAction(
@@ -133,7 +186,11 @@ async function executeAction(
   switch (action.type) {
 
     case 'send_whatsapp': {
-      const message = interpolate((action.config.message as string) ?? '', vars)
+      let message = interpolate((action.config.message as string) ?? '', vars)
+      // Se ai_personalize estiver ativo e ANTHROPIC_API_KEY disponível, personaliza com IA
+      if (action.config.ai_personalize === true) {
+        message = await personalizeMessage(message, lead, storeVars.loja)
+      }
       const phone   = lead.client_phone
       if (!phone) return { ok: false, error: 'Lead sem telefone' }
       const ok = await sendWhatsApp(storeVars.instanceToken, phone, message)

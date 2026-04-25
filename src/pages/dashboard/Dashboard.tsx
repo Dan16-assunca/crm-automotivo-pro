@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import {
   Users, TrendingUp, DollarSign, Flame, AlertCircle,
   ArrowUpRight, ArrowDownRight, MessageSquare, Edit2,
-  LayoutDashboard, Eye, EyeOff, X as XIcon, Check,
+  LayoutDashboard, Eye, EyeOff, X as XIcon, Check, Bell,
 } from 'lucide-react'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import {
@@ -256,6 +256,27 @@ export default function Dashboard() {
     enabled: !!storeId,
   })
 
+  // ── Lead alerts ──
+  const { data: leadAlerts } = useQuery({
+    queryKey: ['lead-alerts', storeId],
+    queryFn: async () => {
+      const { data } = await supabase.from('lead_alerts')
+        .select('id, lead_id, type, title, message, severity, expires_at, leads(client_name)')
+        .eq('store_id', storeId)
+        .gt('expires_at', new Date().toISOString())
+        .order('severity', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(8)
+      return (data ?? []) as Array<{
+        id: string; lead_id: string; type: string; title: string; message: string;
+        severity: string; expires_at: string; leads: { client_name: string } | null
+      }>
+    },
+    enabled: !!storeId,
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 10 * 60 * 1000, // re-check every 10 min
+  })
+
   // ── Financial metrics ──
   const { data: finMetrics } = useQuery({
     queryKey: ['fin-metrics', storeId],
@@ -371,6 +392,42 @@ export default function Dashboard() {
                 <p style={{ fontSize: 22, fontWeight: 800, color: 'var(--t)', marginTop: 5, lineHeight: 1, letterSpacing: '-.02em' }}>{k.value}</p>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* ── Alertas de Leads ── */}
+        {leadAlerts && leadAlerts.length > 0 && (
+          <div style={{ background: 'var(--card)', border: '1px solid rgba(239,68,68,.2)', borderRadius: 16, overflow: 'hidden' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '12px 14px 10px', borderBottom: '1px solid var(--bs)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Bell size={13} style={{ color: '#F43F5E' }} />
+                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--t)', textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                  Alertas IA
+                </p>
+              </div>
+              <span style={{ fontSize: 10, fontWeight: 800, color: '#fff', background: 'var(--red)', padding: '3px 8px', borderRadius: 20 }}>
+                {leadAlerts.length}
+              </span>
+            </div>
+            {leadAlerts.slice(0, 5).map((alert, idx) => {
+              const severityColor = alert.severity === 'critical' ? '#F43F5E'
+                : alert.severity === 'warning' ? '#F97316'
+                : alert.severity === 'attention' ? '#FFD60A'
+                : 'var(--neon)'
+              return (
+                <div key={alert.id} style={{
+                  padding: '10px 14px',
+                  borderBottom: idx < Math.min(leadAlerts.length, 5) - 1 ? '1px solid var(--bs)' : 'none',
+                  borderLeft: `3px solid ${severityColor}`,
+                }}>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: severityColor }}>{alert.title}</p>
+                  <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 3, lineHeight: 1.3 }}>{alert.message}</p>
+                </div>
+              )
+            })}
           </div>
         )}
 
@@ -594,6 +651,7 @@ export default function Dashboard() {
             { id: 'kpis', label: 'KPIs' },
             { id: 'charts1', label: 'Faturamento / Funil' },
             { id: 'charts2', label: 'Leads / Origem / Estoque' },
+            { id: 'alerts', label: 'Alertas de Leads' },
             { id: 'bottom', label: 'Follow-ups / Ranking / Financeiro' },
           ].map(s => {
             const visible = vis(s.id)
@@ -815,7 +873,49 @@ export default function Dashboard() {
         </Card>
       </div>}
 
-      {/* ── BLOCO 5: Follow-ups + Ranking + Financeiro ── */}
+      {/* ── BLOCO 5: Alertas de Leads (IA + Regras) ── */}
+      {vis('alerts') && leadAlerts && leadAlerts.length > 0 && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+            <Bell size={12} style={{ color: 'var(--neon)' }} />
+            <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.1em' }}>
+              Alertas de Leads
+            </p>
+            <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', background: 'var(--red)', padding: '2px 7px', borderRadius: 10 }}>
+              {leadAlerts.filter(a => a.severity === 'critical' || a.severity === 'warning').length}
+            </span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 8 }}>
+            {leadAlerts.map(alert => {
+              const severityColor = alert.severity === 'critical' ? '#F43F5E'
+                : alert.severity === 'warning' ? '#F97316'
+                : alert.severity === 'attention' ? '#FFD60A'
+                : 'var(--neon)'
+              return (
+                <div key={alert.id} style={{
+                  background: 'var(--card)', border: `1px solid ${severityColor}30`,
+                  borderLeft: `3px solid ${severityColor}`,
+                  borderRadius: 9, padding: '10px 12px',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: severityColor, lineHeight: 1.3 }}>{alert.title}</p>
+                    <span style={{
+                      fontSize: 8, fontWeight: 700, flexShrink: 0,
+                      padding: '2px 6px', borderRadius: 6,
+                      background: `${severityColor}18`, color: severityColor, textTransform: 'uppercase',
+                    }}>
+                      {alert.severity}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4, lineHeight: 1.4 }}>{alert.message}</p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── BLOCO 6: Follow-ups + Ranking + Financeiro ── */}
       {vis('bottom') && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
         {/* Follow-ups */}
         <Card>
