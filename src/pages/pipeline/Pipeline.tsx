@@ -319,17 +319,27 @@ function LeadCard({ lead, onClick, isSelected }: { lead: Lead; onClick: () => vo
 
   const initials = lead.client_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
   const tempColor = lead.temperature === 'hot' ? 'var(--red)' : lead.temperature === 'warm' ? 'var(--amber)' : 'var(--blue)'
-  const tempBg = lead.temperature === 'hot' ? 'rgba(255,68,68,0.12)' : lead.temperature === 'warm' ? 'rgba(245,166,35,0.12)' : 'rgba(74,158,255,0.12)'
-  const tempLabel = lead.temperature === 'hot' ? 'Hot' : lead.temperature === 'warm' ? 'Morno' : 'Frio'
-  const budgetRange = lead.budget_min && lead.budget_max
-    ? `R$ ${Math.round(lead.budget_min / 1000)}k–${Math.round(lead.budget_max / 1000)}k`
-    : lead.budget_max
-      ? `até R$ ${Math.round(lead.budget_max / 1000)}k`
-      : null
+  const tempBg    = lead.temperature === 'hot' ? 'rgba(255,68,68,0.12)' : lead.temperature === 'warm' ? 'rgba(245,166,35,0.12)' : 'rgba(74,158,255,0.12)'
+  const tempLabel = lead.temperature === 'hot' ? '🔥 Quente' : lead.temperature === 'warm' ? '⚡ Morno' : '❄️ Frio'
+
+  const budget = lead.budget_max
+    ? lead.budget_min
+      ? `R$ ${Math.round(lead.budget_min / 1000)}k – ${Math.round(lead.budget_max / 1000)}k`
+      : `até R$ ${lead.budget_max.toLocaleString('pt-BR')}`
+    : null
+
+  // Score de qualificação simples
+  const intentMap: Record<string, number> = { hot: 90, warm: 58, cold: 28 }
+  const score = Math.round((intentMap[lead.temperature] ?? 50 + (lead.budget_max ?? 0) > 80000 ? 15 : 0))
+  const scoreColor = score >= 80 ? 'var(--neon)' : score >= 55 ? 'var(--amber)' : 'var(--blue)'
+
+  // Follow-up
+  const hasFollowup = !!lead.next_followup_at
+  const followupOverdue = hasFollowup && new Date(lead.next_followup_at!) < new Date()
 
   const borderColor = isSelected
     ? 'var(--neon-border)'
-    : isUrgent ? 'rgba(255,68,68,0.35)' : 'var(--border)'
+    : isUrgent ? 'rgba(255,68,68,0.4)' : 'var(--border)'
 
   return (
     <div
@@ -342,104 +352,124 @@ function LeadCard({ lead, onClick, isSelected }: { lead: Lead; onClick: () => vo
       <div style={{
         background: isSelected ? 'var(--neon-dim)' : 'var(--bg2)',
         border: `1px solid ${borderColor}`,
+        borderLeft: `3px solid ${tempColor}`,
         borderRadius: 9,
         padding: '10px 10px 8px',
         cursor: 'pointer',
         userSelect: 'none',
         transition: 'all .15s',
-        marginBottom: 5,
+        marginBottom: 6,
       }}
-        onMouseEnter={e => { if (!isSelected) e.currentTarget.style.borderColor = 'var(--neon-border)' }}
-        onMouseLeave={e => { if (!isSelected) e.currentTarget.style.borderColor = borderColor }}
+        onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.borderColor = 'var(--neon-border)' }}
+        onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.borderColor = borderColor }}
       >
-        {/* Top row: avatar + name + temp badge */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7 }}>
+        {/* Top row: avatar + name + score */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
           <div style={{
-            width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+            width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
             background: tempBg, border: `1.5px solid ${tempColor}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 10, fontWeight: 700, color: tempColor,
+            fontSize: 11, fontWeight: 700, color: tempColor,
           }}>
             {initials}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-              <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {lead.client_name}
-              </p>
-              <span style={{
-                fontSize: 9, fontWeight: 700, flexShrink: 0,
-                color: tempColor, background: tempBg,
-                padding: '1px 5px', borderRadius: 8,
-              }}>
-                {tempLabel}
-              </span>
-            </div>
+            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {lead.client_name}
+            </p>
             {lead.client_phone && (
-              <p style={{ fontSize: 10, color: 'var(--text4)', marginTop: 1 }}>{lead.client_phone}</p>
+              <p style={{ fontSize: 11, color: 'var(--text2)', marginTop: 1 }}>{lead.client_phone}</p>
             )}
           </div>
+          {/* Temp badge */}
+          <span style={{
+            fontSize: 9, fontWeight: 700, flexShrink: 0,
+            color: tempColor, background: tempBg,
+            padding: '2px 6px', borderRadius: 8, whiteSpace: 'nowrap',
+          }}>
+            {tempLabel}
+          </span>
         </div>
 
-        {/* Vehicle line */}
-        {(lead.vehicle_interest || budgetRange) && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6, fontSize: 11 }}>
-            <Car size={10} style={{ color: 'var(--text4)', flexShrink: 0 }} />
-            <span style={{ color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-              {lead.vehicle_interest ?? ''}
-              {budgetRange && <span style={{ color: 'var(--text4)' }}> — {budgetRange}</span>}
-            </span>
+        {/* Vehicle + budget */}
+        {(lead.vehicle_interest || budget) && (
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 5, marginBottom: 6 }}>
+            <Car size={11} style={{ color: 'var(--neon)', flexShrink: 0, marginTop: 1 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {lead.vehicle_interest && (
+                <p style={{ fontSize: 12, color: 'var(--text)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {lead.vehicle_interest}
+                </p>
+              )}
+              {budget && (
+                <p style={{ fontSize: 11, color: 'var(--neon)', fontWeight: 700, marginTop: 1 }}>
+                  {budget}
+                </p>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Tags */}
+        {/* Tags row */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 7 }}>
+          {lead.source && (
+            <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8, background: 'rgba(255,255,255,0.07)', color: 'var(--text2)' }}>
+              {SOURCE_LABEL[lead.source] ?? lead.source}
+            </span>
+          )}
           {lead.payment_type === 'financiamento' && (
-            <span style={{ fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 8, background: 'rgba(74,158,255,0.12)', color: 'var(--blue)' }}>
-              Financ.
+            <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8, background: 'rgba(74,158,255,0.15)', color: '#60A5FA' }}>
+              Financiamento
             </span>
           )}
           {lead.payment_type === 'avista' && (
-            <span style={{ fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 8, background: 'rgba(57,255,20,0.1)', color: 'var(--neon)' }}>
-              À vista
+            <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8, background: 'rgba(57,255,20,0.12)', color: 'var(--neon)' }}>
+              À Vista
             </span>
           )}
           {lead.payment_type === 'consorcio' && (
-            <span style={{ fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 8, background: 'rgba(168,85,247,0.12)', color: 'var(--purple)' }}>
+            <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8, background: 'rgba(168,85,247,0.15)', color: '#C084FC' }}>
               Consórcio
             </span>
           )}
           {lead.trade_in && (
-            <span style={{ fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 8, background: 'rgba(168,85,247,0.12)', color: 'var(--purple)' }}>
-              Troca
+            <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8, background: 'rgba(168,85,247,0.15)', color: '#C084FC' }}>
+              🔄 Troca
             </span>
           )}
           {isUrgent && (
-            <span style={{ fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 8, background: 'rgba(255,68,68,0.12)', color: 'var(--red)' }}>
-              Urgente
+            <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8, background: 'rgba(255,68,68,0.15)', color: '#F87171' }}>
+              🔴 Urgente
+            </span>
+          )}
+          {hasFollowup && (
+            <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8, background: followupOverdue ? 'rgba(255,68,68,0.15)' : 'rgba(245,166,35,0.12)', color: followupOverdue ? '#F87171' : 'var(--amber)' }}>
+              {followupOverdue ? '⚠️ Atrasado' : '📅 Agendado'}
             </span>
           )}
         </div>
 
-        {/* Footer */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 9, color: 'var(--text4)', display: 'flex', alignItems: 'center', gap: 3 }}>
-            <Clock size={8} /> {days}d
+        {/* Footer: dias + score + ações */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 7 }}>
+          <span style={{ fontSize: 10, color: 'var(--text2)', display: 'flex', alignItems: 'center', gap: 3 }}>
+            <Clock size={9} />
+            <strong style={{ color: days > 7 ? 'var(--amber)' : 'var(--text)' }}>{days}d</strong>
+            <span style={{ color: 'var(--text3)' }}>no pipeline</span>
           </span>
-          <span style={{ fontSize: 9, color: 'var(--text4)' }}>
-            {lead.source ? (SOURCE_LABEL[lead.source] ?? lead.source) : ''}
+          <span style={{ fontSize: 10, fontWeight: 700, color: scoreColor }}>
+            ★ {intentMap[lead.temperature] ?? 50}
           </span>
-          <div style={{ display: 'flex', gap: 1 }}>
-            <button style={{ padding: '2px 4px', borderRadius: 4, border: 'none', background: 'transparent', color: 'var(--text4)', cursor: 'pointer' }}
+          <div style={{ display: 'flex', gap: 2 }}>
+            <button style={{ padding: '3px 6px', borderRadius: 5, border: '1px solid rgba(255,255,255,0.08)', background: 'transparent', color: 'var(--text2)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
               onClick={e => e.stopPropagation()}
-              onMouseEnter={e => { e.currentTarget.style.color = '#25D366' }}
-              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text4)' }}
-            ><MessageSquare size={10} /></button>
-            <button style={{ padding: '2px 4px', borderRadius: 4, border: 'none', background: 'transparent', color: 'var(--text4)', cursor: 'pointer' }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#25D366'; e.currentTarget.style.borderColor = '#25D36640' }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text2)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)' }}
+            ><MessageSquare size={11} /></button>
+            <button style={{ padding: '3px 6px', borderRadius: 5, border: '1px solid rgba(255,255,255,0.08)', background: 'transparent', color: 'var(--text2)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
               onClick={e => e.stopPropagation()}
-              onMouseEnter={e => { e.currentTarget.style.color = 'var(--neon)' }}
-              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text4)' }}
-            ><Phone size={10} /></button>
+              onMouseEnter={e => { e.currentTarget.style.color = 'var(--neon)'; e.currentTarget.style.borderColor = 'var(--neon-border)' }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text2)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)' }}
+            ><Phone size={11} /></button>
           </div>
         </div>
       </div>
@@ -495,8 +525,8 @@ function KanbanColumn({ stage, leads, onLeadClick, onAddLead, selectedLeadId, is
           </button>
         </div>
         {totalValue > 0 && (
-          <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text3)' }}>
-            R$ {Math.round(totalValue / 1000)}k
+          <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text2)' }}>
+            R$ {Math.round(totalValue / 1000)}k em pipeline
           </p>
         )}
       </div>
@@ -609,9 +639,9 @@ function PipelineKPIs({ leads, isMobile }: { leads: Lead[]; isMobile: boolean })
             background: 'var(--card)', border: '1px solid var(--bs)',
             borderRadius: 12, padding: '10px 12px',
           }}>
-            <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 4 }}>{k.label}</p>
+            <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--text2)', marginBottom: 4 }}>{k.label}</p>
             <p style={{ fontSize: 18, fontWeight: 800, color: k.color, lineHeight: 1, letterSpacing: '-.02em' }}>{k.value}</p>
-            <p style={{ fontSize: 9, color: 'var(--t3)', marginTop: 3 }}>{k.sub}</p>
+            <p style={{ fontSize: 9, color: 'var(--text2)', marginTop: 3 }}>{k.sub}</p>
           </div>
         ))}
       </div>
