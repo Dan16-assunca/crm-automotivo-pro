@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { toast } from '@/components/ui/Toast'
 import { useLeadPanelStore } from '@/store/leadPanelStore'
+import { getLeadUtmFields, clearStoredUtms } from '@/utils/utm'
 
 interface Props {
   open: boolean
@@ -97,6 +98,8 @@ export function QuickAddLeadSheet({ open, onClose }: Props) {
 
       const budgetNum = budget ? parseFloat(budget.replace(/\D/g, '')) || null : null
 
+      const utmFields = getLeadUtmFields()
+
       const { data: lead, error } = await supabase
         .from('leads')
         .insert({
@@ -112,12 +115,14 @@ export function QuickAddLeadSheet({ open, onClose }: Props) {
           source,
           notes:            notes.trim() || null,
           stage_id:         stages?.[0]?.id ?? null,
+          ...utmFields,
         })
         .select()
         .single()
 
       if (error) throw error
 
+      clearStoredUtms()
       toast.success('Lead cadastrado!', name.trim())
       onClose()
       if (lead) setTimeout(() => openLeadPanel(lead.id), 400)

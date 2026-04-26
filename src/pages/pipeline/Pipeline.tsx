@@ -25,6 +25,7 @@ import { Input } from '@/components/ui/Input'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { toast } from '@/components/ui/Toast'
 import { formatCurrency, daysInStage } from '@/utils/format'
+import { getLeadUtmFields, clearStoredUtms } from '@/utils/utm'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import type { Lead, PipelineStage } from '@/types'
 
@@ -103,6 +104,7 @@ function NewLeadModal({ open, onClose, stages, defaultStageId }: {
 
   const mut = useMutation({
     mutationFn: async (d: FormData) => {
+      const utmFields = getLeadUtmFields()
       const { error } = await supabase.from('leads').insert({
         store_id: store!.id, salesperson_id: user!.id, stage_id: stageId,
         client_name: d.client_name,
@@ -127,8 +129,10 @@ function NewLeadModal({ open, onClose, stages, defaultStageId }: {
           renda: d.renda || null,
           cnh: d.cnh ?? false,
         },
+        ...utmFields,
       })
       if (error) throw error
+      clearStoredUtms()
     },
     onSuccess: () => {
       toast.success('Lead criado!', 'Adicionado ao pipeline')

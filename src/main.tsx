@@ -5,6 +5,10 @@ import { StatusBar, Style } from '@capacitor/status-bar'
 import { SplashScreen } from '@capacitor/splash-screen'
 import '@/index.css'
 import App from '@/App'
+import { captureUtmsFromUrl } from '@/utils/utm'
+
+// Captura UTMs/click IDs da URL assim que o app carrega (first-touch attribution)
+captureUtmsFromUrl()
 
 // Inicialização nativa (só roda dentro do app Capacitor)
 async function initNative() {

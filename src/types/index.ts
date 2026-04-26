@@ -94,6 +94,19 @@ export interface Lead {
   notes?: string
   tags: string[]
   custom_fields: Record<string, unknown>
+  // UTM / Ad Attribution
+  utm_source?: string
+  utm_medium?: string
+  utm_campaign?: string
+  utm_term?: string
+  utm_content?: string
+  utm_ad_id?: string
+  utm_adset_id?: string
+  utm_campaign_id?: string
+  fbclid?: string
+  gclid?: string
+  landing_page?: string
+  referrer?: string
   created_at: string
   updated_at: string
   // Relations
