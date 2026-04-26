@@ -902,6 +902,37 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
                 </p>
               </div>
             </div>
+
+            {/* UTM / Atribuição de Anúncio */}
+            {(lead.utm_source || lead.utm_campaign || lead.fbclid || lead.gclid) && (
+              <div style={{ marginTop: 10, background: 'rgba(61,247,16,.04)', border: '1px solid rgba(61,247,16,.12)', borderRadius: 8, padding: '8px 10px' }}>
+                <p style={{ fontSize: 9, fontWeight: 700, color: '#3df710', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 7 }}>
+                  📊 Atribuição de Anúncio
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
+                  {[
+                    { label: 'Fonte',    value: lead.utm_source    },
+                    { label: 'Meio',     value: lead.utm_medium    },
+                    { label: 'Campanha', value: lead.utm_campaign  },
+                    { label: 'Conteúdo', value: lead.utm_content   },
+                    { label: 'Termo',    value: lead.utm_term      },
+                    { label: 'fbclid',   value: lead.fbclid ? lead.fbclid.slice(0, 14) + '…' : undefined },
+                    { label: 'gclid',    value: lead.gclid  ? lead.gclid.slice(0,  14) + '…' : undefined },
+                  ].filter(r => r.value).map(r => (
+                    <div key={r.label} style={{ background: '#0d0d0d', borderRadius: 6, padding: '4px 7px' }}>
+                      <p style={{ fontSize: 8, color: '#505050', marginBottom: 1 }}>{r.label}</p>
+                      <p style={{ fontSize: 10, color: '#e0e0e0', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.value}>{r.value}</p>
+                    </div>
+                  ))}
+                </div>
+                {lead.landing_page && (
+                  <div style={{ marginTop: 5, background: '#0d0d0d', borderRadius: 6, padding: '4px 7px' }}>
+                    <p style={{ fontSize: 8, color: '#505050', marginBottom: 1 }}>Landing Page</p>
+                    <p style={{ fontSize: 9, color: '#505050', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={lead.landing_page}>{lead.landing_page}</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Qualificação */}

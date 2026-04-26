@@ -7,7 +7,7 @@ import {
 } from 'recharts'
 import {
   TrendingUp, Users, DollarSign, Target, Download,
-  ChevronDown, BarChart2, Filter,
+  ChevronDown, BarChart2, Filter, Megaphone, ExternalLink,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
@@ -70,7 +70,7 @@ export default function Reports() {
   const { store } = useAuthStore()
   const [period, setPeriod] = useState('3m')
   const [showPeriodMenu, setShowPeriodMenu] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview'|'salespeople'|'sources'|'funnel'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview'|'salespeople'|'sources'|'funnel'|'attribution'>('overview')
 
   const { from, to } = useMemo(() => getPeriodRange(period), [period])
 
@@ -80,10 +80,25 @@ export default function Reports() {
     queryFn: async () => {
       const { data } = await supabase
         .from('leads')
-        .select('id, status, source, stage_id, lost_reason, sale_value, salesperson_id, created_at, updated_at, temperature')
+        .select('id, status, source, stage_id, lost_reason, sale_value, salesperson_id, created_at, updated_at, temperature, utm_source, utm_medium, utm_campaign, utm_content, utm_term, fbclid, gclid, won_value')
         .eq('store_id', store!.id)
         .gte('created_at', from)
         .lte('created_at', to)
+      return data ?? []
+    },
+    enabled: !!store?.id,
+  })
+
+  // ── Campanhas + investimento ──────────────────────────────────────────────────
+  const { data: campaignSpend = [] } = useQuery({
+    queryKey: ['campaign-spend', store?.id, from, to],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('campaign_spend')
+        .select('amount, spend_date, campaign_id, ad_campaigns(name, utm_campaign, utm_source, utm_medium, platform)')
+        .eq('store_id', store!.id)
+        .gte('spend_date', from.slice(0, 10))
+        .lte('spend_date', to.slice(0, 10))
       return data ?? []
     },
     enabled: !!store?.id,
@@ -194,13 +209,79 @@ export default function Reports() {
     return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 8)
   }, [leads])
 
+  // Atribuição: agrupa leads por utm_source / utm_medium / utm_campaign
+  const attributionStats = useMemo(() => {
+    type Row = {
+      utm_source: string; utm_medium: string; utm_campaign: string
+      leads: number; won: number; revenue: number
+      convRate: number; spend: number; cpl: number; roas: number
+    }
+    const map: Record<string, Row> = {}
+
+    leads.forEach(l => {
+      const src = l.utm_source ?? '(direto)'
+      const med = l.utm_medium ?? '(none)'
+      const cam = l.utm_campaign ?? '(sem campanha)'
+      const key = `${src}||${med}||${cam}`
+      if (!map[key]) map[key] = { utm_source: src, utm_medium: med, utm_campaign: cam, leads: 0, won: 0, revenue: 0, convRate: 0, spend: 0, cpl: 0, roas: 0 }
+      map[key].leads++
+      if (l.status === 'won') { map[key].won++; map[key].revenue += l.won_value ?? l.sale_value ?? 0 }
+    })
+
+    // Soma investimento por utm_campaign
+    campaignSpend.forEach((s: Record<string, unknown>) => {
+      const cam = (s.ad_campaigns as Record<string, string> | null)?.utm_campaign ?? '(sem campanha)'
+      const src = (s.ad_campaigns as Record<string, string> | null)?.utm_source ?? '(direto)'
+      const med = (s.ad_campaigns as Record<string, string> | null)?.utm_medium ?? '(none)'
+      const key = `${src}||${med}||${cam}`
+      if (!map[key]) map[key] = { utm_source: src, utm_medium: med, utm_campaign: cam, leads: 0, won: 0, revenue: 0, convRate: 0, spend: 0, cpl: 0, roas: 0 }
+      map[key].spend += Number(s.amount ?? 0)
+    })
+
+    return Object.values(map).map(r => ({
+      ...r,
+      convRate: r.leads > 0 ? Math.round((r.won / r.leads) * 100) : 0,
+      cpl: r.leads > 0 && r.spend > 0 ? Math.round(r.spend / r.leads) : 0,
+      roas: r.spend > 0 ? Math.round((r.revenue / r.spend) * 100) / 100 : 0,
+    })).sort((a, b) => b.leads - a.leads)
+  }, [leads, campaignSpend])
+
+  // Leads por fonte (utm_source) para o gráfico de pizza
+  const utmSourceChart = useMemo(() => {
+    const map: Record<string, number> = {}
+    leads.forEach(l => {
+      const src = l.utm_source ?? '(direto)'
+      map[src] = (map[src] ?? 0) + 1
+    })
+    return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
+  }, [leads])
+
+  // Leads por campanha (top 8) para bar chart
+  const utmCampaignChart = useMemo(() => {
+    const map: Record<string, { leads: number; won: number }> = {}
+    leads.forEach(l => {
+      const cam = l.utm_campaign ?? '(sem campanha)'
+      if (!map[cam]) map[cam] = { leads: 0, won: 0 }
+      map[cam].leads++
+      if (l.status === 'won') map[cam].won++
+    })
+    return Object.entries(map)
+      .map(([name, v]) => ({ name: name.length > 18 ? name.slice(0, 18) + '…' : name, ...v }))
+      .sort((a, b) => b.leads - a.leads)
+      .slice(0, 8)
+  }, [leads])
+
+  const totalSpend = useMemo(() => campaignSpend.reduce((s: number, r: Record<string, unknown>) => s + Number(r.amount ?? 0), 0), [campaignSpend])
+  const leadsWithUtm = useMemo(() => leads.filter(l => l.utm_source).length, [leads])
+
   // ── UI ───────────────────────────────────────────────────────────────────────
 
   const tabs = [
-    { id: 'overview' as const,    label: 'Visão Geral' },
-    { id: 'salespeople' as const, label: 'Vendedores' },
-    { id: 'sources' as const,     label: 'Origens' },
-    { id: 'funnel' as const,      label: 'Funil' },
+    { id: 'overview' as const,     label: 'Visão Geral' },
+    { id: 'salespeople' as const,  label: 'Vendedores' },
+    { id: 'sources' as const,      label: 'Origens' },
+    { id: 'funnel' as const,       label: 'Funil' },
+    { id: 'attribution' as const,  label: '📊 Atribuição' },
   ]
 
   return (
@@ -479,6 +560,198 @@ export default function Reports() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Atribuição ── */}
+      {activeTab === 'attribution' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+          {/* KPI cards de atribuição */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+            {[
+              {
+                icon: <Megaphone size={13} />,
+                label: 'Leads Rastreados',
+                value: leadsWithUtm,
+                sub: `${kpis.total > 0 ? Math.round((leadsWithUtm / kpis.total) * 100) : 0}% do total`,
+                color: 'var(--blu)',
+              },
+              {
+                icon: <DollarSign size={13} />,
+                label: 'Investimento',
+                value: formatCurrency(totalSpend),
+                sub: 'no período',
+                color: 'var(--yel)',
+              },
+              {
+                icon: <Users size={13} />,
+                label: 'CPL Médio',
+                value: leadsWithUtm > 0 && totalSpend > 0 ? formatCurrency(totalSpend / leadsWithUtm) : '—',
+                sub: 'custo por lead',
+                color: totalSpend > 0 && leadsWithUtm > 0 ? 'var(--neon)' : 'var(--t3)',
+              },
+              {
+                icon: <TrendingUp size={13} />,
+                label: 'ROAS Geral',
+                value: totalSpend > 0 ? `${(kpis.revenue / Math.max(1, totalSpend)).toFixed(2)}x` : '—',
+                sub: 'retorno sobre investimento',
+                color: totalSpend > 0 && kpis.revenue > totalSpend ? 'var(--neon)' : 'var(--red)',
+              },
+            ].map(k => (
+              <div key={k.label} style={{ background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 9, padding: '12px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+                  <span style={{ color: k.color }}>{k.icon}</span>
+                  <span style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.06em' }}>{k.label}</span>
+                </div>
+                <p style={{ fontSize: 15, fontWeight: 800, color: k.color }}>{k.value}</p>
+                <p style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>{k.sub}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Gráficos */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {/* Leads por fonte */}
+            <div style={{ background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 10, padding: '16px 18px' }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--t)', marginBottom: 14 }}>Leads por Fonte (utm_source)</p>
+              {utmSourceChart.length > 0 ? (
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie data={utmSourceChart} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={72}
+                      label={props => `${props.name} ${((props.percent ?? 0) * 100).toFixed(0)}%`} labelLine={false}>
+                      {utmSourceChart.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip {...tt} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8 }}>
+                  <Megaphone size={32} style={{ color: 'var(--t4)', opacity: 0.4 }} />
+                  <p style={{ fontSize: 12, color: 'var(--t3)', textAlign: 'center' }}>
+                    Nenhum lead com UTM ainda.<br />
+                    <span style={{ fontSize: 10 }}>Adicione <code>?utm_source=facebook</code> nos links dos seus anúncios.</span>
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Leads por campanha */}
+            <div style={{ background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 10, padding: '16px 18px' }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--t)', marginBottom: 14 }}>Leads por Campanha (top 8)</p>
+              {utmCampaignChart.filter(c => c.name !== '(sem campanha)').length > 0 ? (
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={utmCampaignChart.filter(c => c.name !== '(sem campanha)')} barGap={4}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--b)" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fill: 'var(--t3)', fontSize: 9 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: 'var(--t3)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <Tooltip {...tt} />
+                    <Legend wrapperStyle={{ fontSize: 11, color: 'var(--t3)' }} />
+                    <Bar dataKey="leads" fill="var(--blu)" radius={[4,4,0,0]} name="Leads" opacity={0.8} />
+                    <Bar dataKey="won"   fill="var(--neon)" radius={[4,4,0,0]} name="Ganhos" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <p style={{ fontSize: 12, color: 'var(--t3)' }}>Nenhuma campanha identificada no período</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Tabela de atribuição detalhada */}
+          <div style={{ background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 10, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--bs)' }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--t)' }}>Atribuição por Campanha</p>
+              <button
+                onClick={() => exportCSV(attributionStats.map(r => ({
+                  Fonte: r.utm_source, Meio: r.utm_medium, Campanha: r.utm_campaign,
+                  Leads: r.leads, Ganhos: r.won, 'Conversão%': r.convRate,
+                  Receita: r.revenue, Investimento: r.spend, CPL: r.cpl, ROAS: r.roas,
+                })), `atribuicao-${period}-${new Date().toISOString().slice(0,10)}.csv`)}
+                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: 'var(--el)', border: '1px solid var(--bs)', borderRadius: 6, color: 'var(--t3)', fontSize: 11, cursor: 'pointer' }}>
+                <Download size={11} /> CSV
+              </button>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
+                <thead>
+                  <tr style={{ background: 'var(--el)' }}>
+                    {['Fonte','Meio','Campanha','Leads','Ganhos','Conv.','Investimento','CPL','ROAS','Receita'].map(h => (
+                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 9, fontWeight: 600, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {attributionStats.map((row, i) => (
+                    <tr key={i} style={{ borderTop: '1px solid var(--bs)' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--el)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                      {/* Fonte */}
+                      <td style={{ padding: '9px 12px' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: COLORS[i % COLORS.length] + '20', color: COLORS[i % COLORS.length] }}>
+                          {row.utm_source}
+                        </span>
+                      </td>
+                      {/* Meio */}
+                      <td style={{ padding: '9px 12px', fontSize: 11, color: 'var(--t3)' }}>{row.utm_medium}</td>
+                      {/* Campanha */}
+                      <td style={{ padding: '9px 12px', fontSize: 11, color: 'var(--t2)', maxWidth: 200 }}>
+                        <span title={row.utm_campaign} style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {row.utm_campaign}
+                        </span>
+                      </td>
+                      {/* Leads */}
+                      <td style={{ padding: '9px 12px', fontSize: 12, fontWeight: 700, color: 'var(--t)' }}>{row.leads}</td>
+                      {/* Ganhos */}
+                      <td style={{ padding: '9px 12px', fontSize: 12, fontWeight: 700, color: 'var(--neon)' }}>{row.won}</td>
+                      {/* Conversão */}
+                      <td style={{ padding: '9px 12px' }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: row.convRate >= 20 ? 'var(--neon)' : row.convRate >= 10 ? 'var(--yel)' : 'var(--t3)' }}>
+                          {row.convRate}%
+                        </span>
+                      </td>
+                      {/* Investimento */}
+                      <td style={{ padding: '9px 12px', fontSize: 11, color: row.spend > 0 ? 'var(--yel)' : 'var(--t4)' }}>
+                        {row.spend > 0 ? formatCurrency(row.spend) : '—'}
+                      </td>
+                      {/* CPL */}
+                      <td style={{ padding: '9px 12px', fontSize: 11, color: row.cpl > 0 ? 'var(--t2)' : 'var(--t4)' }}>
+                        {row.cpl > 0 ? formatCurrency(row.cpl) : '—'}
+                      </td>
+                      {/* ROAS */}
+                      <td style={{ padding: '9px 12px', fontSize: 11, fontWeight: row.roas > 0 ? 700 : 400, color: row.roas >= 3 ? 'var(--neon)' : row.roas >= 1 ? 'var(--yel)' : 'var(--t4)' }}>
+                        {row.roas > 0 ? `${row.roas}x` : '—'}
+                      </td>
+                      {/* Receita */}
+                      <td style={{ padding: '9px 12px', fontSize: 11, color: 'var(--t)' }}>
+                        {row.revenue > 0 ? formatCurrency(row.revenue) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                  {attributionStats.length === 0 && (
+                    <tr><td colSpan={10} style={{ padding: '32px', textAlign: 'center', color: 'var(--t3)', fontSize: 12 }}>
+                      Nenhum lead com UTM no período. Adicione <code>?utm_source=facebook&utm_campaign=nome</code> nos links dos anúncios.
+                    </td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Dica de parâmetros */}
+          <div style={{ background: 'rgba(61,247,16,.04)', border: '1px solid rgba(61,247,16,.15)', borderRadius: 10, padding: '12px 16px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <ExternalLink size={14} style={{ color: 'var(--neon)', flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--neon)', marginBottom: 4 }}>Como rastrear seus anúncios</p>
+              <p style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.6 }}>
+                Adicione parâmetros UTM nos links dos seus anúncios. Exemplo para Facebook:<br />
+                <code style={{ fontSize: 10, color: 'var(--t2)', background: 'var(--el)', padding: '2px 6px', borderRadius: 4 }}>
+                  {`https://seusite.com/?utm_source=facebook&utm_medium=cpc&utm_campaign=nome-da-campanha&utm_content=criativo-1&fbclid={{fbc}}`}
+                </code>
+              </p>
+            </div>
           </div>
         </div>
       )}
