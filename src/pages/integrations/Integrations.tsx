@@ -3,7 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plug, CheckCircle2, Clock, ExternalLink, Plus, Megaphone,
   X, Pencil, Trash2, DollarSign, TrendingUp, Users, BarChart2,
-  ChevronDown, Calendar, Save,
+  ChevronDown, Calendar, Save, Copy, Eye, EyeOff, RefreshCw,
+  AlertCircle,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -575,6 +576,368 @@ function CampaignCard({
   )
 }
 
+// ─── Modal: Configurar Facebook Lead Ads ─────────────────────────────────────
+
+const WEBHOOK_URL = 'https://eakdywmuewvuzyqfpcpl.supabase.co/functions/v1/facebook-lead-webhook'
+
+interface FbConfig {
+  id: string
+  page_id: string
+  page_name: string | null
+  page_access_token: string
+  verify_token: string
+  default_stage_id: string | null
+  default_salesperson_id: string | null
+  default_temperature: string
+  active: boolean
+}
+
+function FacebookConfigModal({ onClose }: { onClose: () => void }) {
+  const { store } = useAuthStore()
+  const qc = useQueryClient()
+
+  const [step, setStep]       = useState<'config' | 'instructions'>('config')
+  const [showToken, setShowToken] = useState(false)
+  const [saving, setSaving]   = useState(false)
+  const [copied, setCopied]   = useState<string | null>(null)
+
+  // Dados da integração existente (se já configurada)
+  const { data: existing, isLoading } = useQuery<FbConfig | null>({
+    queryKey: ['fb-integration', store?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('facebook_integrations')
+        .select('*')
+        .eq('store_id', store!.id)
+        .maybeSingle()
+      return data as FbConfig | null
+    },
+    enabled: !!store?.id,
+  })
+
+  // Estágios e vendedores para os selects
+  const { data: stages = [] } = useQuery({
+    queryKey: ['pipeline-stages', store?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from('pipeline_stages').select('id,name').eq('store_id', store!.id).order('position')
+      return data ?? []
+    },
+    enabled: !!store?.id,
+  })
+  const { data: users = [] } = useQuery({
+    queryKey: ['analytics-users', store?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from('users').select('id,full_name').eq('store_id', store!.id).eq('active', true)
+      return data ?? []
+    },
+    enabled: !!store?.id,
+  })
+
+  const [form, setForm] = useState({
+    page_id:                '',
+    page_name:              '',
+    page_access_token:      '',
+    default_stage_id:       '',
+    default_salesperson_id: '',
+    default_temperature:    'hot',
+  })
+
+  // Preenche o form quando os dados chegam
+  const initialised = existing !== undefined
+  const [didInit, setDidInit] = useState(false)
+  if (initialised && !didInit && existing) {
+    setForm({
+      page_id:                existing.page_id,
+      page_name:              existing.page_name ?? '',
+      page_access_token:      existing.page_access_token,
+      default_stage_id:       existing.default_stage_id ?? '',
+      default_salesperson_id: existing.default_salesperson_id ?? '',
+      default_temperature:    existing.default_temperature,
+    })
+    setDidInit(true)
+  }
+
+  const verifyToken = existing?.verify_token ?? '(salve a configuração para gerar)'
+
+  function copy(text: string, key: string) {
+    navigator.clipboard.writeText(text).catch(() => {})
+    setCopied(key)
+    setTimeout(() => setCopied(null), 2000)
+  }
+
+  async function handleSave() {
+    if (!form.page_id.trim() || !form.page_access_token.trim()) {
+      toast.error('Campos obrigatórios', 'Preencha o Page ID e o Token de Acesso')
+      return
+    }
+    setSaving(true)
+    try {
+      const payload = {
+        store_id:               store!.id,
+        page_id:                form.page_id.trim(),
+        page_name:              form.page_name.trim() || null,
+        page_access_token:      form.page_access_token.trim(),
+        default_stage_id:       form.default_stage_id       || null,
+        default_salesperson_id: form.default_salesperson_id || null,
+        default_temperature:    form.default_temperature,
+        active:                 true,
+      }
+      if (existing) {
+        const { error } = await supabase.from('facebook_integrations').update(payload).eq('id', existing.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('facebook_integrations').insert(payload)
+        if (error) throw error
+      }
+      toast.success('Configuração salva!', 'Webhook pronto para receber leads')
+      qc.invalidateQueries({ queryKey: ['fb-integration'] })
+      setDidInit(false)
+    } catch (e) {
+      toast.error('Erro ao salvar', e instanceof Error ? e.message : '')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!existing) return
+    if (!confirm('Desconectar o Facebook Lead Ads? Os leads já recebidos não serão afetados.')) return
+    const { error } = await supabase.from('facebook_integrations').delete().eq('id', existing.id)
+    if (error) { toast.error('Erro ao remover'); return }
+    toast.success('Integração removida')
+    qc.invalidateQueries({ queryKey: ['fb-integration'] })
+    onClose()
+  }
+
+  const inp: React.CSSProperties = {
+    width: '100%', height: 38, background: 'var(--el)', border: '1px solid var(--bs)',
+    borderRadius: 7, color: 'var(--t)', fontSize: 12, padding: '0 10px',
+    boxSizing: 'border-box', outline: 'none', fontFamily: 'inherit',
+  }
+  const lbl: React.CSSProperties = {
+    fontSize: 9, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase',
+    letterSpacing: '.07em', display: 'block', marginBottom: 4,
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.75)' }} />
+      <div style={{
+        position: 'relative', width: '100%', maxWidth: 560,
+        background: 'var(--surf)', border: '1px solid var(--bs)', borderRadius: 14,
+        padding: 24, maxHeight: '92dvh', overflowY: 'auto',
+        boxShadow: '0 24px 64px rgba(0,0,0,.7)',
+      }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 28 }}>📘</span>
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--t)', margin: 0 }}>Facebook Lead Ads</h3>
+              <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>
+                {existing ? <span style={{ color: 'var(--neon)' }}>✓ Conectado · {existing.page_name ?? existing.page_id}</span> : 'Não configurado'}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--el)', border: '1px solid var(--bs)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t3)' }}>
+            <X size={14} />
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 2, background: 'var(--el)', borderRadius: 7, padding: 3, marginBottom: 20, border: '1px solid var(--bs)' }}>
+          {(['config', 'instructions'] as const).map(s => (
+            <button key={s} onClick={() => setStep(s)} style={{
+              flex: 1, padding: '5px 0', borderRadius: 5, fontSize: 11, fontWeight: 500,
+              background: step === s ? 'var(--card)' : 'transparent',
+              border: step === s ? '1px solid var(--bs)' : '1px solid transparent',
+              color: step === s ? 'var(--t)' : 'var(--t3)', cursor: 'pointer',
+            }}>
+              {s === 'config' ? '⚙️ Configuração' : '📖 Como conectar'}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Tab: Config ── */}
+        {step === 'config' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+            {isLoading ? (
+              <p style={{ fontSize: 12, color: 'var(--t3)', textAlign: 'center', padding: 20 }}>Carregando...</p>
+            ) : (<>
+
+              {/* URL do Webhook (read-only) */}
+              <div style={{ background: 'rgba(61,247,16,.05)', border: '1px solid rgba(61,247,16,.2)', borderRadius: 9, padding: '10px 12px' }}>
+                <p style={{ ...lbl, color: 'var(--neon)', marginBottom: 6 }}>URL do Webhook — cole no Facebook Developers</p>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <code style={{ flex: 1, fontSize: 10, color: 'var(--t2)', background: 'var(--el)', borderRadius: 6, padding: '6px 10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {WEBHOOK_URL}
+                  </code>
+                  <button onClick={() => copy(WEBHOOK_URL, 'url')} style={{ padding: '6px 10px', borderRadius: 6, background: 'var(--el)', border: '1px solid var(--bs)', cursor: 'pointer', color: copied === 'url' ? 'var(--neon)' : 'var(--t3)', fontSize: 11, display: 'flex', gap: 4, alignItems: 'center' }}>
+                    <Copy size={11} /> {copied === 'url' ? 'Copiado!' : 'Copiar'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Verify Token */}
+              <div style={{ background: 'var(--el)', border: '1px solid var(--bs)', borderRadius: 9, padding: '10px 12px' }}>
+                <p style={{ ...lbl, marginBottom: 6 }}>Token de Verificação — cole no Facebook Developers</p>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <code style={{ flex: 1, fontSize: 11, color: 'var(--t2)', background: 'var(--surf)', borderRadius: 6, padding: '6px 10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {verifyToken}
+                  </code>
+                  {existing && (
+                    <button onClick={() => copy(verifyToken, 'verify')} style={{ padding: '6px 10px', borderRadius: 6, background: 'var(--el)', border: '1px solid var(--bs)', cursor: 'pointer', color: copied === 'verify' ? 'var(--neon)' : 'var(--t3)', fontSize: 11, display: 'flex', gap: 4, alignItems: 'center' }}>
+                      <Copy size={11} /> {copied === 'verify' ? 'Copiado!' : 'Copiar'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Campos do formulário */}
+              <div>
+                <label style={lbl}>ID da Página do Facebook *</label>
+                <input style={inp} value={form.page_id} onChange={e => setForm(f => ({ ...f, page_id: e.target.value }))}
+                  placeholder="Ex: 123456789012345" />
+                <p style={{ fontSize: 10, color: 'var(--t3)', marginTop: 3 }}>Encontre em: Facebook Business Suite → Configurações → ID da Página</p>
+              </div>
+
+              <div>
+                <label style={lbl}>Nome da Página (opcional)</label>
+                <input style={inp} value={form.page_name} onChange={e => setForm(f => ({ ...f, page_name: e.target.value }))}
+                  placeholder="Ex: Revenda Silva Automóveis" />
+              </div>
+
+              <div>
+                <label style={lbl}>Token de Acesso da Página (Page Access Token) *</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    style={{ ...inp, paddingRight: 40 }}
+                    type={showToken ? 'text' : 'password'}
+                    value={form.page_access_token}
+                    onChange={e => setForm(f => ({ ...f, page_access_token: e.target.value }))}
+                    placeholder="EAABwzLixnjYBO..." />
+                  <button onClick={() => setShowToken(v => !v)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)' }}>
+                    {showToken ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+                <p style={{ fontSize: 10, color: 'var(--t3)', marginTop: 3 }}>Token de longa duração (60 dias). Veja a aba "Como conectar" para gerar.</p>
+              </div>
+
+              {/* Defaults */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={lbl}>Etapa padrão do pipeline</label>
+                  <select style={{ ...inp }} value={form.default_stage_id} onChange={e => setForm(f => ({ ...f, default_stage_id: e.target.value }))}>
+                    <option value="">Primeira etapa</option>
+                    {stages.map((s: { id: string; name: string }) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={lbl}>Vendedor padrão</label>
+                  <select style={{ ...inp }} value={form.default_salesperson_id} onChange={e => setForm(f => ({ ...f, default_salesperson_id: e.target.value }))}>
+                    <option value="">Sem vendedor</option>
+                    {users.map((u: { id: string; full_name: string }) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label style={lbl}>Temperatura padrão dos leads</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {[{ v: 'hot', l: '🔥 Quente', c: '#F43F5E' }, { v: 'warm', l: '⚡ Morno', c: '#F97316' }, { v: 'cold', l: '❄️ Frio', c: '#3B82F6' }].map(opt => (
+                    <button key={opt.v} onClick={() => setForm(f => ({ ...f, default_temperature: opt.v }))} style={{
+                      flex: 1, height: 36, borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                      border: form.default_temperature === opt.v ? `2px solid ${opt.c}` : '1px solid var(--bs)',
+                      background: form.default_temperature === opt.v ? opt.c + '20' : 'var(--el)',
+                      color: form.default_temperature === opt.v ? opt.c : 'var(--t3)',
+                    }}>
+                      {opt.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Botões */}
+              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                {existing && (
+                  <button onClick={handleDelete} style={{ height: 40, padding: '0 14px', borderRadius: 8, background: 'transparent', border: '1px solid var(--red)', color: 'var(--red)', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <Trash2 size={12} /> Desconectar
+                  </button>
+                )}
+                <button onClick={handleSave} disabled={saving} style={{
+                  flex: 1, height: 40, borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                  background: 'var(--neon)', border: 'none', color: '#000',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  opacity: saving ? 0.7 : 1,
+                }}>
+                  <Save size={14} /> {saving ? 'Salvando...' : existing ? 'Salvar alterações' : 'Conectar Facebook'}
+                </button>
+              </div>
+            </>)}
+          </div>
+        )}
+
+        {/* ── Tab: Instruções ── */}
+        {step === 'instructions' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {[
+              {
+                n: '1', title: 'Crie um App no Facebook Developers',
+                body: 'Acesse developers.facebook.com → Meus Apps → Criar App → escolha "Business". Anote o App ID e o App Secret.',
+              },
+              {
+                n: '2', title: 'Adicione o produto "Lead Ads Retrieval"',
+                body: 'No painel do App, clique em "+ Adicionar produto" e adicione "Leadgen Notifications" (ou "Lead Ads"). Isso libera permissão leads_retrieval.',
+              },
+              {
+                n: '3', title: 'Configure o Webhook',
+                body: `Em Webhooks → Página → Adicionar URL de Retorno de Chamada.\n\nURL: ${WEBHOOK_URL}\n\nToken de verificação: copie da aba Configuração acima.`,
+                highlight: true,
+              },
+              {
+                n: '4', title: 'Assine o evento "leadgen"',
+                body: 'Após verificar o webhook, clique em "Inscrever" ao lado do campo "leadgen". Selecione a sua Página do Facebook.',
+              },
+              {
+                n: '5', title: 'Gere um Token de Acesso da Página',
+                body: 'Em Ferramentas → Explorador da Graph API → selecione seu App e sua Página → gere o token com permissões leads_retrieval e pages_read_engagement. Depois use a API de token de longa duração para converter para 60 dias.',
+              },
+              {
+                n: '6', title: 'Cole os dados na aba Configuração',
+                body: 'Copie o Page ID e o Page Access Token e cole na aba "Configuração" acima. Salve e pronto — leads do Facebook chegam ao CRM automaticamente.',
+              },
+            ].map(s => (
+              <div key={s.n} style={{ display: 'flex', gap: 12 }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--neon)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0 }}>
+                  {s.n}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--t)', marginBottom: 4 }}>{s.title}</p>
+                  <p style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.7, whiteSpace: 'pre-line' }}>{s.body}</p>
+                  {s.highlight && (
+                    <div style={{ marginTop: 8, background: 'var(--el)', borderRadius: 7, padding: '6px 10px', display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <code style={{ fontSize: 10, color: 'var(--t2)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{WEBHOOK_URL}</code>
+                      <button onClick={() => copy(WEBHOOK_URL, 'inst')} style={{ padding: '4px 8px', borderRadius: 5, background: 'transparent', border: '1px solid var(--bs)', cursor: 'pointer', color: copied === 'inst' ? 'var(--neon)' : 'var(--t3)', fontSize: 10, display: 'flex', gap: 3, alignItems: 'center', flexShrink: 0 }}>
+                        <Copy size={10} /> {copied === 'inst' ? 'Copiado!' : 'Copiar'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+            <div style={{ background: 'rgba(249,115,22,.08)', border: '1px solid rgba(249,115,22,.2)', borderRadius: 9, padding: '10px 14px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <AlertCircle size={14} style={{ color: '#F97316', flexShrink: 0, marginTop: 1 }} />
+              <p style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.6 }}>
+                O Token de Acesso da Página expira em <strong style={{ color: 'var(--yel)' }}>60 dias</strong>. Atualize-o antes de vencer para não perder leads. Use o <strong>Facebook Graph API</strong> para renovar com a rota <code>/oauth/access_token</code>.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export default function Integrations() {
@@ -582,6 +945,7 @@ export default function Integrations() {
   const qc = useQueryClient()
 
   const [activeTab, setActiveTab]       = useState<'integrations' | 'campaigns'>('integrations')
+  const [showFbModal, setShowFbModal]   = useState(false)
   const [showModal, setShowModal]       = useState(false)
   const [editing, setEditing]           = useState<AdCampaign | null>(null)
   const [spendFor, setSpendFor]         = useState<AdCampaign | null>(null)
@@ -598,6 +962,20 @@ export default function Integrations() {
         .eq('store_id', store!.id)
         .order('created_at', { ascending: false })
       return (data ?? []) as AdCampaign[]
+    },
+    enabled: !!store?.id,
+  })
+
+  // ── Status da integração Facebook ────────────────────────────────────────
+  const { data: fbIntegration } = useQuery({
+    queryKey: ['fb-integration', store?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('facebook_integrations')
+        .select('id, page_name, active')
+        .eq('store_id', store!.id)
+        .maybeSingle()
+      return data
     },
     enabled: !!store?.id,
   })
@@ -768,36 +1146,46 @@ export default function Integrations() {
       {/* ── Integrações ── */}
       {activeTab === 'integrations' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-          {INTEGRATIONS.map(int => (
-            <Card key={int.name} style={{ padding: '16px 18px' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 9, background: 'var(--el)', border: '1px solid var(--b)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
-                    {int.icon}
+          {INTEGRATIONS.map(int => {
+            const isMeta = int.name === 'Meta Ads'
+            const metaConnected = isMeta && !!fbIntegration?.active
+            const isConnected = int.status === 'connected' || metaConnected
+            return (
+              <Card key={int.name} style={{ padding: '16px 18px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 9, background: 'var(--el)', border: '1px solid var(--b)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
+                      {int.icon}
+                    </div>
+                    <div>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--t)' }}>{int.name}</p>
+                      <Badge variant={isConnected ? 'success' : 'default'} dot style={{ marginTop: 2 }}>
+                        {isConnected
+                          ? (metaConnected ? `Conectado · ${fbIntegration?.page_name ?? 'Página'}` : 'Conectado')
+                          : 'Disponível'}
+                      </Badge>
+                    </div>
                   </div>
-                  <div>
-                    <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--t)' }}>{int.name}</p>
-                    <Badge variant={int.status === 'connected' ? 'success' : 'default'} dot style={{ marginTop: 2 }}>
-                      {int.status === 'connected' ? 'Conectado' : 'Disponível'}
-                    </Badge>
-                  </div>
+                  {isConnected
+                    ? <CheckCircle2 size={16} style={{ color: 'var(--grn)', flexShrink: 0 }} />
+                    : <Clock size={16} style={{ color: 'var(--t3)', flexShrink: 0 }} />
+                  }
                 </div>
-                {int.status === 'connected'
-                  ? <CheckCircle2 size={16} style={{ color: 'var(--grn)', flexShrink: 0 }} />
-                  : <Clock size={16} style={{ color: 'var(--t3)', flexShrink: 0 }} />
-                }
-              </div>
-              <p style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.5, marginBottom: 12 }}>{int.desc}</p>
-              <button style={{
-                width: '100%', padding: '6px 0', borderRadius: 6, fontSize: 11, fontWeight: int.status === 'connected' ? 600 : 700,
-                background: int.status === 'connected' ? 'transparent' : 'var(--neon)',
-                border: int.status === 'connected' ? '1px solid var(--b)' : 'none',
-                color: int.status === 'connected' ? 'var(--t2)' : '#000', cursor: 'pointer',
-              }}>
-                {int.status === 'connected' ? 'Configurar' : 'Conectar'}
-              </button>
-            </Card>
-          ))}
+                <p style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.5, marginBottom: 12 }}>{int.desc}</p>
+                <button
+                  onClick={isMeta ? () => setShowFbModal(true) : undefined}
+                  style={{
+                    width: '100%', padding: '6px 0', borderRadius: 6, fontSize: 11,
+                    fontWeight: isConnected ? 600 : 700,
+                    background: isConnected ? 'transparent' : isMeta ? '#1877F2' : 'var(--neon)',
+                    border: isConnected ? '1px solid var(--b)' : 'none',
+                    color: isConnected ? 'var(--t2)' : '#fff', cursor: 'pointer',
+                  }}>
+                  {isConnected ? 'Configurar' : isMeta ? '📘 Conectar Facebook' : 'Conectar'}
+                </button>
+              </Card>
+            )
+          })}
         </div>
       )}
 
@@ -891,6 +1279,7 @@ export default function Integrations() {
       )}
 
       {/* Modais */}
+      {showFbModal && <FacebookConfigModal onClose={() => setShowFbModal(false)} />}
       {showModal && (
         <CampaignModal
           initial={editing}
