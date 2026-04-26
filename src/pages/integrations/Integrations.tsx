@@ -578,7 +578,8 @@ function CampaignCard({
 
 // ─── Modal: Configurar Facebook Lead Ads ─────────────────────────────────────
 
-const WEBHOOK_URL = 'https://eakdywmuewvuzyqfpcpl.supabase.co/functions/v1/facebook-lead-webhook'
+const WEBHOOK_URL        = 'https://eakdywmuewvuzyqfpcpl.supabase.co/functions/v1/facebook-lead-webhook'
+const GOOGLE_WEBHOOK_URL = 'https://eakdywmuewvuzyqfpcpl.supabase.co/functions/v1/google-lead-webhook'
 
 interface FbConfig {
   id: string
@@ -938,6 +939,264 @@ function FacebookConfigModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+// ─── Modal: Configurar Google Ads Lead Form ───────────────────────────────────
+
+interface GoogleConfig {
+  id: string
+  google_key: string
+  account_name: string | null
+  default_stage_id: string | null
+  default_salesperson_id: string | null
+  default_temperature: string
+  active: boolean
+}
+
+function GoogleConfigModal({ onClose }: { onClose: () => void }) {
+  const { store } = useAuthStore()
+  const qc = useQueryClient()
+
+  const [step, setStep]       = useState<'config' | 'instructions'>('config')
+  const [saving, setSaving]   = useState(false)
+  const [copied, setCopied]   = useState<string | null>(null)
+  const [showKey, setShowKey] = useState(false)
+
+  const { data: existing, isLoading } = useQuery<GoogleConfig | null>({
+    queryKey: ['google-integration', store?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from('google_integrations').select('*').eq('store_id', store!.id).maybeSingle()
+      return data as GoogleConfig | null
+    },
+    enabled: !!store?.id,
+  })
+
+  const { data: stages = [] } = useQuery({
+    queryKey: ['pipeline-stages', store?.id],
+    queryFn: async () => { const { data } = await supabase.from('pipeline_stages').select('id,name').eq('store_id', store!.id).order('position'); return data ?? [] },
+    enabled: !!store?.id,
+  })
+  const { data: users = [] } = useQuery({
+    queryKey: ['analytics-users', store?.id],
+    queryFn: async () => { const { data } = await supabase.from('users').select('id,full_name').eq('store_id', store!.id).eq('active', true); return data ?? [] },
+    enabled: !!store?.id,
+  })
+
+  const [form, setForm] = useState({ google_key: '', account_name: '', default_stage_id: '', default_salesperson_id: '', default_temperature: 'hot' })
+  const [didInit, setDidInit] = useState(false)
+  if (existing !== undefined && !didInit && existing) {
+    setForm({ google_key: existing.google_key, account_name: existing.account_name ?? '', default_stage_id: existing.default_stage_id ?? '', default_salesperson_id: existing.default_salesperson_id ?? '', default_temperature: existing.default_temperature })
+    setDidInit(true)
+  }
+
+  function copy(text: string, key: string) {
+    navigator.clipboard.writeText(text).catch(() => {})
+    setCopied(key); setTimeout(() => setCopied(null), 2000)
+  }
+
+  // Gera uma chave aleatória sugerida para o cliente usar no Google Ads
+  function generateKey() {
+    const key = crypto.randomUUID().replace(/-/g, '').slice(0, 24)
+    setForm(f => ({ ...f, google_key: key }))
+  }
+
+  async function handleSave() {
+    if (!form.google_key.trim()) { toast.error('Informe a Chave de Webhook'); return }
+    setSaving(true)
+    try {
+      const payload = { store_id: store!.id, google_key: form.google_key.trim(), account_name: form.account_name.trim() || null, default_stage_id: form.default_stage_id || null, default_salesperson_id: form.default_salesperson_id || null, default_temperature: form.default_temperature, active: true }
+      if (existing) {
+        const { error } = await supabase.from('google_integrations').update(payload).eq('id', existing.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('google_integrations').insert(payload)
+        if (error) throw error
+      }
+      toast.success('Configuração salva!', 'Webhook pronto para receber leads do Google')
+      qc.invalidateQueries({ queryKey: ['google-integration'] })
+      setDidInit(false)
+    } catch (e) {
+      toast.error('Erro ao salvar', e instanceof Error ? e.message : '')
+    } finally { setSaving(false) }
+  }
+
+  async function handleDelete() {
+    if (!existing || !confirm('Desconectar o Google Ads?')) return
+    const { error } = await supabase.from('google_integrations').delete().eq('id', existing.id)
+    if (error) { toast.error('Erro ao remover'); return }
+    toast.success('Integração removida')
+    qc.invalidateQueries({ queryKey: ['google-integration'] })
+    onClose()
+  }
+
+  const inp: React.CSSProperties = { width: '100%', height: 38, background: 'var(--el)', border: '1px solid var(--bs)', borderRadius: 7, color: 'var(--t)', fontSize: 12, padding: '0 10px', boxSizing: 'border-box', outline: 'none', fontFamily: 'inherit' }
+  const lbl: React.CSSProperties = { fontSize: 9, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.07em', display: 'block', marginBottom: 4 }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.75)' }} />
+      <div style={{ position: 'relative', width: '100%', maxWidth: 560, background: 'var(--surf)', border: '1px solid var(--bs)', borderRadius: 14, padding: 24, maxHeight: '92dvh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,.7)' }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 28 }}>🔍</span>
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--t)', margin: 0 }}>Google Ads Lead Form</h3>
+              <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>
+                {existing ? <span style={{ color: 'var(--neon)' }}>✓ Conectado · {existing.account_name ?? 'Google Ads'}</span> : 'Não configurado'}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--el)', border: '1px solid var(--bs)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t3)' }}>
+            <X size={14} />
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 2, background: 'var(--el)', borderRadius: 7, padding: 3, marginBottom: 20, border: '1px solid var(--bs)' }}>
+          {(['config', 'instructions'] as const).map(s => (
+            <button key={s} onClick={() => setStep(s)} style={{ flex: 1, padding: '5px 0', borderRadius: 5, fontSize: 11, fontWeight: 500, background: step === s ? 'var(--card)' : 'transparent', border: step === s ? '1px solid var(--bs)' : '1px solid transparent', color: step === s ? 'var(--t)' : 'var(--t3)', cursor: 'pointer' }}>
+              {s === 'config' ? '⚙️ Configuração' : '📖 Como conectar'}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Config ── */}
+        {step === 'config' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {isLoading ? <p style={{ fontSize: 12, color: 'var(--t3)', textAlign: 'center', padding: 20 }}>Carregando...</p> : (<>
+
+              {/* URL do Webhook */}
+              <div style={{ background: 'rgba(66,133,244,.08)', border: '1px solid rgba(66,133,244,.25)', borderRadius: 9, padding: '10px 12px' }}>
+                <p style={{ ...lbl, color: '#4285F4', marginBottom: 6 }}>URL do Webhook — cole no Google Ads</p>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <code style={{ flex: 1, fontSize: 10, color: 'var(--t2)', background: 'var(--el)', borderRadius: 6, padding: '6px 10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{GOOGLE_WEBHOOK_URL}</code>
+                  <button onClick={() => copy(GOOGLE_WEBHOOK_URL, 'url')} style={{ padding: '6px 10px', borderRadius: 6, background: 'var(--el)', border: '1px solid var(--bs)', cursor: 'pointer', color: copied === 'url' ? 'var(--neon)' : 'var(--t3)', fontSize: 11, display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+                    <Copy size={11} /> {copied === 'url' ? 'Copiado!' : 'Copiar'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Chave de Webhook */}
+              <div>
+                <label style={lbl}>Chave de Webhook (Google Key) *</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <div style={{ position: 'relative', flex: 1 }}>
+                    <input style={{ ...inp, paddingRight: 40 }} type={showKey ? 'text' : 'password'} value={form.google_key} onChange={e => setForm(f => ({ ...f, google_key: e.target.value }))} placeholder="Chave secreta para autenticar o Google Ads" />
+                    <button onClick={() => setShowKey(v => !v)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)' }}>
+                      {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                  <button onClick={generateKey} title="Gerar chave aleatória" style={{ height: 38, padding: '0 12px', borderRadius: 7, background: 'var(--el)', border: '1px solid var(--bs)', cursor: 'pointer', color: 'var(--t3)', display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, flexShrink: 0 }}>
+                    <RefreshCw size={12} /> Gerar
+                  </button>
+                  {form.google_key && (
+                    <button onClick={() => copy(form.google_key, 'key')} style={{ height: 38, padding: '0 12px', borderRadius: 7, background: 'var(--el)', border: '1px solid var(--bs)', cursor: 'pointer', color: copied === 'key' ? 'var(--neon)' : 'var(--t3)', display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, flexShrink: 0 }}>
+                      <Copy size={12} /> {copied === 'key' ? 'Copiado!' : 'Copiar'}
+                    </button>
+                  )}
+                </div>
+                <p style={{ fontSize: 10, color: 'var(--t3)', marginTop: 3 }}>Você vai colar essa chave no campo "Chave" dentro do Google Ads ao configurar o webhook. O CRM a usa para identificar sua conta.</p>
+              </div>
+
+              {/* Nome da conta (display) */}
+              <div>
+                <label style={lbl}>Nome da conta (opcional)</label>
+                <input style={inp} value={form.account_name} onChange={e => setForm(f => ({ ...f, account_name: e.target.value }))} placeholder="Ex: Google Ads — Revenda Silva" />
+              </div>
+
+              {/* Defaults */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={lbl}>Etapa padrão do pipeline</label>
+                  <select style={{ ...inp }} value={form.default_stage_id} onChange={e => setForm(f => ({ ...f, default_stage_id: e.target.value }))}>
+                    <option value="">Primeira etapa</option>
+                    {stages.map((s: { id: string; name: string }) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={lbl}>Vendedor padrão</label>
+                  <select style={{ ...inp }} value={form.default_salesperson_id} onChange={e => setForm(f => ({ ...f, default_salesperson_id: e.target.value }))}>
+                    <option value="">Sem vendedor</option>
+                    {users.map((u: { id: string; full_name: string }) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label style={lbl}>Temperatura padrão</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {[{ v: 'hot', l: '🔥 Quente', c: '#F43F5E' }, { v: 'warm', l: '⚡ Morno', c: '#F97316' }, { v: 'cold', l: '❄️ Frio', c: '#3B82F6' }].map(opt => (
+                    <button key={opt.v} onClick={() => setForm(f => ({ ...f, default_temperature: opt.v }))} style={{ flex: 1, height: 36, borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700, border: form.default_temperature === opt.v ? `2px solid ${opt.c}` : '1px solid var(--bs)', background: form.default_temperature === opt.v ? opt.c + '20' : 'var(--el)', color: form.default_temperature === opt.v ? opt.c : 'var(--t3)' }}>
+                      {opt.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                {existing && (
+                  <button onClick={handleDelete} style={{ height: 40, padding: '0 14px', borderRadius: 8, background: 'transparent', border: '1px solid var(--red)', color: 'var(--red)', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <Trash2 size={12} /> Desconectar
+                  </button>
+                )}
+                <button onClick={handleSave} disabled={saving} style={{ flex: 1, height: 40, borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', background: 'var(--neon)', border: 'none', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: saving ? 0.7 : 1 }}>
+                  <Save size={14} /> {saving ? 'Salvando...' : existing ? 'Salvar alterações' : 'Conectar Google Ads'}
+                </button>
+              </div>
+            </>)}
+          </div>
+        )}
+
+        {/* ── Instruções ── */}
+        {step === 'instructions' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {[
+              { n: '1', title: 'Acesse o Google Ads', body: 'Faça login em ads.google.com. No menu lateral, vá em Campanhas → Recursos → Formulários de lead.' },
+              { n: '2', title: 'Crie ou edite um Formulário de Lead', body: 'Crie um novo formulário ou edite um existente. Adicione os campos que deseja capturar: Nome, Telefone, E-mail, Cidade. Você pode adicionar até 10 perguntas personalizadas.' },
+              { n: '3', title: 'Configure a entrega por webhook', body: 'No final do formulário, em "Entrega de leads", selecione "Webhook". Preencha:\n\n• URL do webhook: copie da aba Configuração\n• Chave: copie da aba Configuração\n\nClique em "Enviar lead de teste" para verificar a conexão.', highlight: true },
+              { n: '4', title: 'Salve o formulário', body: 'Salve o formulário de lead. A partir desse momento, todos os leads preenchidos no Google Ads chegam automaticamente no CRM com nome, telefone, e-mail e dados da campanha.' },
+              { n: '5', title: 'Vincule a campanha no CRM', body: 'Para o cálculo automático de CPL, vá em Integrações → Campanhas, crie a campanha com o ID correto do Google Ads. O CRM associa os leads às campanhas e calcula o CPL.' },
+            ].map(s => (
+              <div key={s.n} style={{ display: 'flex', gap: 12 }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#4285F4', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0 }}>{s.n}</div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--t)', marginBottom: 4 }}>{s.title}</p>
+                  <p style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.7, whiteSpace: 'pre-line' }}>{s.body}</p>
+                  {s.highlight && (
+                    <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ background: 'var(--el)', borderRadius: 7, padding: '6px 10px', display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <span style={{ fontSize: 10, color: 'var(--t3)', minWidth: 100 }}>URL do webhook:</span>
+                        <code style={{ fontSize: 10, color: 'var(--t2)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{GOOGLE_WEBHOOK_URL}</code>
+                        <button onClick={() => copy(GOOGLE_WEBHOOK_URL, 'inst-url')} style={{ padding: '4px 8px', borderRadius: 5, background: 'transparent', border: '1px solid var(--bs)', cursor: 'pointer', color: copied === 'inst-url' ? 'var(--neon)' : 'var(--t3)', fontSize: 10, display: 'flex', gap: 3, alignItems: 'center', flexShrink: 0 }}>
+                          <Copy size={10} /> {copied === 'inst-url' ? 'Copiado!' : 'Copiar'}
+                        </button>
+                      </div>
+                      <div style={{ background: 'var(--el)', borderRadius: 7, padding: '6px 10px', display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <span style={{ fontSize: 10, color: 'var(--t3)', minWidth: 100 }}>Chave:</span>
+                        <code style={{ fontSize: 10, color: form.google_key ? 'var(--t2)' : 'var(--t4)', flex: 1 }}>{form.google_key || '(configure na aba Configuração)'}</code>
+                        {form.google_key && (
+                          <button onClick={() => copy(form.google_key, 'inst-key')} style={{ padding: '4px 8px', borderRadius: 5, background: 'transparent', border: '1px solid var(--bs)', cursor: 'pointer', color: copied === 'inst-key' ? 'var(--neon)' : 'var(--t3)', fontSize: 10, display: 'flex', gap: 3, alignItems: 'center', flexShrink: 0 }}>
+                            <Copy size={10} /> {copied === 'inst-key' ? 'Copiado!' : 'Copiar'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+            <div style={{ background: 'rgba(66,133,244,.06)', border: '1px solid rgba(66,133,244,.2)', borderRadius: 9, padding: '10px 14px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <AlertCircle size={14} style={{ color: '#4285F4', flexShrink: 0, marginTop: 1 }} />
+              <p style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.6 }}>
+                O Google Ads inclui automaticamente no payload: <strong style={{ color: 'var(--t2)' }}>campaign_id, campaign_name, adgroup_id, adgroup_name, creative_id e gcl_id</strong>. Todos são salvos no lead para rastreamento completo de atribuição — sem precisar de parâmetros UTM manuais.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export default function Integrations() {
@@ -945,7 +1204,8 @@ export default function Integrations() {
   const qc = useQueryClient()
 
   const [activeTab, setActiveTab]       = useState<'integrations' | 'campaigns'>('integrations')
-  const [showFbModal, setShowFbModal]   = useState(false)
+  const [showFbModal, setShowFbModal]         = useState(false)
+  const [showGoogleModal, setShowGoogleModal] = useState(false)
   const [showModal, setShowModal]       = useState(false)
   const [editing, setEditing]           = useState<AdCampaign | null>(null)
   const [spendFor, setSpendFor]         = useState<AdCampaign | null>(null)
@@ -962,6 +1222,16 @@ export default function Integrations() {
         .eq('store_id', store!.id)
         .order('created_at', { ascending: false })
       return (data ?? []) as AdCampaign[]
+    },
+    enabled: !!store?.id,
+  })
+
+  // ── Status da integração Google ──────────────────────────────────────────
+  const { data: googleIntegration } = useQuery({
+    queryKey: ['google-integration', store?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from('google_integrations').select('id,account_name,active').eq('store_id', store!.id).maybeSingle()
+      return data
     },
     enabled: !!store?.id,
   })
@@ -1147,9 +1417,17 @@ export default function Integrations() {
       {activeTab === 'integrations' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
           {INTEGRATIONS.map(int => {
-            const isMeta = int.name === 'Meta Ads'
-            const metaConnected = isMeta && !!fbIntegration?.active
-            const isConnected = int.status === 'connected' || metaConnected
+            const isMeta   = int.name === 'Meta Ads'
+            const isGoogle = int.name === 'Google Ads'
+            const metaConnected   = isMeta   && !!fbIntegration?.active
+            const googleConnected = isGoogle && !!googleIntegration?.active
+            const isConnected = int.status === 'connected' || metaConnected || googleConnected
+
+            function handleClick() {
+              if (isMeta)   { setShowFbModal(true);     return }
+              if (isGoogle) { setShowGoogleModal(true); return }
+            }
+
             return (
               <Card key={int.name} style={{ padding: '16px 18px' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -1161,7 +1439,9 @@ export default function Integrations() {
                       <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--t)' }}>{int.name}</p>
                       <Badge variant={isConnected ? 'success' : 'default'} dot style={{ marginTop: 2 }}>
                         {isConnected
-                          ? (metaConnected ? `Conectado · ${fbIntegration?.page_name ?? 'Página'}` : 'Conectado')
+                          ? metaConnected   ? `Conectado · ${fbIntegration?.page_name ?? 'Página'}`
+                          : googleConnected ? `Conectado · ${googleIntegration?.account_name ?? 'Google Ads'}`
+                          : 'Conectado'
                           : 'Disponível'}
                       </Badge>
                     </div>
@@ -1173,15 +1453,22 @@ export default function Integrations() {
                 </div>
                 <p style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.5, marginBottom: 12 }}>{int.desc}</p>
                 <button
-                  onClick={isMeta ? () => setShowFbModal(true) : undefined}
+                  onClick={isMeta || isGoogle ? handleClick : undefined}
                   style={{
                     width: '100%', padding: '6px 0', borderRadius: 6, fontSize: 11,
                     fontWeight: isConnected ? 600 : 700,
-                    background: isConnected ? 'transparent' : isMeta ? '#1877F2' : 'var(--neon)',
+                    background: isConnected ? 'transparent'
+                      : isMeta   ? '#1877F2'
+                      : isGoogle ? '#4285F4'
+                      : 'var(--neon)',
                     border: isConnected ? '1px solid var(--b)' : 'none',
-                    color: isConnected ? 'var(--t2)' : '#fff', cursor: 'pointer',
+                    color: isConnected ? 'var(--t2)' : '#fff',
+                    cursor: isMeta || isGoogle ? 'pointer' : 'default',
                   }}>
-                  {isConnected ? 'Configurar' : isMeta ? '📘 Conectar Facebook' : 'Conectar'}
+                  {isConnected ? 'Configurar'
+                    : isMeta   ? '📘 Conectar Facebook'
+                    : isGoogle ? '🔍 Conectar Google Ads'
+                    : 'Conectar'}
                 </button>
               </Card>
             )
@@ -1279,7 +1566,8 @@ export default function Integrations() {
       )}
 
       {/* Modais */}
-      {showFbModal && <FacebookConfigModal onClose={() => setShowFbModal(false)} />}
+      {showFbModal     && <FacebookConfigModal onClose={() => setShowFbModal(false)} />}
+      {showGoogleModal && <GoogleConfigModal  onClose={() => setShowGoogleModal(false)} />}
       {showModal && (
         <CampaignModal
           initial={editing}
