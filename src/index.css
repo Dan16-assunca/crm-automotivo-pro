@@ -17,8 +17,8 @@
   --card: #0d0d0d;
   --el:   #141414;
   --el2:  #1a1a1a;
-  --b:    #222222;
-  --bs:   #111111;
+  --b:    #282828;
+  --bs:   #1e1e1e;
 
   /* ── Verde Neon ── */
   --neon: #3df710;
@@ -27,9 +27,9 @@
   --nb:   rgba(61,247,16,.22);
 
   /* ── Tipografia ── */
-  --t:  #f5f5f5;
-  --t2: #9a9a9a;
-  --t3: #505050;
+  --t:  #f0f0f0;
+  --t2: #b8b8b8;
+  --t3: #757575;
 
   /* ── Cores de dados ── */
   --red:  #F43F5E;
@@ -119,24 +119,24 @@
 
 /* ── LIGHT MODE ── */
 .light {
-  --bg:   #F0F2F5;
+  --bg:   #ECEEF4;
   --surf: #FFFFFF;
-  --card: #F5F6FA;
-  --el:   #EBEDF2;
-  --el2:  #E4E6EC;
-  --b:    #D0D4DE;
-  --bs:   #E0E3EB;
+  --card: #F8F9FC;
+  --el:   #EDEEF5;
+  --el2:  #E4E6EF;
+  --b:    #C2C8D8;
+  --bs:   #D4D8E6;
 
   --neon: #16A807;
   --nd:   #12900A;
   --ng:   rgba(22,168,7,.07);
   --nb:   rgba(22,168,7,.3);
 
-  --t:  #0F1117;
-  --t2: #3A3F50;
-  --t3: #8A90A0;
+  --t:  #0D0F14;
+  --t2: #2E3444;
+  --t3: #5E6578;
 
-  --border-strong: #B8BDD0;
+  --border-strong: #A4AABF;
   --neon-glow: 0 0 16px rgba(22,168,7,.25);
   --neon-glow-sm: 0 0 8px rgba(22,168,7,.2);
   --neon-glow-text: none;

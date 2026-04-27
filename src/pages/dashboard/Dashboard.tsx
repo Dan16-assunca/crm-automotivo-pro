@@ -39,12 +39,13 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null
   return (
     <div style={{
-      background: 'var(--el)', border: '1px solid var(--b)',
-      borderRadius: 7, padding: '8px 12px', fontSize: 11,
+      background: 'var(--surf)', border: '1px solid var(--b)',
+      borderRadius: 8, padding: '10px 14px', fontSize: 12,
+      boxShadow: 'var(--shadow-md)',
     }}>
-      <p style={{ color: 'var(--t3)', marginBottom: 4 }}>{label}</p>
+      <p style={{ color: 'var(--t2)', marginBottom: 6, fontWeight: 600, fontSize: 11 }}>{label}</p>
       {payload.map((p: any, i: number) => (
-        <p key={i} style={{ color: p.color, fontWeight: 600 }}>
+        <p key={i} style={{ color: p.color, fontWeight: 700, fontSize: 12 }}>
           {p.name}: {typeof p.value === 'number' && p.value > 1000 ? formatCurrency(p.value) : p.value}
         </p>
       ))}
@@ -55,9 +56,21 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 // ─── Stat row item ─────────────────────────────────────────────────────────────
 function StatRow({ label, value, color = 'var(--t)' }: { label: string; value: string; color?: string }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--bs)' }}>
-      <span style={{ fontSize: 12, color: 'var(--t2)' }}>{label}</span>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid var(--bs)' }}>
+      <span style={{ fontSize: 12, color: 'var(--t2)', fontWeight: 500 }}>{label}</span>
       <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--fm)', color }}>{value}</span>
+    </div>
+  )
+}
+
+// ─── Section label ─────────────────────────────────────────────────────────────
+function SectionLabel({ icon: Icon, children }: { icon?: React.ElementType; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+      {Icon && <Icon size={12} style={{ color: 'var(--t2)' }} />}
+      <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
+        {children}
+      </p>
     </div>
   )
 }
@@ -307,7 +320,7 @@ export default function Dashboard() {
     { label: 'Este ano', val: 'year' },  { label: 'Tudo',    val: 'all' },
   ]
 
-  const CHART_COLORS = ['#3DF710', '#0A84FF', '#FFD60A', '#FF9F0A', '#BF5AF2', '#FF3B30']
+  const CHART_COLORS = ['#3DF710', '#3B82F6', '#F59E0B', '#F97316', '#A855F7', '#F43F5E', '#14B8A6', '#EC4899']
 
   if (!authLoading && !storeId) {
     return (
@@ -388,8 +401,8 @@ export default function Dashboard() {
                 background: 'var(--card)', border: '1px solid var(--bs)',
                 borderRadius: 14, padding: '14px',
               }}>
-                <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.06em' }}>{k.label}</p>
-                <p style={{ fontSize: 22, fontWeight: 800, color: 'var(--t)', marginTop: 5, lineHeight: 1, letterSpacing: '-.02em' }}>{k.value}</p>
+                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: '.05em' }}>{k.label}</p>
+                <p style={{ fontSize: 22, fontWeight: 800, color: 'var(--t)', marginTop: 6, lineHeight: 1, letterSpacing: '-.02em' }}>{k.value}</p>
               </div>
             ))}
           </div>
@@ -493,12 +506,12 @@ export default function Dashboard() {
 
         {/* ── Funil Comercial ── */}
         <div>
-          <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 10 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>
             Funil Comercial
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {funnelLoading || !stages ? [...Array(6)].map((_, i) => (
-              <Skeleton key={i} style={{ height: 76, borderRadius: 14 }} />
+              <Skeleton key={i} style={{ height: 82, borderRadius: 14 }} />
             )) : stages.filter(s => !s.is_final).map((stage, i) => {
               const count = funnelCounts?.[stage.id] ?? 0
               const nonFinal = stages.filter(s => !s.is_final)
@@ -513,14 +526,14 @@ export default function Dashboard() {
                     position: 'absolute', top: 0, left: 0, right: 0, height: 3,
                     background: stage.color || 'var(--neon)',
                   }} />
-                  <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: '.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {stage.name}
                   </p>
-                  <p style={{ fontSize: 28, fontWeight: 900, color: 'var(--t)', lineHeight: 1.15, marginTop: 3, letterSpacing: '-.02em' }}>
+                  <p style={{ fontSize: 30, fontWeight: 900, color: 'var(--t)', lineHeight: 1.15, marginTop: 4, letterSpacing: '-.02em' }}>
                     {count}
                   </p>
                   {convPct !== null && (
-                    <p style={{ fontSize: 9, color: 'var(--neon)', marginTop: 1, fontWeight: 600 }}>{convPct}% conv.</p>
+                    <p style={{ fontSize: 11, color: 'var(--neon)', marginTop: 2, fontWeight: 600 }}>{convPct}% conv.</p>
                   )}
                 </div>
               )
@@ -531,22 +544,22 @@ export default function Dashboard() {
         {/* ── Leads por dia ── */}
         <div style={{ background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 16, padding: '14px 4px 10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 10px' }}>
-            <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--t)' }}>Leads por dia</p>
-            <span style={{ fontSize: 10, color: 'var(--t3)' }}>14 dias</span>
+            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--t)' }}>Leads por dia</p>
+            <span style={{ fontSize: 11, color: 'var(--t2)' }}>14 dias</span>
           </div>
           <ResponsiveContainer width="100%" height={120}>
-            <AreaChart data={leadsPerDay ?? []} margin={{ top: 2, right: 6, bottom: 0, left: -30 }}>
+            <AreaChart data={leadsPerDay ?? []} margin={{ top: 4, right: 8, bottom: 0, left: -18 }}>
               <defs>
                 <linearGradient id="lgm" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="var(--neon)" stopOpacity={0.18} />
+                  <stop offset="5%" stopColor="var(--neon)" stopOpacity={0.22} />
                   <stop offset="95%" stopColor="var(--neon)" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--b)" vertical={false} />
-              <XAxis dataKey="name" tick={{ fill: 'var(--t3)', fontSize: 8 }} axisLine={false} tickLine={false} interval={3} />
-              <YAxis tick={{ fill: 'var(--t3)', fontSize: 8 }} axisLine={false} tickLine={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--bs)" vertical={false} />
+              <XAxis dataKey="name" tick={{ fill: 'var(--t2)', fontSize: 10 }} axisLine={false} tickLine={false} interval={3} />
+              <YAxis tick={{ fill: 'var(--t2)', fontSize: 10 }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="leads" name="Leads" stroke="var(--neon)" strokeWidth={2}
+              <Area type="monotone" dataKey="leads" name="Leads" stroke="var(--neon)" strokeWidth={2.5}
                 fill="url(#lgm)" dot={{ fill: 'var(--neon)', r: 2.5, strokeWidth: 0 }} />
             </AreaChart>
           </ResponsiveContainer>
@@ -599,34 +612,38 @@ export default function Dashboard() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--t)' }}>Dashboard</h1>
-          <p style={{ fontSize: 10, color: 'var(--t3)', marginTop: 1 }}>{store?.name}</p>
+          <p style={{ fontSize: 12, color: 'var(--t2)', marginTop: 1 }}>{store?.name}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          {pills.map(p => (
-            <button key={p.val} onClick={() => { setPeriod(p.val); setCustomFrom(''); setCustomTo('') }}
-              style={{
-                padding: '4px 11px', fontSize: 11, borderRadius: 20, cursor: 'pointer',
-                border: '1px solid ' + (period === p.val && !customFrom ? 'var(--nb)' : 'var(--b)'),
-                background: period === p.val && !customFrom ? 'var(--ng)' : 'transparent',
-                color: period === p.val && !customFrom ? 'var(--neon)' : 'var(--t2)',
-                transition: 'all .12s',
-              }}>
-              {p.label}
-            </button>
-          ))}
+          {pills.map(p => {
+            const active = period === p.val && !customFrom
+            return (
+              <button key={p.val} onClick={() => { setPeriod(p.val); setCustomFrom(''); setCustomTo('') }}
+                style={{
+                  padding: '5px 13px', fontSize: 12, fontWeight: active ? 700 : 500,
+                  borderRadius: 20, cursor: 'pointer',
+                  border: '1px solid ' + (active ? 'var(--nb)' : 'var(--b)'),
+                  background: active ? 'var(--ng)' : 'transparent',
+                  color: active ? 'var(--neon)' : 'var(--t2)',
+                  transition: 'all .12s',
+                }}>
+                {p.label}
+              </button>
+            )
+          })}
           <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
-            style={{ height: 28, padding: '0 8px', fontSize: 11, background: 'var(--el)', border: '1px solid var(--b)', borderRadius: 6, color: 'var(--t)', outline: 'none' }} />
-          <span style={{ color: 'var(--t3)', fontSize: 11 }}>→</span>
+            style={{ height: 30, padding: '0 8px', fontSize: 12, background: 'var(--el)', border: '1px solid var(--b)', borderRadius: 6, color: 'var(--t)', outline: 'none' }} />
+          <span style={{ color: 'var(--t2)', fontSize: 13 }}>→</span>
           <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)}
-            style={{ height: 28, padding: '0 8px', fontSize: 11, background: 'var(--el)', border: '1px solid var(--b)', borderRadius: 6, color: 'var(--t)', outline: 'none' }} />
+            style={{ height: 30, padding: '0 8px', fontSize: 12, background: 'var(--el)', border: '1px solid var(--b)', borderRadius: 6, color: 'var(--t)', outline: 'none' }} />
           <button
             onClick={() => setEditMode(v => !v)}
             style={{
-              height: 28, padding: '0 12px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+              height: 30, padding: '0 13px', borderRadius: 7, fontSize: 12, fontWeight: 600,
               display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer',
               border: `1px solid ${editMode ? 'var(--neon)' : 'var(--b)'}`,
               background: editMode ? 'var(--ng)' : 'var(--el)',
-              color: editMode ? 'var(--neon)' : 'var(--t2)',
+              color: editMode ? 'var(--neon)' : 'var(--t)',
               transition: 'all .15s',
             }}
           >
@@ -685,9 +702,7 @@ export default function Dashboard() {
 
       {/* ── BLOCO 1: Funil Comercial ── */}
       {vis('funil') && <div>
-        <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>
-          Funil Comercial
-        </p>
+        <SectionLabel>Funil Comercial</SectionLabel>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8 }}>
           {funnelLoading || !stages ? [...Array(5)].map((_, i) => (
             <Skeleton key={i} style={{ height: 90, borderRadius: 9 }} />
@@ -695,25 +710,26 @@ export default function Dashboard() {
             const count = funnelCounts?.[stage.id] ?? 0
             const prevCount = i > 0 && stages ? (funnelCounts?.[stages.filter(s => !s.is_final)[i-1]?.id] ?? 0) : 0
             const convPct = i > 0 && prevCount > 0 ? Math.round((count / prevCount) * 100) : null
+            const stageColor = stage.color || 'var(--neon)'
             return (
               <motion.div key={stage.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
                 <div style={{
-                  background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 9,
+                  background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 10,
                   padding: '14px 16px', position: 'relative', overflow: 'hidden',
                 }}>
                   <div style={{
-                    position: 'absolute', top: 0, left: 0, right: 0, height: 2, borderRadius: '9px 9px 0 0',
-                    background: stage.color || 'var(--neon)',
+                    position: 'absolute', top: 0, left: 0, right: 0, height: 3, borderRadius: '10px 10px 0 0',
+                    background: stageColor,
                   }} />
-                  <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.06em' }}>
-                    {String(i + 1).padStart(2, '0')} {stage.name}
+                  <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: '.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {stage.name}
                   </p>
-                  <p style={{ fontSize: 32, fontWeight: 800, color: 'var(--t)', lineHeight: 1.2, marginTop: 6, fontFamily: 'var(--fn)' }}>
+                  <p style={{ fontSize: 34, fontWeight: 900, color: 'var(--t)', lineHeight: 1.15, marginTop: 6, letterSpacing: '-.03em' }}>
                     {count}
                   </p>
                   {convPct !== null && (
-                    <p style={{ fontSize: 10, color: 'var(--neon)', marginTop: 2 }}>
-                      conv. {stages.filter(s=>!s.is_final)[i-1]?.name.toLowerCase()}: {convPct}%
+                    <p style={{ fontSize: 11, color: 'var(--neon)', marginTop: 3, fontWeight: 600 }}>
+                      {convPct}% conv.
                     </p>
                   )}
                 </div>
@@ -725,7 +741,7 @@ export default function Dashboard() {
 
       {/* ── BLOCO 2: KPIs secundários ── */}
       {vis('kpis') && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
-        {kpisLoading ? [...Array(5)].map((_, i) => <Skeleton key={i} style={{ height: 80, borderRadius: 9 }} />) : [
+        {kpisLoading ? [...Array(5)].map((_, i) => <Skeleton key={i} style={{ height: 88, borderRadius: 10 }} />) : [
           { title: 'Conversão Geral', value: `${(kpis?.convRate ?? 0).toFixed(1)}%`, color: 'var(--neon)', sub: 'este período' },
           { title: 'Ticket Médio',    value: kpis ? formatCurrency(kpis.avgTicket) : '—', color: 'var(--t)', sub: 'por venda' },
           { title: 'Faturamento',     value: kpis ? formatCurrency(kpis.revenue) : '—',   color: 'var(--t)', sub: 'receita total' },
@@ -734,20 +750,20 @@ export default function Dashboard() {
         ].map((k) => (
           <div key={k.title} style={{
             background: 'var(--card)', border: '1px solid var(--bs)',
-            borderRadius: 9, padding: '14px 16px',
+            borderRadius: 10, padding: '14px 16px',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <p style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.06em', fontWeight: 700 }}>{k.title}</p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <p style={{ fontSize: 10, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: '.06em', fontWeight: 700, lineHeight: 1.3 }}>{k.title}</p>
               {k.action && (
-                <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--neon)', fontSize: 9 }}>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--neon)', fontSize: 10, fontWeight: 700 }}>
                   EDITAR
                 </button>
               )}
             </div>
-            <p style={{ fontSize: 24, fontWeight: 800, color: k.color, marginTop: 6, fontFamily: 'var(--fn)', lineHeight: 1 }}>
+            <p style={{ fontSize: 22, fontWeight: 800, color: k.color, lineHeight: 1, letterSpacing: '-.02em' }}>
               {k.value}
             </p>
-            <p style={{ fontSize: 10, color: 'var(--t3)', marginTop: 3 }}>{k.sub}</p>
+            <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>{k.sub}</p>
           </div>
         ))}
       </div>}
@@ -755,44 +771,44 @@ export default function Dashboard() {
       {/* ── BLOCO 3: Gráficos linha 1 ── */}
       {vis('charts1') && <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 12 }}>
         <Card>
-          <CardHeader style={{ padding: '12px 16px 0' }}>
+          <CardHeader style={{ padding: '14px 16px 0' }}>
             <div>
               <CardTitle>Faturamento vs Lucro</CardTitle>
-              <p style={{ fontSize: 9, color: 'var(--t3)', marginTop: 2 }}>
-                {new Date().getFullYear()} · MENSAL
+              <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>
+                {new Date().getFullYear()} · mensal
               </p>
             </div>
             <Badge variant="neon" dot>Atualizado</Badge>
           </CardHeader>
           <CardContent style={{ padding: '8px 8px 12px' }}>
             <ResponsiveContainer width="100%" height={210}>
-              <BarChart data={monthlyData ?? []} margin={{ top: 4, right: 0, bottom: 0, left: -20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--b)" vertical={false} />
-                <XAxis dataKey="name" tick={{ fill: 'var(--t3)', fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: 'var(--t3)', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <BarChart data={monthlyData ?? []} margin={{ top: 4, right: 4, bottom: 0, left: -10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--bs)" vertical={false} />
+                <XAxis dataKey="name" tick={{ fill: 'var(--t2)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: 'var(--t2)', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip content={<CustomTooltip />} />
-                <Legend iconSize={7} iconType="circle"
-                  formatter={v => <span style={{ color: 'var(--t2)', fontSize: 10 }}>{v}</span>} />
-                <Bar dataKey="faturamento" name="Faturamento" fill="rgba(61,247,16,.3)" radius={[3,3,0,0]} />
-                <Bar dataKey="lucro"       name="Lucro"       fill="rgba(61,247,16,.85)" radius={[3,3,0,0]} />
+                <Legend iconSize={8} iconType="circle"
+                  formatter={v => <span style={{ color: 'var(--t2)', fontSize: 11 }}>{v}</span>} />
+                <Bar dataKey="faturamento" name="Faturamento" fill="#3B82F6" radius={[4,4,0,0]} />
+                <Bar dataKey="lucro"       name="Lucro"       fill="#3DF710" radius={[4,4,0,0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader style={{ padding: '12px 16px 0' }}>
+          <CardHeader style={{ padding: '14px 16px 0' }}>
             <CardTitle>Funil de Conversão</CardTitle>
-            <span style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase' }}>Este mês</span>
+            <span style={{ fontSize: 11, color: 'var(--t3)' }}>Este mês</span>
           </CardHeader>
           <CardContent style={{ padding: '8px 8px 12px' }}>
             <ResponsiveContainer width="100%" height={210}>
-              <BarChart data={funnelBarData} layout="vertical" margin={{ top: 0, right: 0, bottom: 0, left: -8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--b)" horizontal={false} />
-                <XAxis type="number" tick={{ fill: 'var(--t3)', fontSize: 9 }} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="name" tick={{ fill: 'var(--t2)', fontSize: 9 }} axisLine={false} tickLine={false} width={60} />
+              <BarChart data={funnelBarData} layout="vertical" margin={{ top: 0, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--bs)" horizontal={false} />
+                <XAxis type="number" tick={{ fill: 'var(--t2)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="name" tick={{ fill: 'var(--t)', fontSize: 11, fontWeight: 500 }} axisLine={false} tickLine={false} width={68} />
                 <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="value" name="Leads" fill="var(--neon)" radius={[0,3,3,0]} />
+                <Bar dataKey="value" name="Leads" fill="var(--neon)" radius={[0,4,4,0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -802,25 +818,25 @@ export default function Dashboard() {
       {/* ── BLOCO 4: Gráficos linha 2 ── */}
       {vis('charts2') && <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 12 }}>
         <Card>
-          <CardHeader style={{ padding: '12px 16px 0' }}>
+          <CardHeader style={{ padding: '14px 16px 0' }}>
             <CardTitle>Leads por dia</CardTitle>
-            <span style={{ fontSize: 9, color: 'var(--t3)' }}>Últimos 14 dias</span>
+            <span style={{ fontSize: 11, color: 'var(--t3)' }}>Últimos 14 dias</span>
           </CardHeader>
           <CardContent style={{ padding: '8px 8px 12px' }}>
             <ResponsiveContainer width="100%" height={180}>
-              <AreaChart data={leadsPerDay ?? []} margin={{ top: 4, right: 0, bottom: 0, left: -28 }}>
+              <AreaChart data={leadsPerDay ?? []} margin={{ top: 4, right: 4, bottom: 0, left: -16 }}>
                 <defs>
                   <linearGradient id="lg" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="var(--neon)" stopOpacity={0.2} />
+                    <stop offset="5%"  stopColor="var(--neon)" stopOpacity={0.25} />
                     <stop offset="95%" stopColor="var(--neon)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--b)" vertical={false} />
-                <XAxis dataKey="name" tick={{ fill: 'var(--t3)', fontSize: 9 }} axisLine={false} tickLine={false} interval={2} />
-                <YAxis tick={{ fill: 'var(--t3)', fontSize: 9 }} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--bs)" vertical={false} />
+                <XAxis dataKey="name" tick={{ fill: 'var(--t2)', fontSize: 11 }} axisLine={false} tickLine={false} interval={2} />
+                <YAxis tick={{ fill: 'var(--t2)', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="leads" name="Leads" stroke="var(--neon)" strokeWidth={2}
-                  fill="url(#lg)" strokeDasharray="4 2"
+                <Area type="monotone" dataKey="leads" name="Leads" stroke="var(--neon)" strokeWidth={2.5}
+                  fill="url(#lg)"
                   dot={{ fill: 'var(--neon)', r: 3, strokeWidth: 0 }}
                   activeDot={{ r: 5, fill: 'var(--neon)' }} />
               </AreaChart>
@@ -829,42 +845,42 @@ export default function Dashboard() {
         </Card>
 
         <Card>
-          <CardHeader style={{ padding: '12px 16px 0' }}>
+          <CardHeader style={{ padding: '14px 16px 0' }}>
             <CardTitle>Origem dos leads</CardTitle>
-            <span style={{ fontSize: 9, color: 'var(--t3)' }}>Mês atual</span>
+            <span style={{ fontSize: 11, color: 'var(--t3)' }}>Mês atual</span>
           </CardHeader>
           <CardContent style={{ padding: '4px 8px 12px' }}>
             <ResponsiveContainer width="100%" height={180}>
               <PieChart>
                 <Pie data={sourceData?.length ? sourceData : [{ name: 'Sem dados', value: 1 }]}
-                  cx="50%" cy="50%" innerRadius={42} outerRadius={62} paddingAngle={3} dataKey="value">
+                  cx="50%" cy="42%" innerRadius={40} outerRadius={60} paddingAngle={3} dataKey="value">
                   {(sourceData?.length ? sourceData : [{ name: '', value: 1 }]).map((_, idx) => (
                     <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} opacity={sourceData?.length ? 1 : 0.15} />
                   ))}
                 </Pie>
                 <Tooltip content={<CustomTooltip />} />
-                <Legend iconSize={7} iconType="circle"
-                  formatter={v => <span style={{ color: 'var(--t2)', fontSize: 9 }}>{v}</span>} />
+                <Legend iconSize={8} iconType="circle"
+                  formatter={v => <span style={{ color: 'var(--t2)', fontSize: 11 }}>{v}</span>} />
               </PieChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader style={{ padding: '12px 16px 0' }}>
-            <CardTitle>Estoque x Giro</CardTitle>
-            <span style={{ fontSize: 9, color: 'var(--t3)' }}>Dias médios</span>
+          <CardHeader style={{ padding: '14px 16px 0' }}>
+            <CardTitle>Estoque × Giro</CardTitle>
+            <span style={{ fontSize: 11, color: 'var(--t3)' }}>Dias médios em estoque</span>
           </CardHeader>
           <CardContent style={{ padding: '8px 8px 12px' }}>
             <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={stockGiro ?? []} margin={{ top: 4, right: 0, bottom: 0, left: -28 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--b)" vertical={false} />
-                <XAxis dataKey="name" tick={{ fill: 'var(--t3)', fontSize: 9 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: 'var(--t3)', fontSize: 9 }} axisLine={false} tickLine={false} />
+              <BarChart data={stockGiro ?? []} margin={{ top: 4, right: 4, bottom: 0, left: -16 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--bs)" vertical={false} />
+                <XAxis dataKey="name" tick={{ fill: 'var(--t2)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: 'var(--t2)', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="avg" name="Dias" radius={[3,3,0,0]}>
+                <Bar dataKey="avg" name="Dias" radius={[4,4,0,0]}>
                   {(stockGiro ?? []).map((entry, idx) => (
-                    <Cell key={idx} fill={entry.avg > 60 ? 'var(--red)' : entry.avg > 30 ? 'var(--yel)' : 'var(--neon)'} />
+                    <Cell key={idx} fill={entry.avg > 60 ? '#F43F5E' : entry.avg > 30 ? '#F59E0B' : '#3DF710'} />
                   ))}
                 </Bar>
               </BarChart>
@@ -877,11 +893,11 @@ export default function Dashboard() {
       {vis('alerts') && leadAlerts && leadAlerts.length > 0 && (
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
-            <Bell size={12} style={{ color: 'var(--neon)' }} />
-            <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.1em' }}>
+            <Bell size={12} style={{ color: 'var(--t2)' }} />
+            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
               Alertas de Leads
             </p>
-            <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', background: 'var(--red)', padding: '2px 7px', borderRadius: 10 }}>
+            <span style={{ fontSize: 10, fontWeight: 800, color: '#fff', background: 'var(--red)', padding: '2px 8px', borderRadius: 10 }}>
               {leadAlerts.filter(a => a.severity === 'critical' || a.severity === 'warning').length}
             </span>
           </div>
@@ -919,7 +935,7 @@ export default function Dashboard() {
       {vis('bottom') && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
         {/* Follow-ups */}
         <Card>
-          <CardHeader style={{ padding: '12px 16px 0' }}>
+          <CardHeader style={{ padding: '14px 16px 0' }}>
             <CardTitle>Follow-ups urgentes</CardTitle>
             {followUps?.filter(f => f.overdue).length
               ? <Badge variant="danger" dot>{followUps.filter(f => f.overdue).length} atrasados</Badge>
@@ -930,14 +946,15 @@ export default function Dashboard() {
             {!followUps?.length ? (
               <p style={{ fontSize: 12, color: 'var(--t3)', textAlign: 'center', padding: '20px 0' }}>Nenhum follow-up pendente</p>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
                 {followUps.map(f => (
                   <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{
-                      width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-                      background: 'var(--ng)', border: '1px solid var(--nb)',
+                      width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                      background: f.overdue ? 'rgba(244,63,94,.12)' : 'var(--ng)',
+                      border: `1px solid ${f.overdue ? 'rgba(244,63,94,.3)' : 'var(--nb)'}`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 9, fontWeight: 700, color: 'var(--neon)',
+                      fontSize: 11, fontWeight: 700, color: f.overdue ? 'var(--red)' : 'var(--neon)',
                     }}>
                       {f.client_name.slice(0, 2).toUpperCase()}
                     </div>
@@ -945,11 +962,11 @@ export default function Dashboard() {
                       <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--t)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {f.client_name}
                       </p>
-                      <p style={{ fontSize: 10, color: 'var(--t3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <p style={{ fontSize: 11, color: 'var(--t3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {f.vehicle_interest ?? '—'}
                       </p>
                     </div>
-                    <Badge variant={f.overdue ? 'danger' : f.isToday ? 'warning' : 'default'} style={{ flexShrink: 0, fontSize: 9 }}>
+                    <Badge variant={f.overdue ? 'danger' : f.isToday ? 'warning' : 'default'} style={{ flexShrink: 0, fontSize: 10 }}>
                       {f.overdue ? 'ATRASADO' : f.isToday ? 'HOJE' : timeAgo(f.next_followup_at!)}
                     </Badge>
                   </div>
@@ -961,9 +978,9 @@ export default function Dashboard() {
 
         {/* Ranking */}
         <Card>
-          <CardHeader style={{ padding: '12px 16px 0' }}>
+          <CardHeader style={{ padding: '14px 16px 0' }}>
             <CardTitle>Ranking vendedores</CardTitle>
-            <span style={{ fontSize: 9, color: 'var(--t3)' }}>Mês atual</span>
+            <span style={{ fontSize: 11, color: 'var(--t3)' }}>Mês atual</span>
           </CardHeader>
           <CardContent style={{ padding: '8px 16px 14px' }}>
             {!vendorRanking?.length ? (
@@ -972,25 +989,25 @@ export default function Dashboard() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {vendorRanking.map((v, i) => (
                   <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: i === 0 ? 'var(--neon)' : 'var(--t3)', width: 16, flexShrink: 0 }}>
-                      {i + 1}
+                    <span style={{ fontSize: 13, fontWeight: 700, color: i === 0 ? 'var(--neon)' : 'var(--t3)', width: 20, flexShrink: 0, textAlign: 'center' }}>
+                      {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`}
                     </span>
                     <div style={{
-                      width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                      width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
                       background: i === 0 ? 'var(--ng)' : 'var(--el)',
                       border: `1px solid ${i === 0 ? 'var(--nb)' : 'var(--b)'}`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 9, fontWeight: 700, color: i === 0 ? 'var(--neon)' : 'var(--t2)',
+                      fontSize: 11, fontWeight: 700, color: i === 0 ? 'var(--neon)' : 'var(--t2)',
                     }}>
                       {v.initials}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--t)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--t)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {v.name.split(' ')[0]}
                       </p>
                     </div>
-                    <span style={{ fontSize: 11, fontFamily: 'var(--fm)', color: 'var(--t2)', flexShrink: 0 }}>
-                      {v.won} / {v.goal || '—'}
+                    <span style={{ fontSize: 12, fontFamily: 'var(--fm)', color: i === 0 ? 'var(--neon)' : 'var(--t)', flexShrink: 0, fontWeight: 700 }}>
+                      {v.won}<span style={{ color: 'var(--t3)', fontWeight: 400 }}>/{v.goal || '—'}</span>
                     </span>
                   </div>
                 ))}
@@ -1001,9 +1018,9 @@ export default function Dashboard() {
 
         {/* Financial metrics */}
         <Card>
-          <CardHeader style={{ padding: '12px 16px 0' }}>
+          <CardHeader style={{ padding: '14px 16px 0' }}>
             <CardTitle>Métricas financeiras</CardTitle>
-            <span style={{ fontSize: 9, color: 'var(--t3)' }}>Mês atual</span>
+            <span style={{ fontSize: 11, color: 'var(--t3)' }}>Mês atual</span>
           </CardHeader>
           <CardContent style={{ padding: '8px 16px 14px' }}>
             <StatRow label="Margem bruta"

@@ -44,7 +44,7 @@ export function CardHeader({ className, children, style, ...props }: React.HTMLA
 export function CardTitle({ className, children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
   return (
     <h3
-      className={cn('text-[10px] font-semibold uppercase tracking-[.06em]', className)}
+      className={cn('text-[11px] font-bold uppercase tracking-[.07em]', className)}
       style={{ color: 'var(--t2)' }}
       {...props}
     >
