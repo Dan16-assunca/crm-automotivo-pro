@@ -398,7 +398,10 @@ export default function Register() {
 
             <p style={{ textAlign: 'center', fontSize: 10, color: 'var(--t3)', lineHeight: 1.6 }}>
               14 dias grátis, sem cartão de crédito.<br />
-              Ao criar, você concorda com os Termos de Uso.
+              Ao criar, você concorda com os{' '}
+              <Link to="/termos" style={{ color: 'var(--neon)', textDecoration: 'none' }}>Termos de Uso</Link>
+              {' '}e a{' '}
+              <Link to="/privacidade" style={{ color: 'var(--neon)', textDecoration: 'none' }}>Política de Privacidade</Link>.
             </p>
           </form>
 

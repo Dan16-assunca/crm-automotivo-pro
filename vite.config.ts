@@ -31,7 +31,7 @@ export default defineConfig(({ mode }) => {
             },
           ],
         },
-        includeAssets: ['favicon.ico', 'icons/*.png'],
+        includeAssets: ['favicon.svg', 'icon-source.svg', 'icons/*.png'],
         manifest: {
           name: 'CRM Automotivo Pro',
           short_name: 'CRM Auto',

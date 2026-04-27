@@ -5,7 +5,8 @@ import {
   Car, BarChart3, MessageCircle, Zap, Users, Target,
   CheckCircle, ChevronDown, ChevronRight, ArrowRight,
   Shield, Clock, TrendingUp, Star, Menu, X,
-  Kanban, Bell, Globe,
+  Kanban, Bell, Globe, Cpu, Megaphone, Calculator,
+  GitBranch, Smartphone,
 } from 'lucide-react'
 
 const ROOT_DOMAIN = (import.meta.env.VITE_ROOT_DOMAIN as string | undefined) ?? 'crmautomotivopro.com'
@@ -26,16 +27,34 @@ const FEATURES = [
     desc: 'Gerencie todas as conversas da equipe em um só lugar. Nunca perca um cliente por falta de resposta.',
   },
   {
+    icon: Megaphone,
+    color: '#3B82F6',
+    title: 'Leads de Meta & Google',
+    desc: 'Receba leads do Facebook Lead Ads e Google Ads automaticamente no CRM, com atribuição completa de campanha.',
+  },
+  {
+    icon: Cpu,
+    color: '#A855F7',
+    title: 'IA Generativa',
+    desc: 'Análise de estoque com IA, geração de descrições de veículos e mensagens de boas-vindas personalizadas por Claude.',
+  },
+  {
+    icon: BarChart3,
+    color: '#6366F1',
+    title: 'Atribuição de Marketing',
+    desc: 'Rastreamento UTM completo: saiba qual campanha gerou cada venda. Dashboard com CPL, ROAS e conversão por canal.',
+  },
+  {
     icon: Zap,
     color: '#F59E0B',
     title: 'Automações',
     desc: 'Crie fluxos automáticos de follow-up. O CRM trabalha mesmo quando sua equipe está dormindo.',
   },
   {
-    icon: BarChart3,
-    color: '#6366F1',
-    title: 'Relatórios em Tempo Real',
-    desc: 'Dashboards completos com métricas de vendas, conversão e performance por vendedor.',
+    icon: Calculator,
+    color: '#10B981',
+    title: 'Calculadora Financeira',
+    desc: 'Simule financiamentos, calcule comissões e apresente propostas detalhadas para o cliente na hora.',
   },
   {
     icon: Users,
@@ -48,6 +67,24 @@ const FEATURES = [
     color: '#3DF710',
     title: 'Metas e Comissões',
     desc: 'Defina metas individuais e acompanhe o progresso da equipe em tempo real.',
+  },
+  {
+    icon: GitBranch,
+    color: '#F97316',
+    title: 'Campanhas & UTMs',
+    desc: 'Gerencie campanhas de anúncios, registre investimentos e acompanhe métricas de performance em um só lugar.',
+  },
+  {
+    icon: Bell,
+    color: '#EAB308',
+    title: 'Alertas Inteligentes',
+    desc: 'Receba notificações de leads quentes, follow-ups atrasados e oportunidades prestes a expirar.',
+  },
+  {
+    icon: Smartphone,
+    color: '#3DF710',
+    title: 'App Mobile (PWA)',
+    desc: 'Instale como app no Android e iPhone. Interface mobile nativa com experiência completa.',
   },
 ]
 
@@ -65,6 +102,7 @@ const PLANS = [
       'Pipeline Kanban',
       'WhatsApp integrado',
       'Relatórios básicos',
+      'Calculadora financeira',
       'Suporte por email',
     ],
   },
@@ -79,8 +117,10 @@ const PLANS = [
       'Até 10 vendedores',
       'Leads ilimitados',
       'Tudo do Starter',
+      'Meta & Google Lead Ads',
+      'IA para análise de estoque',
+      'Atribuição UTM completa',
       'Automações avançadas',
-      'Relatórios completos',
       'Metas e comissões',
       'Suporte prioritário',
     ],
@@ -97,6 +137,7 @@ const PLANS = [
       'Múltiplas lojas',
       'Tudo do Pro',
       'API personalizada',
+      'Integrações customizadas',
       'Onboarding dedicado',
       'Gerente de conta',
       'SLA garantido',
@@ -110,8 +151,20 @@ const FAQS = [
     a: 'Não. O trial de 14 dias é 100% gratuito e sem necessidade de cartão. Você só paga se quiser continuar.',
   },
   {
+    q: 'Como funciona a integração com Meta e Google Ads?',
+    a: 'Você configura um webhook na sua conta de anúncios e, a partir daí, todo lead gerado nos formulários do Facebook/Instagram Lead Ads ou Google Ads chega automaticamente no CRM — com dados da campanha, grupo de anúncio e o identificador de clique (fbclid/gclid) para atribuição precisa.',
+  },
+  {
+    q: 'O que é a atribuição UTM e para que serve?',
+    a: 'O sistema captura automaticamente os parâmetros UTM dos seus links de campanha (utm_source, utm_medium, utm_campaign, etc.). Você vê em cada lead de qual campanha ele veio, e no dashboard de Atribuição acompanha métricas como Custo por Lead (CPL) e ROAS por campanha.',
+  },
+  {
     q: 'Como funciona o WhatsApp integrado?',
-    a: 'Você conecta seu número comercial via QR Code. Todas as conversas são gerenciadas dentro do CRM, organizadas por lead.',
+    a: 'Você conecta seu número comercial via QR Code. Todas as conversas são gerenciadas dentro do CRM, organizadas por lead. A IA pode enviar mensagens de boas-vindas personalizadas automaticamente para novos leads.',
+  },
+  {
+    q: 'O que a IA faz no sistema?',
+    a: 'A IA (Claude da Anthropic) analisa o estoque e sugere o melhor veículo para cada perfil de lead, gera descrições profissionais para anúncios, e cria mensagens de boas-vindas personalizadas via WhatsApp mencionando o veículo de interesse do lead.',
   },
   {
     q: 'Minha equipe precisa de treinamento?',
@@ -128,8 +181,8 @@ const FAQS = [
 ]
 
 const STATS = [
-  { value: '2.400+', label: 'Leads gerenciados' },
-  { value: '97%', label: 'Uptime garantido' },
+  { value: '12+', label: 'Funcionalidades' },
+  { value: '99%', label: 'Uptime garantido' },
   { value: '14 dias', label: 'Trial grátis' },
   { value: '< 1h', label: 'Para configurar' },
 ]
@@ -404,6 +457,38 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ── Integrações ── */}
+      <section style={{ padding: '60px 24px' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: 44 }}>
+            <div style={s.badge}><Globe size={10} /> Integrações nativas</div>
+            <h2 style={s.h2}>Conectado ao seu ecossistema</h2>
+            <p style={{ ...s.sub, margin: '0 auto' }}>
+              Leads chegam automaticamente de onde seus anúncios estão. Sem planilhas, sem copiar e colar.
+            </p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
+            {[
+              { emoji: '📘', name: 'Meta Lead Ads', desc: 'Facebook & Instagram', color: '#1877F2' },
+              { emoji: '🔴', name: 'Google Ads', desc: 'Lead Form Assets', color: '#EA4335' },
+              { emoji: '💬', name: 'WhatsApp Business', desc: 'Uazapi / Evolution API', color: '#25D366' },
+              { emoji: '🤖', name: 'Claude IA', desc: 'Anthropic — análise & copy', color: '#A855F7' },
+              { emoji: '💳', name: 'Stripe', desc: 'Pagamentos & assinaturas', color: '#635BFF' },
+              { emoji: '📊', name: 'UTM Tracking', desc: 'Atribuição de marketing', color: '#F59E0B' },
+            ].map((item, i) => (
+              <motion.div key={i} initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.06 }} viewport={{ once: true }}
+                style={{ ...s.card, display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div style={{ fontSize: 24, flexShrink: 0 }}>{item.emoji}</div>
+                <div>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--t)' }}>{item.name}</p>
+                  <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--t3)' }}>{item.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── Preços ── */}
       <section id="preços" style={s.section}>
         <div style={{ textAlign: 'center', marginBottom: 52 }}>
@@ -505,9 +590,9 @@ export default function Landing() {
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--neon)', letterSpacing: '.1em' }}>CRM AUTO</span>
           </div>
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-            {['Termos de Uso', 'Privacidade', 'Suporte'].map(label => (
-              <a key={label} href="#" style={{ fontSize: 12, color: 'var(--t3)', textDecoration: 'none' }}>{label}</a>
-            ))}
+            <Link to="/termos" style={{ fontSize: 12, color: 'var(--t3)', textDecoration: 'none' }}>Termos de Uso</Link>
+            <Link to="/privacidade" style={{ fontSize: 12, color: 'var(--t3)', textDecoration: 'none' }}>Privacidade</Link>
+            <a href={`mailto:suporte@crmautomotivopro.com`} style={{ fontSize: 12, color: 'var(--t3)', textDecoration: 'none' }}>Suporte</a>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--t3)' }}>
             <Shield size={12} />

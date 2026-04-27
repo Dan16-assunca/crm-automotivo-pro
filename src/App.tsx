@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { lazy, Suspense, useEffect } from 'react'
+import * as Sentry from '@sentry/react'
 import { useAuth } from '@/hooks/useAuth'
 import { useUIStore } from '@/store/uiStore'
 import { Layout } from '@/components/layout/Layout'
@@ -32,6 +33,8 @@ const Integrations = lazy(() => import('@/pages/integrations/Integrations'))
 const Analytics = lazy(() => import('@/pages/analytics/Analytics'))
 const Instagram = lazy(() => import('@/pages/instagram/Instagram'))
 const Planos = lazy(() => import('@/pages/planos/Planos'))
+const Privacy = lazy(() => import('@/pages/landing/Privacy'))
+const Terms = lazy(() => import('@/pages/landing/Terms'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -69,6 +72,8 @@ function AppInner() {
           <Route path="/registro" element={<Register />} />
           <Route path="/convite" element={<InviteAccept />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/privacidade" element={<Privacy />} />
+          <Route path="/termos" element={<Terms />} />
 
           {/* Landing page — exibida no domínio raiz (não em subdomínios de tenant) */}
           {!isOnTenantSubdomain() && (
@@ -115,10 +120,35 @@ function AppInner() {
   )
 }
 
+function SentryFallback({ error }: { error: unknown }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: 24, fontFamily: 'var(--fn)', background: 'var(--bg)', gap: 16, textAlign: 'center' }}>
+      <div style={{ fontSize: 40 }}>⚠️</div>
+      <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--t)', margin: 0 }}>Algo deu errado</h1>
+      <p style={{ fontSize: 14, color: 'var(--t3)', maxWidth: 360, lineHeight: 1.7, margin: 0 }}>
+        Ocorreu um erro inesperado. Nossa equipe já foi notificada. Tente recarregar a página.
+      </p>
+      <button
+        onClick={() => window.location.reload()}
+        style={{ background: 'var(--neon)', color: '#000', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+      >
+        Recarregar página
+      </button>
+      {import.meta.env.DEV && error instanceof Error && (
+        <pre style={{ fontSize: 11, color: 'rgba(255,100,100,.8)', background: 'rgba(255,0,0,.05)', border: '1px solid rgba(255,0,0,.15)', borderRadius: 8, padding: 16, maxWidth: 600, overflow: 'auto', textAlign: 'left' }}>
+          {error.message}
+        </pre>
+      )}
+    </div>
+  )
+}
+
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AppInner />
-    </QueryClientProvider>
+    <Sentry.ErrorBoundary fallback={SentryFallback} showDialog={false}>
+      <QueryClientProvider client={queryClient}>
+        <AppInner />
+      </QueryClientProvider>
+    </Sentry.ErrorBoundary>
   )
 }
