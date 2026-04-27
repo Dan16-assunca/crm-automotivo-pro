@@ -4,6 +4,7 @@ import {
   Save, Loader2, Lock, Eye, EyeOff,
   QrCode, LogOut, Plus, Trash2,
   Smartphone, CreditCard, Star, Zap, Building2,
+  GripVertical, X as XIcon, Settings2,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
@@ -13,6 +14,10 @@ import { Input } from '@/components/ui/Input'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { toast } from '@/components/ui/Toast'
+import {
+  type LeadFieldConfig, type CustomField, type CustomFieldType,
+  DEFAULT_LEAD_FIELD_CONFIG,
+} from '@/hooks/useLeadFieldConfig'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -1064,9 +1069,274 @@ export default function Settings() {
       {/* Plano / Billing */}
       <BillingSection />
 
+      {/* Campos do formulário de Lead */}
+      <LeadFieldsCard />
+
       {/* Segurança */}
       <PasswordCard />
     </div>
+  )
+}
+
+// ─── Card de Campos do Lead ───────────────────────────────────────────────────
+
+const FIELD_TYPE_LABELS: Record<CustomFieldType, string> = {
+  text:   'Texto',
+  number: 'Número',
+  date:   'Data',
+  select: 'Seleção',
+}
+
+function ToggleRow({ label, desc, checked, onChange }: {
+  label: string; desc?: string; checked: boolean; onChange: (v: boolean) => void
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid var(--bs)' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--t)' }}>{label}</p>
+        {desc && <p style={{ fontSize: 10, color: 'var(--t3)', marginTop: 1 }}>{desc}</p>}
+      </div>
+      <button
+        type="button"
+        onClick={() => onChange(!checked)}
+        style={{
+          width: 38, height: 21, borderRadius: 10.5, border: 'none', cursor: 'pointer',
+          background: checked ? 'var(--neon)' : 'var(--el)',
+          position: 'relative', transition: 'background .2s', flexShrink: 0, marginLeft: 12,
+          minHeight: 'unset',
+        }}
+      >
+        <span style={{
+          position: 'absolute', top: 3, left: checked ? 19 : 3,
+          width: 15, height: 15, borderRadius: '50%',
+          background: checked ? '#000' : 'var(--t3)',
+          transition: 'left .2s',
+        }} />
+      </button>
+    </div>
+  )
+}
+
+function LeadFieldsCard() {
+  const { store, setStore } = useAuthStore()
+  const [config, setConfig] = useState<LeadFieldConfig>(DEFAULT_LEAD_FIELD_CONFIG)
+  const [saving, setSaving] = useState(false)
+  const [newLabel, setNewLabel] = useState('')
+  const [newType, setNewType]   = useState<CustomFieldType>('text')
+  const [newPlaceholder, setNewPlaceholder] = useState('')
+  const [newOptions, setNewOptions] = useState('')
+  const [showAddForm, setShowAddForm] = useState(false)
+
+  // Load config from store settings
+  useEffect(() => {
+    const raw = (store?.settings as Record<string, unknown> | undefined)?.lead_fields
+    if (raw && typeof raw === 'object') {
+      setConfig({ ...DEFAULT_LEAD_FIELD_CONFIG, ...(raw as Partial<LeadFieldConfig>) })
+    }
+  }, [store?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const patch = <K extends keyof LeadFieldConfig>(key: K, value: LeadFieldConfig[K]) =>
+    setConfig(prev => ({ ...prev, [key]: value }))
+
+  const addCustomField = () => {
+    if (!newLabel.trim()) return
+    const newField: CustomField = {
+      id:          `cf_${Date.now()}`,
+      label:       newLabel.trim(),
+      type:        newType,
+      placeholder: newPlaceholder.trim() || undefined,
+      options:     newType === 'select' && newOptions.trim()
+                     ? newOptions.split(',').map(o => o.trim()).filter(Boolean)
+                     : undefined,
+    }
+    setConfig(prev => ({ ...prev, custom_fields: [...prev.custom_fields, newField] }))
+    setNewLabel(''); setNewType('text'); setNewPlaceholder(''); setNewOptions('')
+    setShowAddForm(false)
+  }
+
+  const removeCustomField = (id: string) =>
+    setConfig(prev => ({ ...prev, custom_fields: prev.custom_fields.filter(f => f.id !== id) }))
+
+  const save = async () => {
+    if (!store) return
+    setSaving(true)
+    try {
+      const newSettings = { ...(store.settings as Record<string, unknown> ?? {}), lead_fields: config }
+      const { data, error } = await supabase.from('stores').update({ settings: newSettings }).eq('id', store.id).select().single()
+      if (error) { toast.error('Erro ao salvar', error.message); return }
+      if (data) setStore(data as Parameters<typeof setStore>[0])
+      toast.success('Configuração salva!', 'O formulário de lead foi atualizado')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const inp: React.CSSProperties = {
+    height: 32, padding: '0 9px', fontSize: 12,
+    background: 'var(--el)', border: '1px solid var(--b)',
+    borderRadius: 6, color: 'var(--t)', outline: 'none',
+    fontFamily: 'var(--fn)', boxSizing: 'border-box' as const,
+  }
+
+  return (
+    <Card>
+      <CardHeader style={{ padding: '14px 16px 0' }}>
+        <CardTitle>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Settings2 size={16} style={{ color: 'var(--neon)' }} />
+            Campos do Formulário de Lead
+          </div>
+        </CardTitle>
+      </CardHeader>
+
+      <CardContent style={{ padding: '14px 16px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <p style={{ fontSize: 11, color: 'var(--t3)' }}>
+          Personalize quais campos aparecem ao criar um lead. Útil para negócios fora do setor automotivo (imóveis, seguros, etc.).
+        </p>
+
+        {/* Interest field label */}
+        <div>
+          <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.06em', display: 'block', marginBottom: 6 }}>
+            Nome do campo "Produto/Interesse"
+          </label>
+          <input
+            type="text"
+            value={config.interest_label}
+            onChange={e => patch('interest_label', e.target.value)}
+            placeholder="Ex: Veículo de interesse / Imóvel desejado / Produto"
+            style={{ ...inp, width: '100%' }}
+            onFocus={e => (e.currentTarget.style.borderColor = 'var(--nb)')}
+            onBlur={e => (e.currentTarget.style.borderColor = 'var(--b)')}
+          />
+        </div>
+
+        {/* Standard fields toggles */}
+        <div>
+          <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 2 }}>
+            Campos padrão
+          </p>
+          <ToggleRow label="Campo de interesse" desc="Ex: Veículo, imóvel, produto"
+            checked={config.show_vehicle} onChange={v => patch('show_vehicle', v)} />
+          <ToggleRow label="Orçamento (mínimo e máximo)" desc="Faixas de valor disponível"
+            checked={config.show_budget} onChange={v => patch('show_budget', v)} />
+          <ToggleRow label="Forma de pagamento" desc="À vista, financiamento, etc."
+            checked={config.show_payment_type} onChange={v => patch('show_payment_type', v)} />
+          <ToggleRow label="Permuta / Troca" desc="Se o cliente tem bem para troca"
+            checked={config.show_trade_in} onChange={v => patch('show_trade_in', v)} />
+          <ToggleRow label="Cidade / Estado"
+            checked={config.show_city} onChange={v => patch('show_city', v)} />
+          <ToggleRow label="CPF do cliente"
+            checked={config.show_cpf} onChange={v => patch('show_cpf', v)} />
+        </div>
+
+        {/* Custom fields */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
+              Campos personalizados ({config.custom_fields.length})
+            </p>
+            {!showAddForm && (
+              <button
+                type="button"
+                onClick={() => setShowAddForm(true)}
+                style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--neon)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, minHeight: 'unset' }}
+              >
+                <Plus size={12} /> Adicionar campo
+              </button>
+            )}
+          </div>
+
+          {/* Existing custom fields list */}
+          {config.custom_fields.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 10 }}>
+              {config.custom_fields.map(f => (
+                <div key={f.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 10px', borderRadius: 7,
+                  background: 'var(--el)', border: '1px solid var(--bs)',
+                }}>
+                  <GripVertical size={13} style={{ color: 'var(--t3)', flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--t)', flex: 1 }}>{f.label}</span>
+                  <Badge variant="default" style={{ fontSize: 9 }}>{FIELD_TYPE_LABELS[f.type]}</Badge>
+                  <button
+                    type="button"
+                    onClick={() => removeCustomField(f.id)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', display: 'flex', padding: 2, minHeight: 'unset', borderRadius: 4 }}
+                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--red)')}
+                    onMouseLeave={e => (e.currentTarget.style.color = 'var(--t3)')}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add field form */}
+          {showAddForm && (
+            <div style={{ background: 'var(--el)', border: '1px solid var(--b)', borderRadius: 9, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
+                <input
+                  type="text" placeholder="Nome do campo (ex: Metragem, Bairro...)"
+                  value={newLabel} onChange={e => setNewLabel(e.target.value)}
+                  style={{ ...inp, width: '100%' }}
+                  onFocus={e => (e.currentTarget.style.borderColor = 'var(--nb)')}
+                  onBlur={e => (e.currentTarget.style.borderColor = 'var(--b)')}
+                  autoFocus
+                />
+                <select
+                  value={newType} onChange={e => setNewType(e.target.value as CustomFieldType)}
+                  style={{ ...inp, width: 110, cursor: 'pointer' }}
+                >
+                  {(Object.entries(FIELD_TYPE_LABELS) as [CustomFieldType, string][]).map(([v, l]) => (
+                    <option key={v} value={v}>{l}</option>
+                  ))}
+                </select>
+              </div>
+              <input
+                type="text" placeholder="Placeholder (opcional)"
+                value={newPlaceholder} onChange={e => setNewPlaceholder(e.target.value)}
+                style={{ ...inp, width: '100%' }}
+                onFocus={e => (e.currentTarget.style.borderColor = 'var(--nb)')}
+                onBlur={e => (e.currentTarget.style.borderColor = 'var(--b)')}
+              />
+              {newType === 'select' && (
+                <input
+                  type="text" placeholder="Opções separadas por vírgula (ex: Casa, Apartamento, Terreno)"
+                  value={newOptions} onChange={e => setNewOptions(e.target.value)}
+                  style={{ ...inp, width: '100%' }}
+                  onFocus={e => (e.currentTarget.style.borderColor = 'var(--nb)')}
+                  onBlur={e => (e.currentTarget.style.borderColor = 'var(--b)')}
+                />
+              )}
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  type="button" onClick={() => setShowAddForm(false)}
+                  style={{ flex: 1, height: 30, borderRadius: 6, fontSize: 11, cursor: 'pointer', background: 'transparent', border: '1px solid var(--b)', color: 'var(--t2)', minHeight: 'unset' }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button" onClick={addCustomField} disabled={!newLabel.trim()}
+                  style={{ flex: 2, height: 30, borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', background: 'var(--ng)', border: '1px solid var(--nb)', color: 'var(--neon)', minHeight: 'unset', opacity: !newLabel.trim() ? 0.4 : 1 }}
+                >
+                  <Plus size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+                  Adicionar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Save */}
+        <div>
+          <Button size="sm" onClick={save} disabled={saving}>
+            {saving ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={13} />}
+            {saving ? 'Salvando…' : 'Salvar configuração'}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Check, Trash2, UserCog, Clock, MailCheck, MessageCircle } from 'lucide-react'
+import { Plus, Check, Trash2, UserCog, Clock, MailCheck, MessageCircle, Lock, Eye, EyeOff } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -30,15 +30,25 @@ const ROLE_VARIANTS: Record<string, 'neon' | 'info' | 'default'> = {
   admin: 'neon', manager: 'info', salesperson: 'default',
 }
 
-// ─── Modal de convite ─────────────────────────────────────────────────────────
+// ─── Constantes da API ────────────────────────────────────────────────────────
+const SUPA_URL  = (import.meta.env.VITE_SUPABASE_URL  as string | undefined) ?? 'https://eakdywmuewvuzyqfpcpl.supabase.co'
+const SUPA_ANON = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVha2R5d211ZXd2dXp5cWZwY3BsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3MjQ5MTgsImV4cCI6MjA5MDMwMDkxOH0.EeUINhQUomMKqhfkjGnkDpO3aO5NZ4Yqd15qof-mB20'
+
+// ─── Modal de adicionar membro ────────────────────────────────────────────────
+type AddMode = 'invite' | 'password'
+
 interface InviteModalProps {
   onClose: () => void
   onSuccess: () => void
 }
 function InviteModal({ onClose, onSuccess }: InviteModalProps) {
+  const [mode, setMode] = useState<AddMode>('password')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<'manager' | 'salesperson'>('salesperson')
+  const [password, setPassword] = useState('')
+  const [confirmPwd, setConfirmPwd] = useState('')
+  const [showPwd, setShowPwd] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   const inp: React.CSSProperties = {
@@ -52,39 +62,48 @@ function InviteModal({ onClose, onSuccess }: InviteModalProps) {
     textTransform: 'uppercase', letterSpacing: '.06em', display: 'block', marginBottom: 5,
   }
 
-  const handleSubmit = async () => {
-    if (!email.trim() || !email.includes('@')) { toast.error('Email inválido'); return }
+  const getSession = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    return session
+  }
 
+  const handleInvite = async () => {
+    if (!email.trim() || !email.includes('@')) { toast.error('Email inválido'); return }
     setSubmitting(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
+      const session = await getSession()
       if (!session) { toast.error('Sessão expirada', 'Faça login novamente'); return }
-
-      const SUPA_URL  = (import.meta.env.VITE_SUPABASE_URL  as string | undefined) ?? 'https://eakdywmuewvuzyqfpcpl.supabase.co'
-      const SUPA_ANON = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVha2R5d211ZXd2dXp5cWZwY3BsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3MjQ5MTgsImV4cCI6MjA5MDMwMDkxOH0.EeUINhQUomMKqhfkjGnkDpO3aO5NZ4Yqd15qof-mB20'
-      const fnUrl = `${SUPA_URL}/functions/v1/invite-team-member`
-      const res = await fetch(fnUrl, {
+      const res = await fetch(`${SUPA_URL}/functions/v1/invite-team-member`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-          'apikey': SUPA_ANON,
-        },
-        body: JSON.stringify({
-          email:     email.trim().toLowerCase(),
-          full_name: name.trim() || null,
-          role,
-        }),
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}`, 'apikey': SUPA_ANON },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), full_name: name.trim() || null, role }),
       })
-
       const result = await res.json()
-
-      if (!res.ok || result.error) {
-        toast.error('Erro ao enviar convite', result.error ?? 'Tente novamente')
-        return
-      }
-
+      if (!res.ok || result.error) { toast.error('Erro ao enviar convite', result.error ?? 'Tente novamente'); return }
       toast.success('Convite enviado!', `Email de convite enviado para ${email.trim().toLowerCase()}`)
+      onSuccess()
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleCreateWithPassword = async () => {
+    if (!name.trim())  { toast.error('Nome obrigatório'); return }
+    if (!email.trim() || !email.includes('@')) { toast.error('Email inválido'); return }
+    if (password.length < 6) { toast.error('Senha muito curta', 'Mínimo 6 caracteres'); return }
+    if (password !== confirmPwd) { toast.error('As senhas não coincidem'); return }
+    setSubmitting(true)
+    try {
+      const session = await getSession()
+      if (!session) { toast.error('Sessão expirada', 'Faça login novamente'); return }
+      const res = await fetch(`${SUPA_URL}/functions/v1/create-team-member`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}`, 'apikey': SUPA_ANON },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), full_name: name.trim(), role, password }),
+      })
+      const result = await res.json()
+      if (!res.ok || result.error) { toast.error('Erro ao criar conta', result.error ?? 'Tente novamente'); return }
+      toast.success('Conta criada!', `${name.trim()} já pode fazer login com o email e senha definidos`)
       onSuccess()
     } finally {
       setSubmitting(false)
@@ -99,17 +118,56 @@ function InviteModal({ onClose, onSuccess }: InviteModalProps) {
     }} onClick={onClose}>
       <div style={{
         background: 'var(--card)', border: '1px solid var(--bs)',
-        borderRadius: 14, padding: 24, width: '100%', maxWidth: 420,
+        borderRadius: 14, padding: 24, width: '100%', maxWidth: 440,
         boxShadow: '0 24px 48px rgba(0,0,0,.6)',
       }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--t)' }}>Convidar Membro</h2>
-          <button onClick={onClose} style={{ color: 'var(--t3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>×</button>
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+          <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--t)' }}>Adicionar Vendedor</h2>
+          <button onClick={onClose} style={{ color: 'var(--t3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, lineHeight: 1, minHeight: 'unset' }}>×</button>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: 'var(--el)', borderRadius: 9, padding: 4 }}>
+          {([
+            { id: 'password' as AddMode, label: '🔐 Criar com senha', desc: 'Login imediato' },
+            { id: 'invite'   as AddMode, label: '✉️ Convidar por email', desc: 'Link por email' },
+          ] as const).map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setMode(tab.id)}
+              style={{
+                flex: 1, padding: '7px 4px', borderRadius: 6, cursor: 'pointer',
+                background: mode === tab.id ? 'var(--card)' : 'transparent',
+                border: mode === tab.id ? '1px solid var(--neon-card)' : '1px solid transparent',
+                color: mode === tab.id ? 'var(--t)' : 'var(--t3)',
+                fontSize: 11, fontWeight: mode === tab.id ? 700 : 500,
+                transition: 'all .15s', textAlign: 'center', minHeight: 'unset',
+              }}
+            >
+              {tab.label}
+              <p style={{ fontSize: 9, color: mode === tab.id ? 'var(--neon)' : 'var(--t3)', margin: '2px 0 0', fontWeight: 400 }}>
+                {tab.desc}
+              </p>
+            </button>
+          ))}
+        </div>
+
+        {/* Form fields */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {mode === 'password' && (
+            <div style={{
+              background: 'var(--ng)', border: '1px solid var(--nb)',
+              borderRadius: 8, padding: '8px 12px', fontSize: 11, color: 'var(--t2)',
+              lineHeight: 1.5,
+            }}>
+              O vendedor receberá o email e senha para fazer login imediatamente — sem precisar confirmar por email.
+            </div>
+          )}
+
           <div>
-            <label style={lbl}>Nome (opcional)</label>
+            <label style={lbl}>Nome {mode === 'password' ? '*' : '(opcional)'}</label>
             <input type="text" placeholder="Ex: João Silva" value={name}
               onChange={e => setName(e.target.value)} style={inp}
               onFocus={e => (e.currentTarget.style.borderColor = 'var(--nb)')}
@@ -135,10 +193,55 @@ function InviteModal({ onClose, onSuccess }: InviteModalProps) {
             </select>
           </div>
 
+          {mode === 'password' && (
+            <>
+              <div>
+                <label style={lbl}>Senha *</label>
+                <div style={{ position: 'relative' }}>
+                  <Lock size={11} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)', pointerEvents: 'none' }} />
+                  <input
+                    type={showPwd ? 'text' : 'password'}
+                    placeholder="Mínimo 6 caracteres"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    style={{ ...inp, paddingLeft: 28, paddingRight: 32 }}
+                    onFocus={e => (e.currentTarget.style.borderColor = 'var(--nb)')}
+                    onBlur={e => (e.currentTarget.style.borderColor = 'var(--b)')}
+                  />
+                  <button
+                    type="button" onClick={() => setShowPwd(v => !v)}
+                    style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', minHeight: 'unset', padding: 2 }}
+                  >
+                    {showPwd ? <EyeOff size={12} /> : <Eye size={12} />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label style={lbl}>Confirmar Senha *</label>
+                <div style={{ position: 'relative' }}>
+                  <Lock size={11} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)', pointerEvents: 'none' }} />
+                  <input
+                    type={showPwd ? 'text' : 'password'}
+                    placeholder="Repita a senha"
+                    value={confirmPwd}
+                    onChange={e => setConfirmPwd(e.target.value)}
+                    style={{ ...inp, paddingLeft: 28 }}
+                    onFocus={e => (e.currentTarget.style.borderColor = 'var(--nb)')}
+                    onBlur={e => (e.currentTarget.style.borderColor = 'var(--b)')}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
           <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
             <Button variant="secondary" size="sm" onClick={onClose} style={{ flex: 1 }}>Cancelar</Button>
-            <Button variant="primary" size="sm" loading={submitting} onClick={handleSubmit} style={{ flex: 1 }}>
-              Enviar convite por email
+            <Button
+              variant="primary" size="sm" loading={submitting}
+              onClick={mode === 'password' ? handleCreateWithPassword : handleInvite}
+              style={{ flex: 2 }}
+            >
+              {mode === 'password' ? 'Criar conta' : 'Enviar convite'}
             </Button>
           </div>
         </div>

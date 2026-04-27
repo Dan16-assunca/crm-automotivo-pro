@@ -112,7 +112,7 @@ function CampaignModal({
           adset_id:    initial.adset_id     ?? '',
           ad_name:     initial.ad_name      ?? '',
           ad_id:       initial.ad_id        ?? '',
-          status:      initial.status,
+          status:      initial.status as 'active',
           start_date:  initial.start_date   ?? '',
           end_date:    initial.end_date     ?? '',
           notes:       initial.notes        ?? '',

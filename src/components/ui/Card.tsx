@@ -4,10 +4,11 @@ interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   kpi?: boolean
   neon?: boolean
   glass?: boolean
+  glow?: boolean
   accent?: string
 }
 
-export function Card({ className, kpi, neon, glass, accent, children, style, ...props }: CardProps) {
+export function Card({ className, kpi, neon, glass, glow, accent, children, style, ...props }: CardProps) {
   return (
     <div
       className={cn(
@@ -15,8 +16,9 @@ export function Card({ className, kpi, neon, glass, accent, children, style, ...
         glass
           ? 'bg-[rgba(13,13,13,0.9)] backdrop-blur-xl border border-[var(--nb)]'
           : 'bg-[var(--card)] border border-[var(--bs)]',
-        !glass && !neon && 'hover:border-[var(--nb)]',
+        !glass && !neon && !glow && 'hover:border-[var(--nb)]',
         neon && 'border-[var(--nb)]',
+        glow && 'border-[var(--neon-card)]',
         className
       )}
       style={style}

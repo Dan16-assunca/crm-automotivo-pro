@@ -5,6 +5,7 @@ import {
   ChevronRight, Clock, Send, Zap, RefreshCw,
   TrendingUp, Sparkles,
 } from 'lucide-react'
+import { useLeadFieldConfig } from '@/hooks/useLeadFieldConfig'
 
 const SUPA_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? 'https://eakdywmuewvuzyqfpcpl.supabase.co'
 import { supabase } from '@/lib/supabase'
@@ -188,13 +189,25 @@ function CreateForm({ initialData, onClose }: { initialData: Partial<Lead>; onCl
   const { openLeadPanel } = useLeadPanelStore()
   const queryClient = useQueryClient()
   const storeId = store?.id ?? ''
+  const fieldConfig = useLeadFieldConfig()
 
-  const [name, setName] = useState(initialData.client_name ?? '')
-  const [phone, setPhone] = useState(initialData.client_phone ?? '')
-  const [email, setEmail] = useState(initialData.client_email ?? '')
-  const [source, setSource] = useState(initialData.source ?? 'whatsapp')
+  const [name, setName]               = useState(initialData.client_name ?? '')
+  const [phone, setPhone]             = useState(initialData.client_phone ?? '')
+  const [email, setEmail]             = useState(initialData.client_email ?? '')
+  const [cpf, setCpf]                 = useState(initialData.client_cpf ?? '')
+  const [city, setCity]               = useState(initialData.client_city ?? '')
+  const [source, setSource]           = useState(initialData.source ?? 'whatsapp')
   const [temperature, setTemperature] = useState<Lead['temperature']>(initialData.temperature ?? 'cold')
-  const [vehicle, setVehicle] = useState(initialData.vehicle_interest ?? '')
+  const [vehicle, setVehicle]         = useState(initialData.vehicle_interest ?? '')
+  const [budgetMin, setBudgetMin]     = useState(initialData.budget_min?.toString() ?? '')
+  const [budgetMax, setBudgetMax]     = useState(initialData.budget_max?.toString() ?? '')
+  const [paymentType, setPaymentType] = useState(initialData.payment_type ?? '')
+  const [tradeIn, setTradeIn]         = useState(initialData.trade_in ?? false)
+  const [tradeInVehicle, setTradeInVehicle] = useState(initialData.trade_in_vehicle ?? '')
+  // Custom fields state: { [fieldId]: string }
+  const [customValues, setCustomValues] = useState<Record<string, string>>(
+    (initialData.custom_fields as Record<string, string> | undefined) ?? {}
+  )
 
   const { data: stages } = useQuery<PipelineStage[]>({
     queryKey: ['pipeline-stages', storeId],
@@ -210,16 +223,30 @@ function CreateForm({ initialData, onClose }: { initialData: Partial<Lead>; onCl
     mutationFn: async () => {
       const firstStage = stages?.find(s => !s.is_final) ?? stages?.[0]
       if (!firstStage) throw new Error('Nenhuma etapa configurada')
+      // Build custom_fields object (non-empty values only)
+      const customFieldsPayload: Record<string, string> = {}
+      for (const cf of fieldConfig.custom_fields) {
+        const v = customValues[cf.id]?.trim()
+        if (v) customFieldsPayload[cf.id] = v
+      }
       const { data, error } = await supabase.from('leads').insert({
-        store_id: storeId,
+        store_id:       storeId,
         salesperson_id: user?.id,
-        stage_id: initialData.stage_id ?? firstStage.id,
-        client_name: name,
-        client_phone: phone || null,
-        client_email: email || null,
-        source: source || null,
+        stage_id:       initialData.stage_id ?? firstStage.id,
+        client_name:    name,
+        client_phone:   phone  || null,
+        client_email:   email  || null,
+        client_cpf:     cpf    || null,
+        client_city:    city   || null,
+        source:         source || null,
         temperature,
-        vehicle_interest: vehicle || null,
+        vehicle_interest: fieldConfig.show_vehicle ? (vehicle || null) : null,
+        budget_min:     fieldConfig.show_budget && budgetMin ? Number(budgetMin) : null,
+        budget_max:     fieldConfig.show_budget && budgetMax ? Number(budgetMax) : null,
+        payment_type:   fieldConfig.show_payment_type ? (paymentType || null) : null,
+        trade_in:       fieldConfig.show_trade_in ? tradeIn : false,
+        trade_in_vehicle: fieldConfig.show_trade_in && tradeIn ? (tradeInVehicle || null) : null,
+        custom_fields:  Object.keys(customFieldsPayload).length ? customFieldsPayload : null,
         status: 'active',
       }).select('id').single()
       if (error) throw error
@@ -237,6 +264,11 @@ function CreateForm({ initialData, onClose }: { initialData: Partial<Lead>; onCl
   const inpStyle: React.CSSProperties = { ...S.input, marginBottom: 8 }
   const lbl: React.CSSProperties = { fontSize: 10, color: '#505050', display: 'block', marginBottom: 3 }
 
+  const PAYMENT_LABELS = [
+    'Financiamento bancário', 'À vista / PIX', 'Consórcio',
+    'Troca pura', 'Troca + complemento', 'Leasing', 'FGTS',
+  ]
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Header */}
@@ -245,13 +277,18 @@ function CreateForm({ initialData, onClose }: { initialData: Partial<Lead>; onCl
           <p style={{ fontSize: 14, fontWeight: 700, color: '#f5f5f5' }}>Novo Lead</p>
           <p style={{ fontSize: 10, color: '#505050', marginTop: 2 }}>Preencha os dados do contato</p>
         </div>
-        <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#505050', cursor: 'pointer', padding: 4, borderRadius: 4 }}>
+        <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#505050', cursor: 'pointer', padding: 4, borderRadius: 4, minHeight: 'unset' }}>
           <X size={14} />
         </button>
       </div>
 
       {/* Form */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px' }}>
+        {/* ── Dados do contato ── */}
+        <p style={{ fontSize: 9, fontWeight: 700, color: '#3df710', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>
+          Dados do contato
+        </p>
+
         <label style={lbl}>Nome *</label>
         <input style={inpStyle} value={name} onChange={e => setName(e.target.value)} placeholder="Nome completo" />
 
@@ -261,8 +298,108 @@ function CreateForm({ initialData, onClose }: { initialData: Partial<Lead>; onCl
         <label style={lbl}>Email</label>
         <input style={inpStyle} value={email} onChange={e => setEmail(e.target.value)} placeholder="email@exemplo.com" />
 
-        <label style={lbl}>Veículo de interesse</label>
-        <input style={inpStyle} value={vehicle} onChange={e => setVehicle(e.target.value)} placeholder="Honda Civic 2023..." />
+        {fieldConfig.show_cpf && (
+          <>
+            <label style={lbl}>CPF</label>
+            <input style={inpStyle} value={cpf} onChange={e => setCpf(e.target.value)} placeholder="000.000.000-00" />
+          </>
+        )}
+
+        {fieldConfig.show_city && (
+          <>
+            <label style={lbl}>Cidade</label>
+            <input style={inpStyle} value={city} onChange={e => setCity(e.target.value)} placeholder="São Paulo" />
+          </>
+        )}
+
+        {/* ── Interesse ── */}
+        {fieldConfig.show_vehicle && (
+          <>
+            <p style={{ fontSize: 9, fontWeight: 700, color: '#3df710', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, marginTop: 4 }}>
+              Interesse
+            </p>
+            <label style={lbl}>{fieldConfig.interest_label}</label>
+            <input style={inpStyle} value={vehicle} onChange={e => setVehicle(e.target.value)}
+              placeholder={fieldConfig.interest_label + '…'} />
+          </>
+        )}
+
+        {fieldConfig.show_budget && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
+            <div>
+              <label style={lbl}>Orçamento mín. (R$)</label>
+              <input style={{ ...S.input }} type="number" value={budgetMin} onChange={e => setBudgetMin(e.target.value)} placeholder="0" />
+            </div>
+            <div>
+              <label style={lbl}>Orçamento máx. (R$)</label>
+              <input style={{ ...S.input }} type="number" value={budgetMax} onChange={e => setBudgetMax(e.target.value)} placeholder="0" />
+            </div>
+          </div>
+        )}
+
+        {fieldConfig.show_payment_type && (
+          <>
+            <label style={lbl}>Forma de pagamento</label>
+            <select style={{ ...S.select, marginBottom: 8 }} value={paymentType} onChange={e => setPaymentType(e.target.value)}>
+              <option value="">Selecione…</option>
+              {PAYMENT_LABELS.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </>
+        )}
+
+        {fieldConfig.show_trade_in && (
+          <div style={{ marginBottom: 8 }}>
+            <label style={{ ...lbl, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+              <input type="checkbox" checked={tradeIn} onChange={e => setTradeIn(e.target.checked)}
+                style={{ width: 13, height: 13, accentColor: '#3df710' }} />
+              Possui bem para permuta / troca
+            </label>
+            {tradeIn && (
+              <>
+                <label style={{ ...lbl, marginTop: 6 }}>Descreva o bem</label>
+                <input style={inpStyle} value={tradeInVehicle} onChange={e => setTradeInVehicle(e.target.value)}
+                  placeholder="Ex: Toyota Corolla 2020, Apartamento 70m²…" />
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── Custom fields ── */}
+        {fieldConfig.custom_fields.length > 0 && (
+          <>
+            <p style={{ fontSize: 9, fontWeight: 700, color: '#3df710', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, marginTop: 4 }}>
+              Informações adicionais
+            </p>
+            {fieldConfig.custom_fields.map(cf => (
+              <div key={cf.id} style={{ marginBottom: 8 }}>
+                <label style={lbl}>{cf.label}{cf.required ? ' *' : ''}</label>
+                {cf.type === 'select' && cf.options?.length ? (
+                  <select
+                    style={{ ...S.select }}
+                    value={customValues[cf.id] ?? ''}
+                    onChange={e => setCustomValues(prev => ({ ...prev, [cf.id]: e.target.value }))}
+                  >
+                    <option value="">Selecione…</option>
+                    {cf.options.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                ) : (
+                  <input
+                    style={{ ...S.input }}
+                    type={cf.type === 'number' ? 'number' : cf.type === 'date' ? 'date' : 'text'}
+                    placeholder={cf.placeholder ?? cf.label + '…'}
+                    value={customValues[cf.id] ?? ''}
+                    onChange={e => setCustomValues(prev => ({ ...prev, [cf.id]: e.target.value }))}
+                  />
+                )}
+              </div>
+            ))}
+          </>
+        )}
+
+        {/* ── Origem e temperatura ── */}
+        <p style={{ fontSize: 9, fontWeight: 700, color: '#3df710', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, marginTop: 4 }}>
+          Qualificação
+        </p>
 
         <label style={lbl}>Origem</label>
         <select style={{ ...S.select, marginBottom: 8 }} value={source} onChange={e => setSource(e.target.value)}>
@@ -281,6 +418,7 @@ function CreateForm({ initialData, onClose }: { initialData: Partial<Lead>; onCl
                 border: `1px solid ${temperature === t ? TEMP_COLOR[t] : '#222'}`,
                 background: temperature === t ? TEMP_COLOR[t] + '20' : 'transparent',
                 color: temperature === t ? TEMP_COLOR[t] : '#505050',
+                minHeight: 'unset',
               }}>
               {TEMP_LABEL[t]}
             </button>
@@ -319,6 +457,7 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
   const queryClient = useQueryClient()
   const instanceName = (store?.settings as Record<string, string>)?.whatsapp_instance ?? ''
   const storeId = store?.id ?? ''
+  const fieldConfig = useLeadFieldConfig()
 
   const panelRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState({ top: initialPosition?.top ?? 60, right: initialPosition?.right ?? 20 })
@@ -943,18 +1082,22 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
             <Bar label="Urgência" value={urgency} />
           </div>
 
-          {/* Veículo & Negócio */}
+          {/* Interesse & Negócio */}
+          {(fieldConfig.show_vehicle || fieldConfig.show_budget || fieldConfig.show_payment_type || fieldConfig.show_trade_in) && (
           <div style={S.section}>
-            <p style={S.sectionTitle}>Veículo &amp; Negócio</p>
+            <p style={S.sectionTitle}>Interesse &amp; Negócio</p>
+            {fieldConfig.show_vehicle && (
             <div style={S.row}>
               <Car size={11} style={{ color: '#505050', flexShrink: 0 }} />
-              <span style={S.label}>Veículo</span>
+              <span style={S.label}>{fieldConfig.interest_label}</span>
               <InlineEdit
                 value={lead.vehicle_interest ?? ''}
                 placeholder="Ex: Honda Civic 2023"
                 onSave={v => save({ vehicle_interest: v })}
               />
             </div>
+            )}
+            {fieldConfig.show_budget && (
             <div style={S.row}>
               <DollarSign size={11} style={{ color: '#505050', flexShrink: 0 }} />
               <span style={S.label}>Orçamento</span>
@@ -965,6 +1108,8 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
                 onSave={v => save({ budget_max: parseFloat(v) || undefined })}
               />
             </div>
+            )}
+            {fieldConfig.show_payment_type && (
             <div style={S.row}>
               <span style={S.label}>Pagamento</span>
               <select
@@ -976,7 +1121,8 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
                 {PAYMENT_OPTIONS.map(p => <option key={p} value={p.toLowerCase().split(' ')[0]}>{p}</option>)}
               </select>
             </div>
-            {lead.trade_in && (
+            )}
+            {fieldConfig.show_trade_in && lead.trade_in && (
               <div style={S.row}>
                 <RefreshCw size={11} style={{ color: '#505050', flexShrink: 0 }} />
                 <span style={S.label}>Veículo troca</span>
@@ -988,6 +1134,7 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
               </div>
             )}
           </div>
+          )}
 
           {/* Dados do comprador */}
           <div style={S.section}>
@@ -1033,6 +1180,46 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
               </select>
             </div>
           </div>
+
+          {/* Campos personalizados */}
+          {fieldConfig.custom_fields.length > 0 && (() => {
+            const customVals = (lead.custom_fields as Record<string, string> | null) ?? {}
+            return (
+              <div style={S.section}>
+                <p style={S.sectionTitle}>Informações Adicionais</p>
+                {fieldConfig.custom_fields.map(cf => (
+                  <div key={cf.id} style={{ ...S.row, marginBottom: 6 }}>
+                    <span style={S.label}>{cf.label}</span>
+                    {cf.type === 'select' ? (
+                      <select
+                        value={customVals[cf.id] ?? ''}
+                        onChange={e => {
+                          const updated = { ...customVals, [cf.id]: e.target.value }
+                          save({ custom_fields: updated })
+                        }}
+                        style={{ ...S.select, flex: 1 }}
+                      >
+                        <option value="">Selecionar</option>
+                        {(cf.options ?? []).map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <InlineEdit
+                        value={customVals[cf.id] ?? ''}
+                        placeholder={cf.placeholder ?? '—'}
+                        type={cf.type === 'number' ? 'number' : cf.type === 'date' ? 'date' : 'text'}
+                        onSave={v => {
+                          const updated = { ...customVals, [cf.id]: v }
+                          save({ custom_fields: updated })
+                        }}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
 
           {/* Avançar etapa */}
           <div style={S.section}>
