@@ -858,36 +858,41 @@ export default function Dashboard() {
           <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>
             Funil Comercial
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {funnelLoading || !stages ? [...Array(6)].map((_, i) => (
-              <Skeleton key={i} style={{ height: 82, borderRadius: 14 }} />
-            )) : stages.filter(s => !s.is_final).map((stage, i) => {
-              const count = funnelCounts?.[stage.id] ?? 0
-              const nonFinal = stages.filter(s => !s.is_final)
-              const prevCount = i > 0 ? (funnelCounts?.[nonFinal[i-1]?.id] ?? 0) : 0
-              const convPct = i > 0 && prevCount > 0 ? Math.round((count / prevCount) * 100) : null
-              return (
-                <div key={stage.id} style={{
-                  background: 'var(--card)', border: '1px solid var(--neon-card)', borderRadius: 14,
-                  padding: '12px 14px', position: 'relative', overflow: 'hidden',
-                }}>
-                  <div style={{
-                    position: 'absolute', top: 0, left: 0, right: 0, height: 3,
-                    background: stage.color || 'var(--neon)',
-                  }} />
-                  <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: '.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {stage.name}
-                  </p>
-                  <p style={{ fontSize: 30, fontWeight: 900, color: 'var(--t)', lineHeight: 1.15, marginTop: 4, letterSpacing: '-.02em' }}>
-                    {count}
-                  </p>
-                  {convPct !== null && (
-                    <p style={{ fontSize: 11, color: 'var(--neon)', marginTop: 2, fontWeight: 600 }}>{convPct}% conv.</p>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+          {(() => {
+            const nonFinal = stages?.filter(s => !s.is_final) ?? []
+            const cols = funnelLoading || !stages ? 6 : nonFinal.length || 1
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 8 }}>
+                {funnelLoading || !stages ? [...Array(6)].map((_, i) => (
+                  <Skeleton key={i} style={{ height: 82, borderRadius: 14 }} />
+                )) : nonFinal.map((stage, i) => {
+                  const count = funnelCounts?.[stage.id] ?? 0
+                  const prevCount = i > 0 ? (funnelCounts?.[nonFinal[i-1]?.id] ?? 0) : 0
+                  const convPct = i > 0 && prevCount > 0 ? Math.round((count / prevCount) * 100) : null
+                  return (
+                    <div key={stage.id} style={{
+                      background: 'var(--card)', border: '1px solid var(--neon-card)', borderRadius: 14,
+                      padding: '12px 14px', position: 'relative', overflow: 'hidden', minWidth: 0,
+                    }}>
+                      <div style={{
+                        position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+                        background: stage.color || 'var(--neon)',
+                      }} />
+                      <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: '.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {stage.name}
+                      </p>
+                      <p style={{ fontSize: 30, fontWeight: 900, color: 'var(--t)', lineHeight: 1.15, marginTop: 4, letterSpacing: '-.02em' }}>
+                        {count}
+                      </p>
+                      {convPct !== null && (
+                        <p style={{ fontSize: 11, color: 'var(--neon)', marginTop: 2, fontWeight: 600 }}>{convPct}% conv.</p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
         </div>
 
         {/* ── Leads por dia ── */}
@@ -1053,40 +1058,46 @@ export default function Dashboard() {
         {/* ── BLOCO 1: Funil Comercial ── */}
         {vis('funil') && <div>
           <SectionLabel>Funil Comercial</SectionLabel>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
-            {funnelLoading || !stages ? [...Array(5)].map((_, i) => (
-              <Skeleton key={i} style={{ height: 90, borderRadius: 9 }} />
-            )) : stages.filter(s => !s.is_final).map((stage, i) => {
-              const count = funnelCounts?.[stage.id] ?? 0
-              const prevCount = i > 0 && stages ? (funnelCounts?.[stages.filter(s => !s.is_final)[i-1]?.id] ?? 0) : 0
-              const convPct = i > 0 && prevCount > 0 ? Math.round((count / prevCount) * 100) : null
-              const stageColor = stage.color || 'var(--neon)'
-              return (
-                <motion.div key={stage.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-                  <div style={{
-                    background: 'var(--card)', border: '1px solid var(--neon-card)', borderRadius: 10,
-                    padding: '14px 16px', position: 'relative', overflow: 'hidden',
-                  }}>
-                    <div style={{
-                      position: 'absolute', top: 0, left: 0, right: 0, height: 3, borderRadius: '10px 10px 0 0',
-                      background: stageColor,
-                    }} />
-                    <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: '.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {stage.name}
-                    </p>
-                    <p style={{ fontSize: 34, fontWeight: 900, color: 'var(--t)', lineHeight: 1.15, marginTop: 6, letterSpacing: '-.03em' }}>
-                      {count}
-                    </p>
-                    {convPct !== null && (
-                      <p style={{ fontSize: 11, color: 'var(--neon)', marginTop: 3, fontWeight: 600 }}>
-                        {convPct}% conv.
-                      </p>
-                    )}
-                  </div>
-                </motion.div>
-              )
-            })}
-          </div>
+          {(() => {
+            const nonFinal = stages?.filter(s => !s.is_final) ?? []
+            const cols = funnelLoading || !stages ? 5 : nonFinal.length || 1
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 8 }}>
+                {funnelLoading || !stages ? [...Array(5)].map((_, i) => (
+                  <Skeleton key={i} style={{ height: 90, borderRadius: 9 }} />
+                )) : nonFinal.map((stage, i) => {
+                  const count = funnelCounts?.[stage.id] ?? 0
+                  const prevCount = i > 0 ? (funnelCounts?.[nonFinal[i-1]?.id] ?? 0) : 0
+                  const convPct = i > 0 && prevCount > 0 ? Math.round((count / prevCount) * 100) : null
+                  const stageColor = stage.color || 'var(--neon)'
+                  return (
+                    <motion.div key={stage.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+                      <div style={{
+                        background: 'var(--card)', border: '1px solid var(--neon-card)', borderRadius: 10,
+                        padding: '14px 16px', position: 'relative', overflow: 'hidden', minWidth: 0,
+                      }}>
+                        <div style={{
+                          position: 'absolute', top: 0, left: 0, right: 0, height: 3, borderRadius: '10px 10px 0 0',
+                          background: stageColor,
+                        }} />
+                        <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: '.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {stage.name}
+                        </p>
+                        <p style={{ fontSize: 34, fontWeight: 900, color: 'var(--t)', lineHeight: 1.15, marginTop: 6, letterSpacing: '-.03em' }}>
+                          {count}
+                        </p>
+                        {convPct !== null && (
+                          <p style={{ fontSize: 11, color: 'var(--neon)', marginTop: 3, fontWeight: 600 }}>
+                            {convPct}% conv.
+                          </p>
+                        )}
+                      </div>
+                    </motion.div>
+                  )
+                })}
+              </div>
+            )
+          })()}
         </div>}
 
         {/* ── BLOCO 2: KPI Widgets (dinâmico) ── */}

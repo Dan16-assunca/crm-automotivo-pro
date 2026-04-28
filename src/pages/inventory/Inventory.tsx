@@ -90,20 +90,25 @@ function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onCl
     if (!arr.length) return
     setUploading(true)
     const newUrls: string[] = []
-    for (const file of arr) {
-      const ext  = file.name.split('.').pop() ?? 'jpg'
-      const path = `${store!.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-      const { error } = await supabase.storage.from('vehicle-photos').upload(path, file, { upsert: false })
-      if (error) { toast.error('Erro ao enviar foto', error.message); continue }
-      const { data } = supabase.storage.from('vehicle-photos').getPublicUrl(path)
-      newUrls.push(data.publicUrl)
+    try {
+      for (const file of arr) {
+        const ext  = file.name.split('.').pop() ?? 'jpg'
+        const path = `${store!.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+        const { error } = await supabase.storage.from('vehicle-photos').upload(path, file, { upsert: false })
+        if (error) { toast.error('Erro ao enviar foto', error.message); continue }
+        const { data } = supabase.storage.from('vehicle-photos').getPublicUrl(path)
+        newUrls.push(data.publicUrl)
+      }
+      setPhotos(p => {
+        const updated = [...p, ...newUrls]
+        setPhotoIdx(clampIdx(updated, updated.length - 1))
+        return updated
+      })
+    } catch (e) {
+      toast.error('Erro ao enviar foto', (e as Error).message)
+    } finally {
+      setUploading(false)
     }
-    setPhotos(p => {
-      const updated = [...p, ...newUrls]
-      setPhotoIdx(clampIdx(updated, updated.length - 1))
-      return updated
-    })
-    setUploading(false)
   }
 
   // Captura via Capacitor Camera (nativo) ou galeria
@@ -112,12 +117,17 @@ function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onCl
     const photo = isNative ? await takePhoto() : await pickFromGallery()
     if (!photo) return
     setUploading(true)
-    const path = `${store!.id}/${Date.now()}.${photo.filename.split('.').pop() ?? 'jpg'}`
-    const { error } = await supabase.storage.from('vehicle-photos').upload(path, photo.blob, { upsert: false })
-    if (error) { toast.error('Erro ao enviar foto', error.message); setUploading(false); return }
-    const { data } = supabase.storage.from('vehicle-photos').getPublicUrl(path)
-    setPhotos(p => { const updated = [...p, data.publicUrl]; setPhotoIdx(updated.length - 1); return updated })
-    setUploading(false)
+    try {
+      const path = `${store!.id}/${Date.now()}.${photo.filename.split('.').pop() ?? 'jpg'}`
+      const { error } = await supabase.storage.from('vehicle-photos').upload(path, photo.blob, { upsert: false })
+      if (error) { toast.error('Erro ao enviar foto', error.message); return }
+      const { data } = supabase.storage.from('vehicle-photos').getPublicUrl(path)
+      setPhotos(p => { const updated = [...p, data.publicUrl]; setPhotoIdx(updated.length - 1); return updated })
+    } catch (e) {
+      toast.error('Erro ao enviar foto', (e as Error).message)
+    } finally {
+      setUploading(false)
+    }
   }
 
   const handleGalleryPick = async () => {
@@ -125,12 +135,17 @@ function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onCl
     const photo = await pickFromGallery()
     if (!photo) return
     setUploading(true)
-    const path = `${store!.id}/${Date.now()}.${photo.filename.split('.').pop() ?? 'jpg'}`
-    const { error } = await supabase.storage.from('vehicle-photos').upload(path, photo.blob, { upsert: false })
-    if (error) { toast.error('Erro ao enviar foto', error.message); setUploading(false); return }
-    const { data } = supabase.storage.from('vehicle-photos').getPublicUrl(path)
-    setPhotos(p => { const updated = [...p, data.publicUrl]; setPhotoIdx(updated.length - 1); return updated })
-    setUploading(false)
+    try {
+      const path = `${store!.id}/${Date.now()}.${photo.filename.split('.').pop() ?? 'jpg'}`
+      const { error } = await supabase.storage.from('vehicle-photos').upload(path, photo.blob, { upsert: false })
+      if (error) { toast.error('Erro ao enviar foto', error.message); return }
+      const { data } = supabase.storage.from('vehicle-photos').getPublicUrl(path)
+      setPhotos(p => { const updated = [...p, data.publicUrl]; setPhotoIdx(updated.length - 1); return updated })
+    } catch (e) {
+      toast.error('Erro ao enviar foto', (e as Error).message)
+    } finally {
+      setUploading(false)
+    }
   }
 
   const removePhoto = (idx: number) => {
@@ -508,11 +523,11 @@ function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onCl
             </button>
             <button
               onClick={() => mut.mutate()}
-              disabled={!form.brand || !form.model || mut.isPending}
-              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 22px', borderRadius: 8, border: 'none', background: 'var(--neon)', color: '#000', fontSize: 12, fontWeight: 800, cursor: 'pointer', opacity: (!form.brand || !form.model || mut.isPending) ? 0.5 : 1 }}
+              disabled={!form.brand || !form.model || mut.isPending || uploading}
+              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 22px', borderRadius: 8, border: 'none', background: 'var(--neon)', color: '#000', fontSize: 12, fontWeight: 800, cursor: 'pointer', opacity: (!form.brand || !form.model || mut.isPending || uploading) ? 0.5 : 1 }}
             >
               <Save size={13} />
-              {mut.isPending ? 'Salvando...' : isEdit ? 'Salvar veículo' : 'Cadastrar veículo'}
+              {uploading ? 'Enviando fotos...' : mut.isPending ? 'Salvando...' : isEdit ? 'Salvar veículo' : 'Cadastrar veículo'}
             </button>
           </div>
         </motion.div>

@@ -258,7 +258,10 @@ function CreateForm({ initialData, onClose }: { initialData: Partial<Lead>; onCl
       queryClient.invalidateQueries({ queryKey: ['leads-list'] })
       openLeadPanel(id)
     },
-    onError: () => toast.error('Erro ao criar lead'),
+    onError: (e) => {
+      console.error('[LeadPanel] create error:', e)
+      toast.error('Erro ao criar lead', (e as Error).message)
+    },
   })
 
   const inpStyle: React.CSSProperties = { ...S.input, marginBottom: 8 }
