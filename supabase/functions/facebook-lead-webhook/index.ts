@@ -11,8 +11,9 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 )
 
-const FB_APP_SECRET   = Deno.env.get('FB_APP_SECRET')   ?? ''
-const GRAPH_API_VER   = Deno.env.get('FB_GRAPH_VERSION') ?? 'v19.0'
+const FB_APP_SECRET          = Deno.env.get('FB_APP_SECRET')          ?? ''
+const GRAPH_API_VER          = Deno.env.get('FB_GRAPH_VERSION')        ?? 'v19.0'
+const FB_WEBHOOK_VERIFY_TOKEN = Deno.env.get('FB_WEBHOOK_VERIFY_TOKEN') ?? ''
 const UAZAPI_BASE_URL = (Deno.env.get('UAZAPI_BASE_URL') ?? '').replace(/\/$/, '')
 const UAZAPI_ADMIN_TOKEN = Deno.env.get('UAZAPI_ADMIN_TOKEN') ?? ''
 
@@ -277,7 +278,13 @@ Deno.serve(async (req) => {
     const challenge = url.searchParams.get('hub.challenge')
 
     if (mode === 'subscribe' && token && challenge) {
-      // Verifica se o verify_token existe em alguma integração ativa
+      // 1. Verifica token global (configurado no Facebook App para setup inicial)
+      if (FB_WEBHOOK_VERIFY_TOKEN && token === FB_WEBHOOK_VERIFY_TOKEN) {
+        console.log(`[fb-webhook] Webhook verificado com token global`)
+        return new Response(challenge, { status: 200, headers: { 'Content-Type': 'text/plain' } })
+      }
+
+      // 2. Verifica se o verify_token existe em alguma integração ativa (por loja)
       const { data } = await supabase
         .from('facebook_integrations')
         .select('id')
