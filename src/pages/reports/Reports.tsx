@@ -17,7 +17,7 @@ import { formatCurrency } from '@/utils/format'
 
 const MONTHS_SHORT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 
-const COLORS = ['#3df710','#3b82f6','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#10b981']
+const COLORS = ['#3DF710','rgba(61,247,16,.70)','rgba(255,255,255,.75)','rgba(61,247,16,.42)','rgba(255,255,255,.45)','rgba(61,247,16,.22)','rgba(255,255,255,.25)','rgba(61,247,16,.12)']
 
 const STAGE_LABELS: Record<string, string> = {
   novo: 'Novo Lead', contato: 'Contato', visita: 'Visita', proposta: 'Proposta', fechamento: 'Fechamento',
@@ -346,9 +346,9 @@ export default function Reports() {
       {/* KPI Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
         {[
-          { icon: <Users size={14} />,     label: 'Total de Leads',     value: kpis.total,                        sub: 'no período',                color: 'var(--blu)' },
+          { icon: <Users size={14} />,     label: 'Total de Leads',     value: kpis.total,                        sub: 'no período',                color: 'rgba(61,247,16,.65)' },
           { icon: <Target size={14} />,    label: 'Ganhos',             value: kpis.won,                          sub: `${kpis.convRate}% conversão`,color: 'var(--neon)' },
-          { icon: <TrendingUp size={14} />,label: 'Taxa de Conversão',  value: `${kpis.convRate}%`,              sub: `${kpis.lost} perdidos`,      color: kpis.convRate >= '15' ? 'var(--neon)' : 'var(--yel)' },
+          { icon: <TrendingUp size={14} />,label: 'Taxa de Conversão',  value: `${kpis.convRate}%`,              sub: `${kpis.lost} perdidos`,      color: kpis.convRate >= '15' ? 'var(--neon)' : 'var(--t2)' },
           { icon: <DollarSign size={14} />,label: 'Faturamento',        value: formatCurrency(kpis.revenue),      sub: 'vendas fechadas',            color: 'var(--neon)' },
           { icon: <BarChart2 size={14} />, label: 'Ticket Médio',       value: formatCurrency(kpis.avgTicket),    sub: 'por venda',                  color: 'var(--t2)' },
         ].map(k => (
@@ -391,7 +391,7 @@ export default function Reports() {
                 <YAxis tick={{ fill: 'var(--t3)', fontSize: 10 }} axisLine={false} tickLine={false} />
                 <Tooltip {...tt} />
                 <Legend wrapperStyle={{ fontSize: 11, color: 'var(--t3)' }} />
-                <Bar dataKey="leads" fill="var(--blu)" radius={[4,4,0,0]} name="Total Leads" opacity={0.7} />
+                <Bar dataKey="leads" fill="rgba(61,247,16,.38)" radius={[4,4,0,0]} name="Total Leads" opacity={0.7} />
                 <Bar dataKey="won"   fill="var(--neon)" radius={[4,4,0,0]} name="Ganhos" />
               </BarChart>
             </ResponsiveContainer>
@@ -423,7 +423,7 @@ export default function Reports() {
                     <XAxis type="number" tick={{ fill: 'var(--t3)', fontSize: 10 }} axisLine={false} tickLine={false} />
                     <YAxis type="category" dataKey="name" tick={{ fill: 'var(--t2)', fontSize: 10 }} axisLine={false} tickLine={false} width={100} />
                     <Tooltip {...tt} />
-                    <Bar dataKey="value" fill="var(--red)" radius={[0, 4, 4, 0]} name="Leads perdidos" />
+                    <Bar dataKey="value" fill="var(--t2)" radius={[0, 4, 4, 0]} name="Leads perdidos" />
                   </BarChart>
                 </ResponsiveContainer>
               ) : <p style={{ fontSize: 12, color: 'var(--t3)', padding: '40px 0', textAlign: 'center' }}>Nenhum lead perdido no período</p>}
@@ -445,7 +445,7 @@ export default function Reports() {
                 <YAxis tick={{ fill: 'var(--t3)', fontSize: 10 }} axisLine={false} tickLine={false} />
                 <Tooltip {...tt} />
                 <Legend wrapperStyle={{ fontSize: 11, color: 'var(--t3)' }} />
-                <Bar dataKey="total" fill="var(--blu)" radius={[4,4,0,0]} name="Total" opacity={0.7} />
+                <Bar dataKey="total" fill="rgba(61,247,16,.38)" radius={[4,4,0,0]} name="Total" opacity={0.7} />
                 <Bar dataKey="won"   fill="var(--neon)" radius={[4,4,0,0]} name="Ganhos" />
               </BarChart>
             </ResponsiveContainer>
@@ -479,9 +479,9 @@ export default function Reports() {
                     <td style={{ padding: '10px 14px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div style={{ width: 60, height: 5, background: 'var(--el)', borderRadius: 99, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', background: s.convRate >= 20 ? 'var(--neon)' : s.convRate >= 10 ? 'var(--yel)' : 'var(--red)', borderRadius: 99, width: `${s.convRate}%` }} />
+                          <div style={{ height: '100%', background: s.convRate >= 20 ? 'var(--neon)' : s.convRate >= 10 ? 'rgba(61,247,16,.65)' : 'var(--t3)', borderRadius: 99, width: `${s.convRate}%` }} />
                         </div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: s.convRate >= 20 ? 'var(--neon)' : s.convRate >= 10 ? 'var(--yel)' : 'var(--red)' }}>{s.convRate}%</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: s.convRate >= 20 ? 'var(--neon)' : s.convRate >= 10 ? 'rgba(61,247,16,.65)' : 'var(--t3)' }}>{s.convRate}%</span>
                       </div>
                     </td>
                     <td style={{ padding: '10px 14px', fontSize: 12, fontFamily: 'var(--fm)', color: 'var(--t)' }}>{formatCurrency(s.revenue)}</td>
@@ -576,14 +576,14 @@ export default function Reports() {
                 label: 'Leads Rastreados',
                 value: leadsWithUtm,
                 sub: `${kpis.total > 0 ? Math.round((leadsWithUtm / kpis.total) * 100) : 0}% do total`,
-                color: 'var(--blu)',
+                color: 'rgba(61,247,16,.65)',
               },
               {
                 icon: <DollarSign size={13} />,
                 label: 'Investimento',
                 value: formatCurrency(totalSpend),
                 sub: 'no período',
-                color: 'var(--yel)',
+                color: 'var(--t2)',
               },
               {
                 icon: <Users size={13} />,
@@ -597,7 +597,7 @@ export default function Reports() {
                 label: 'ROAS Geral',
                 value: totalSpend > 0 ? `${(kpis.revenue / Math.max(1, totalSpend)).toFixed(2)}x` : '—',
                 sub: 'retorno sobre investimento',
-                color: totalSpend > 0 && kpis.revenue > totalSpend ? 'var(--neon)' : 'var(--red)',
+                color: totalSpend > 0 && kpis.revenue > totalSpend ? 'var(--neon)' : 'var(--t2)',
               },
             ].map(k => (
               <div key={k.label} style={{ background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 9, padding: '12px 14px' }}>
@@ -648,7 +648,7 @@ export default function Reports() {
                     <YAxis tick={{ fill: 'var(--t3)', fontSize: 10 }} axisLine={false} tickLine={false} />
                     <Tooltip {...tt} />
                     <Legend wrapperStyle={{ fontSize: 11, color: 'var(--t3)' }} />
-                    <Bar dataKey="leads" fill="var(--blu)" radius={[4,4,0,0]} name="Leads" opacity={0.8} />
+                    <Bar dataKey="leads" fill="rgba(61,247,16,.38)" radius={[4,4,0,0]} name="Leads" opacity={0.8} />
                     <Bar dataKey="won"   fill="var(--neon)" radius={[4,4,0,0]} name="Ganhos" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -708,12 +708,12 @@ export default function Reports() {
                       <td style={{ padding: '9px 12px', fontSize: 12, fontWeight: 700, color: 'var(--neon)' }}>{row.won}</td>
                       {/* Conversão */}
                       <td style={{ padding: '9px 12px' }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: row.convRate >= 20 ? 'var(--neon)' : row.convRate >= 10 ? 'var(--yel)' : 'var(--t3)' }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: row.convRate >= 20 ? 'var(--neon)' : row.convRate >= 10 ? 'rgba(61,247,16,.65)' : 'var(--t3)' }}>
                           {row.convRate}%
                         </span>
                       </td>
                       {/* Investimento */}
-                      <td style={{ padding: '9px 12px', fontSize: 11, color: row.spend > 0 ? 'var(--yel)' : 'var(--t4)' }}>
+                      <td style={{ padding: '9px 12px', fontSize: 11, color: row.spend > 0 ? 'var(--t2)' : 'var(--t4)' }}>
                         {row.spend > 0 ? formatCurrency(row.spend) : '—'}
                       </td>
                       {/* CPL */}
@@ -721,7 +721,7 @@ export default function Reports() {
                         {row.cpl > 0 ? formatCurrency(row.cpl) : '—'}
                       </td>
                       {/* ROAS */}
-                      <td style={{ padding: '9px 12px', fontSize: 11, fontWeight: row.roas > 0 ? 700 : 400, color: row.roas >= 3 ? 'var(--neon)' : row.roas >= 1 ? 'var(--yel)' : 'var(--t4)' }}>
+                      <td style={{ padding: '9px 12px', fontSize: 11, fontWeight: row.roas > 0 ? 700 : 400, color: row.roas >= 3 ? 'var(--neon)' : row.roas >= 1 ? 'rgba(61,247,16,.65)' : 'var(--t4)' }}>
                         {row.roas > 0 ? `${row.roas}x` : '—'}
                       </td>
                       {/* Receita */}
@@ -780,7 +780,7 @@ export default function Reports() {
                       </div>
                       <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--t)', minWidth: 30, textAlign: 'right' }}>{stage.value}</span>
                       {prevPct !== null && (
-                        <span style={{ fontSize: 10, color: prevPct >= 50 ? 'var(--neon)' : 'var(--yel)', minWidth: 50 }}>
+                        <span style={{ fontSize: 10, color: prevPct >= 50 ? 'var(--neon)' : 'var(--t2)', minWidth: 50 }}>
                           ↓ {prevPct}%
                         </span>
                       )}
@@ -800,7 +800,7 @@ export default function Reports() {
             ].map(m => (
               <div key={m.label} style={{ background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 9, padding: '14px 16px', textAlign: 'center' }}>
                 <p style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 6 }}>{m.label}</p>
-                <p style={{ fontSize: 28, fontWeight: 800, color: m.value >= 20 ? 'var(--neon)' : m.value >= 10 ? 'var(--yel)' : 'var(--red)' }}>{m.value}%</p>
+                <p style={{ fontSize: 28, fontWeight: 800, color: m.value >= 20 ? 'var(--neon)' : m.value >= 10 ? 'rgba(61,247,16,.65)' : 'var(--t3)' }}>{m.value}%</p>
               </div>
             ))}
           </div>

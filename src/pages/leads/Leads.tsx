@@ -13,9 +13,9 @@ import { timeAgo } from '@/utils/format'
 import type { Lead } from '@/types'
 
 const TEMP_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  hot:  { label: '🔥 Quente', color: 'var(--red)',  bg: 'rgba(244,63,94,.1)',  border: 'rgba(244,63,94,.2)' },
-  warm: { label: '⚡ Morno',  color: 'var(--ora)',  bg: 'rgba(249,115,22,.1)', border: 'rgba(249,115,22,.2)' },
-  cold: { label: '❄️ Frio',   color: 'var(--blu)',  bg: 'rgba(59,130,246,.1)', border: 'rgba(59,130,246,.2)' },
+  hot:  { label: '🔥 Quente', color: 'var(--neon)',              bg: 'rgba(61,247,16,.08)',  border: 'rgba(61,247,16,.2)' },
+  warm: { label: '⚡ Morno',  color: 'rgba(61,247,16,.65)',      bg: 'rgba(61,247,16,.06)', border: 'rgba(61,247,16,.15)' },
+  cold: { label: '❄️ Frio',   color: 'var(--t2)',                bg: 'rgba(255,255,255,.04)', border: 'rgba(255,255,255,.1)' },
 }
 
 export default function Leads() {

@@ -214,7 +214,7 @@ function Avatar({ src, name, size = 32 }: { src?: string; name: string; size?: n
     .split(' ').slice(0, 2)
     .map(w => w[0]?.toUpperCase() ?? '')
     .join('') || '?'
-  const colors = ['#075e54','#128c7e','#25d366','#0a84ff','#bf5af2','#ff9f0a','#ff3b30','#32ade6']
+  const colors = ['#3DF710','rgba(61,247,16,.70)','rgba(255,255,255,.75)','rgba(61,247,16,.42)','rgba(255,255,255,.45)','rgba(61,247,16,.22)','rgba(255,255,255,.25)','rgba(61,247,16,.12)']
   const bg = colors[name.charCodeAt(0) % colors.length]
   return (
     <div style={{
@@ -1402,11 +1402,11 @@ export default function WhatsApp() {
               )}
             </div>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: 7, background: 'rgba(255,200,0,.06)', border: '1px solid rgba(255,200,0,.15)', marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: 7, background: 'rgba(61,247,16,.06)', border: '1px solid rgba(61,247,16,.15)', marginBottom: 8 }}>
               <span style={{ fontSize: 13 }}>⚠️</span>
-              <p style={{ fontSize: 10, color: '#ffd60a' }}>
+              <p style={{ fontSize: 10, color: 'var(--t2)' }}>
                 Nenhum número conectado.{' '}
-                <button onClick={() => navigate('/configuracoes')} style={{ background: 'none', border: 'none', color: '#ffd60a', cursor: 'pointer', fontSize: 10, textDecoration: 'underline', padding: 0 }}>
+                <button onClick={() => navigate('/configuracoes')} style={{ background: 'none', border: 'none', color: 'var(--neon)', cursor: 'pointer', fontSize: 10, textDecoration: 'underline', padding: 0 }}>
                   Configurar
                 </button>
               </p>
@@ -1672,11 +1672,11 @@ export default function WhatsApp() {
                       display: 'flex', flexDirection: 'column', gap: 2, minWidth: 180,
                     }}>
                       {[
-                        { label: 'Fotos e vídeos', icon: <ImageIcon size={18} />, color: '#7b68ee', onClick: () => { setShowAttachMenu(false); fileInputRef.current?.click() } },
-                        { label: 'Vídeo',          icon: <Film size={18} />,      color: '#5b8dee', onClick: () => { setShowAttachMenu(false); videoInputRef.current?.click() } },
-                        { label: 'Câmera',         icon: <Camera size={18} />,    color: '#e05c8a', onClick: () => { setShowAttachMenu(false); const i = document.createElement('input'); i.type='file'; i.accept='image/*'; i.capture='environment'; i.onchange=handleFileChange as never; i.click() } },
-                        { label: 'Áudio',          icon: <Music2 size={18} />,    color: '#f0924d', onClick: () => { setShowAttachMenu(false); audioFileInputRef.current?.click() } },
-                        { label: 'Documento',      icon: <FileText size={18} />,  color: '#5fa8e8', onClick: () => { setShowAttachMenu(false); docInputRef.current?.click() } },
+                        { label: 'Fotos e vídeos', icon: <ImageIcon size={18} />, color: 'var(--neon)', onClick: () => { setShowAttachMenu(false); fileInputRef.current?.click() } },
+                        { label: 'Vídeo',          icon: <Film size={18} />,      color: 'rgba(61,247,16,.70)', onClick: () => { setShowAttachMenu(false); videoInputRef.current?.click() } },
+                        { label: 'Câmera',         icon: <Camera size={18} />,    color: 'rgba(255,255,255,.75)', onClick: () => { setShowAttachMenu(false); const i = document.createElement('input'); i.type='file'; i.accept='image/*'; i.capture='environment'; i.onchange=handleFileChange as never; i.click() } },
+                        { label: 'Áudio',          icon: <Music2 size={18} />,    color: 'rgba(61,247,16,.42)', onClick: () => { setShowAttachMenu(false); audioFileInputRef.current?.click() } },
+                        { label: 'Documento',      icon: <FileText size={18} />,  color: 'rgba(255,255,255,.45)', onClick: () => { setShowAttachMenu(false); docInputRef.current?.click() } },
                       ].map(item => (
                         <button key={item.label} onClick={item.onClick}
                           style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 9, width: '100%', textAlign: 'left', color: '#e9edef', fontSize: 13 }}

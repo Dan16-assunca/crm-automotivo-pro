@@ -12,14 +12,14 @@ export default function Instagram() {
       <div style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         padding: '60px 24px', gap: 20, textAlign: 'center',
-        background: 'rgba(168,85,247,.03)', border: '1px solid rgba(168,85,247,.12)', borderRadius: 14,
+        background: 'var(--ng)', border: '1px solid var(--nb)', borderRadius: 14,
       }}>
         <div style={{
           width: 64, height: 64, borderRadius: 16,
-          background: 'rgba(168,85,247,.1)', border: '1px solid rgba(168,85,247,.3)',
+          background: 'var(--ng)', border: '1px solid var(--nb)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <InstagramIcon size={28} style={{ color: 'var(--pur)' }} />
+          <InstagramIcon size={28} style={{ color: 'var(--neon)' }} />
         </div>
 
         <div>

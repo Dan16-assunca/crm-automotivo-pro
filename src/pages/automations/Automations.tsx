@@ -14,23 +14,23 @@ import type { Automation, AutomationAction } from '@/types'
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
 const TRIGGERS = [
-  { id: 'new_lead',      label: 'Novo Lead',        desc: 'Quando um lead é criado',             icon: '🆕', color: '#39FF14' },
-  { id: 'no_contact',   label: 'Sem Contato',       desc: 'Após X dias sem resposta do lead',    icon: '🔕', color: '#f97316' },
-  { id: 'stage_change', label: 'Mudança de Etapa',  desc: 'Quando o lead entra em uma etapa',   icon: '🔀', color: '#3b82f6' },
+  { id: 'new_lead',      label: 'Novo Lead',        desc: 'Quando um lead é criado',             icon: '🆕', color: '#3DF710' },
+  { id: 'no_contact',   label: 'Sem Contato',       desc: 'Após X dias sem resposta do lead',    icon: '🔕', color: 'rgba(61,247,16,.65)' },
+  { id: 'stage_change', label: 'Mudança de Etapa',  desc: 'Quando o lead entra em uma etapa',   icon: '🔀', color: 'rgba(255,255,255,.75)' },
 ]
 
 const ACTION_TYPES: { id: AutomationAction['type']; label: string; icon: React.ReactNode; color: string; bg: string }[] = [
-  { id: 'send_whatsapp',      label: 'Enviar WhatsApp',   icon: <MessageSquare size={14} />, color: '#25d366', bg: 'rgba(37,211,102,.12)' },
-  { id: 'change_temperature', label: 'Mudar Temperatura', icon: <Thermometer size={14} />,  color: '#f97316', bg: 'rgba(249,115,22,.12)'  },
-  { id: 'change_stage',       label: 'Mover de Etapa',    icon: <GitBranch size={14} />,    color: '#3b82f6', bg: 'rgba(59,130,246,.12)'  },
-  { id: 'create_task',        label: 'Criar Tarefa',       icon: <CheckSquare size={14} />,  color: '#8b5cf6', bg: 'rgba(139,92,246,.12)'  },
-  { id: 'archive_lead',       label: 'Arquivar Lead',      icon: <Archive size={14} />,      color: '#6b7280', bg: 'rgba(107,114,128,.12)' },
+  { id: 'send_whatsapp',      label: 'Enviar WhatsApp',   icon: <MessageSquare size={14} />, color: 'var(--neon)',           bg: 'rgba(61,247,16,.08)'  },
+  { id: 'change_temperature', label: 'Mudar Temperatura', icon: <Thermometer size={14} />,  color: 'rgba(61,247,16,.65)',   bg: 'rgba(61,247,16,.06)'  },
+  { id: 'change_stage',       label: 'Mover de Etapa',    icon: <GitBranch size={14} />,    color: 'rgba(255,255,255,.75)', bg: 'rgba(255,255,255,.05)' },
+  { id: 'create_task',        label: 'Criar Tarefa',       icon: <CheckSquare size={14} />,  color: 'rgba(61,247,16,.42)',   bg: 'rgba(61,247,16,.04)'  },
+  { id: 'archive_lead',       label: 'Arquivar Lead',      icon: <Archive size={14} />,      color: 'var(--t3)',             bg: 'rgba(255,255,255,.03)' },
 ]
 
 const TEMP_OPTS = [
-  { id: 'hot',  label: '🔥 Quente', color: '#ef4444' },
-  { id: 'warm', label: '⚡ Morno',  color: '#f97316' },
-  { id: 'cold', label: '❄️ Frio',   color: '#3b82f6' },
+  { id: 'hot',  label: '🔥 Quente', color: 'var(--neon)' },
+  { id: 'warm', label: '⚡ Morno',  color: 'rgba(61,247,16,.65)' },
+  { id: 'cold', label: '❄️ Frio',   color: 'var(--t2)' },
 ]
 
 const VARS = ['{{nome}}', '{{telefone}}', '{{veiculo}}', '{{vendedor}}', '{{loja}}']
@@ -55,7 +55,7 @@ const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
     name: 'Boas-vindas WhatsApp',
     description: 'Mensagem automática para leads que chegam pelo WhatsApp',
     emoji: '👋',
-    color: '#25d366',
+    color: 'var(--neon)',
     trigger_type: 'new_lead',
     trigger_config: {},
     tags: ['WhatsApp', 'Novo lead'],
@@ -70,7 +70,7 @@ const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
     name: 'Reengajamento — Lead Frio',
     description: 'Reativa leads que não respondem há mais de 7 dias',
     emoji: '🔄',
-    color: '#f97316',
+    color: 'rgba(61,247,16,.65)',
     trigger_type: 'no_contact',
     trigger_config: { days: 7 },
     tags: ['Reengajamento', 'Lead frio'],
@@ -87,7 +87,7 @@ const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
     name: 'Pós-venda & Indicação',
     description: 'Nurtura cliente após a compra e solicita indicações',
     emoji: '🏆',
-    color: '#a78bfa',
+    color: 'rgba(255,255,255,.75)',
     trigger_type: 'stage_change',
     trigger_config: {},
     tags: ['Pós-venda', 'Indicação'],
@@ -103,7 +103,7 @@ const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
     name: 'Oferta por Tempo Limitado',
     description: 'Cria senso de urgência para leads que não fecharam',
     emoji: '⚡',
-    color: '#ef4444',
+    color: 'rgba(61,247,16,.42)',
     trigger_type: 'no_contact',
     trigger_config: { days: 5 },
     tags: ['Urgência', 'Conversão'],
@@ -358,9 +358,9 @@ function NodeConfigPanel({ action, index, stages, onChange, onClose }: {
               style={{
                 marginTop: 8, display: 'flex', alignItems: 'center', gap: 7, width: '100%',
                 padding: '7px 10px', borderRadius: 7, cursor: 'pointer', fontSize: 11, fontWeight: 600,
-                border: `1px solid ${action.config.ai_personalize ? 'rgba(139,92,246,.5)' : 'var(--b)'}`,
-                background: action.config.ai_personalize ? 'rgba(139,92,246,.1)' : 'transparent',
-                color: (action.config.ai_personalize ? '#BF5AF2' : 'var(--t3)') as string,
+                border: `1px solid ${action.config.ai_personalize ? 'var(--nb)' : 'var(--b)'}`,
+                background: action.config.ai_personalize ? 'var(--ng)' : 'transparent',
+                color: (action.config.ai_personalize ? 'var(--neon)' : 'var(--t3)') as string,
                 transition: 'all .15s',
               }}
             >
@@ -445,7 +445,7 @@ function NodeConfigPanel({ action, index, stages, onChange, onClose }: {
         )}
 
         {action.type === 'archive_lead' && (
-          <div style={{ background: 'rgba(107,114,128,.08)', border: '1px solid rgba(107,114,128,.2)', borderRadius: 8, padding: '10px 12px' }}>
+          <div style={{ background: 'var(--ng)', border: '1px solid var(--nb)', borderRadius: 8, padding: '10px 12px' }}>
             <p style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.6 }}>
               O lead será movido para o arquivo automaticamente. Nenhuma configuração necessária.
             </p>
@@ -730,9 +730,9 @@ function AutomationCard({
             </p>
             <span style={{
               fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 10, flexShrink: 0,
-              background: automation.active ? 'rgba(37,211,102,.1)' : 'var(--el)',
-              color: automation.active ? '#25d366' : 'var(--t3)',
-              border: `1px solid ${automation.active ? 'rgba(37,211,102,.25)' : 'var(--b)'}`,
+              background: automation.active ? 'var(--ng)' : 'var(--el)',
+              color: automation.active ? 'var(--neon)' : 'var(--t3)',
+              border: `1px solid ${automation.active ? 'var(--nb)' : 'var(--b)'}`,
               textTransform: 'uppercase', letterSpacing: '.05em',
             }}>
               {automation.active ? 'ATIVO' : 'PAUSADO'}
@@ -752,7 +752,7 @@ function AutomationCard({
             <Bot size={13} />
           </button>
           <button onClick={onToggle}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: automation.active ? '#25d366' : 'var(--t3)', display: 'flex', padding: 6, borderRadius: 6 }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: automation.active ? 'var(--neon)' : 'var(--t3)', display: 'flex', padding: 6, borderRadius: 6 }}
             title={automation.active ? 'Pausar' : 'Ativar'}
             onMouseEnter={e => { e.currentTarget.style.background = 'var(--el)' }}
             onMouseLeave={e => { e.currentTarget.style.background = 'none' }}>
@@ -1068,9 +1068,9 @@ export default function Automations() {
       {automations.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           {[
-            { label: 'Automações Ativas', value: totalActive,  color: '#25d366' },
-            { label: 'Pausadas',          value: totalPaused,  color: 'var(--yel)' },
-            { label: 'Total de Ações',    value: totalActions, color: 'var(--blu)' },
+            { label: 'Automações Ativas', value: totalActive,  color: 'var(--neon)' },
+            { label: 'Pausadas',          value: totalPaused,  color: 'var(--t2)' },
+            { label: 'Total de Ações',    value: totalActions, color: 'rgba(61,247,16,.65)' },
           ].map(s => (
             <div key={s.label} style={{ background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 9, padding: '12px 14px' }}>
               <p style={{ fontSize: 22, fontWeight: 800, color: s.color, fontFamily: 'var(--fm)' }}>{s.value}</p>
@@ -1108,8 +1108,8 @@ export default function Automations() {
                 <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--t)' }}>Novo Lead</p>
               </div>
               {PRESET_21.map((item, i) => {
-                const color = item.type === 'whatsapp' ? '#25d366' : item.type === 'task' ? '#8b5cf6' : '#3b82f6'
-                const bg    = item.type === 'whatsapp' ? 'rgba(37,211,102,.1)' : item.type === 'task' ? 'rgba(139,92,246,.1)' : 'rgba(59,130,246,.1)'
+                const color = item.type === 'whatsapp' ? 'var(--neon)' : item.type === 'task' ? 'rgba(61,247,16,.42)' : 'rgba(255,255,255,.75)'
+                const bg    = item.type === 'whatsapp' ? 'rgba(61,247,16,.08)' : item.type === 'task' ? 'rgba(61,247,16,.04)' : 'rgba(255,255,255,.04)'
                 const icon  = item.type === 'whatsapp' ? '💬' : item.type === 'task' ? '✅' : '⚙️'
                 return (
                   <React.Fragment key={i}>
@@ -1139,9 +1139,9 @@ export default function Automations() {
 
           <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
             {[
-              { color: '#25d366', label: '5 WhatsApp' },
-              { color: '#8b5cf6', label: '1 Tarefa' },
-              { color: '#3b82f6', label: '2 Sistema' },
+              { color: 'var(--neon)',           label: '5 WhatsApp' },
+              { color: 'rgba(61,247,16,.42)',   label: '1 Tarefa' },
+              { color: 'rgba(255,255,255,.75)', label: '2 Sistema' },
             ].map(b => (
               <span key={b.label} style={{ fontSize: 10, color: b.color, background: `${b.color}12`, border: `1px solid ${b.color}30`, padding: '2px 8px', borderRadius: 10 }}>
                 {b.label}
@@ -1186,8 +1186,8 @@ export default function Automations() {
       ) : null}
 
       {/* Info sobre execução */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', background: 'rgba(139,92,246,.06)', border: '1px solid rgba(139,92,246,.15)', borderRadius: 8 }}>
-        <AlertCircle size={13} style={{ color: '#8b5cf6', flexShrink: 0, marginTop: 1 }} />
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', background: 'var(--ng)', border: '1px solid var(--nb)', borderRadius: 8 }}>
+        <AlertCircle size={13} style={{ color: 'var(--neon)', flexShrink: 0, marginTop: 1 }} />
         <p style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.6 }}>
           As automações são executadas automaticamente <b style={{ color: 'var(--t2)' }}>a cada hora</b> pelo servidor.
           Cada ação é executada <b style={{ color: 'var(--t2)' }}>uma única vez por lead</b>.

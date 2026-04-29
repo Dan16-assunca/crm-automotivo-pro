@@ -280,7 +280,7 @@ function InviteCard({ invite, onDelete }: { invite: TeamInvite; onDelete: (id: s
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
           <p style={{ fontSize: 10, color: 'var(--t3)' }}>{invite.email}</p>
           <Badge variant={ROLE_VARIANTS[invite.role] ?? 'default'} style={{ fontSize: 8 }}>{ROLE_LABELS[invite.role] ?? invite.role}</Badge>
-          <span style={{ fontSize: 9, color: isExpired ? 'var(--red)' : 'var(--yel)', display: 'flex', alignItems: 'center', gap: 3 }}>
+          <span style={{ fontSize: 9, color: isExpired ? 'var(--red)' : 'var(--t2)', display: 'flex', alignItems: 'center', gap: 3 }}>
             <Clock size={9} /> {expiresIn()}
           </span>
         </div>
@@ -591,7 +591,7 @@ function MemberCard({
             }}
             title={(canManage || canEditOwn) ? 'Clique para editar o WhatsApp' : undefined}
           >
-            <MessageCircle size={10} style={{ color: member.whatsapp_number ? '#25d366' : 'var(--t3)', flexShrink: 0 }} />
+            <MessageCircle size={10} style={{ color: member.whatsapp_number ? 'var(--neon)' : 'var(--t3)', flexShrink: 0 }} />
             <span style={{ fontSize: 10, color: member.whatsapp_number ? 'var(--t2)' : 'var(--t3)', fontStyle: member.whatsapp_number ? 'normal' : 'italic' }}>
               {member.whatsapp_number
                 ? `+${member.whatsapp_number.replace(/\D/g, '')}`

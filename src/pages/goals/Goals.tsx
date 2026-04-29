@@ -25,9 +25,9 @@ function pct(achieved: number, goal: number) {
 
 function statusColor(p: number) {
   if (p >= 100) return 'var(--neon)'
-  if (p >= 70)  return '#3b82f6'
-  if (p >= 40)  return 'var(--yel)'
-  return 'var(--red)'
+  if (p >= 70)  return 'rgba(61,247,16,.65)'
+  if (p >= 40)  return 'var(--t2)'
+  return 'var(--t3)'
 }
 
 function statusLabel(p: number) {
@@ -318,7 +318,7 @@ function GoalCard({
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--t3)', marginTop: 3 }}>
             <span>{unitsPct}% concluído</span>
-            {remainUnits > 0 && <span style={{ color: 'var(--yel)' }}>{remainUnits} un. restantes</span>}
+            {remainUnits > 0 && <span style={{ color: 'var(--t2)' }}>{remainUnits} un. restantes</span>}
           </div>
         </div>
       )}
@@ -338,7 +338,7 @@ function GoalCard({
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--t3)', marginTop: 3 }}>
             <span>Meta: {formatCurrency(goal.goal_revenue)}</span>
-            {remainRev > 0 && <span style={{ color: 'var(--yel)' }}>Faltam {formatCurrency(remainRev)}</span>}
+            {remainRev > 0 && <span style={{ color: 'var(--t2)' }}>Faltam {formatCurrency(remainRev)}</span>}
           </div>
         </div>
       )}
@@ -380,7 +380,7 @@ function Ranking({ goals, wonLeads }: {
   return (
     <div style={{ background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 10, padding: '16px 18px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-        <Award size={15} color="var(--yel)" />
+        <Award size={15} color="var(--neon)" />
         <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--t)' }}>Ranking do Mês</p>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -388,8 +388,8 @@ function Ranking({ goals, wonLeads }: {
           <div key={goal.id} style={{
             display: 'flex', alignItems: 'center', gap: 12,
             padding: '9px 12px', borderRadius: 8,
-            background: i === 0 ? 'rgba(255,215,0,.05)' : 'var(--el)',
-            border: i === 0 ? '1px solid rgba(255,215,0,.15)' : '1px solid transparent',
+            background: i === 0 ? 'rgba(61,247,16,.04)' : 'var(--el)',
+            border: i === 0 ? '1px solid rgba(61,247,16,.12)' : '1px solid transparent',
           }}>
             <span style={{ fontSize: 18, flexShrink: 0 }}>{medals[i] ?? `#${i + 1}`}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -568,14 +568,14 @@ export default function Goals() {
               label: 'Melhor vendedor',
               value: kpis.topName,
               sub: 'Maior % de meta',
-              color: 'var(--yel)',
+              color: 'var(--neon)',
             },
             {
               icon: <Clock size={14} />,
               label: isCurrentMonth ? 'Dias restantes' : 'Período',
               value: kpis.days !== null ? `${kpis.days} dias` : MONTHS[viewMonth - 1],
               sub: isCurrentMonth ? 'Para fechar o mês' : `${viewYear}`,
-              color: kpis.days !== null && kpis.days <= 5 ? 'var(--red)' : 'var(--t2)',
+              color: kpis.days !== null && kpis.days <= 5 ? 'var(--t2)' : 'var(--t2)',
             },
           ].map(k => (
             <div key={k.label} style={{ background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 9, padding: '12px 14px' }}>
