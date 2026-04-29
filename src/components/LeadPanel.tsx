@@ -50,7 +50,7 @@ const S = {
     gap: 8,
     marginBottom: 6,
   },
-  label: { fontSize: 10, color: '#505050', width: 100, flexShrink: 0 },
+  label: { fontSize: 10, color: '#b8b8b8', width: 100, flexShrink: 0 },
   value: { fontSize: 12, color: '#f5f5f5', flex: 1 },
   input: {
     background: '#1a1a1a',
@@ -146,7 +146,7 @@ function Bar({ label, value }: { label: string; value: number }) {
   return (
     <div style={{ marginBottom: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-        <span style={{ fontSize: 10, color: '#9a9a9a' }}>{label}</span>
+        <span style={{ fontSize: 10, color: '#b8b8b8' }}>{label}</span>
         <span style={{ fontSize: 10, color: '#3df710', fontWeight: 700 }}>{value}%</span>
       </div>
       <div style={{ height: 3, background: '#1a1a1a', borderRadius: 2, overflow: 'hidden' }}>
@@ -265,7 +265,7 @@ function CreateForm({ initialData, onClose }: { initialData: Partial<Lead>; onCl
   })
 
   const inpStyle: React.CSSProperties = { ...S.input, marginBottom: 8 }
-  const lbl: React.CSSProperties = { fontSize: 10, color: '#505050', display: 'block', marginBottom: 3 }
+  const lbl: React.CSSProperties = { fontSize: 10, color: '#b8b8b8', display: 'block', marginBottom: 3 }
 
   const PAYMENT_LABELS = [
     'Financiamento bancário', 'À vista / PIX', 'Consórcio',
@@ -1032,13 +1032,13 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
               <div style={{ background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 7, padding: '6px 8px' }}>
-                <p style={{ fontSize: 9, color: '#505050', marginBottom: 2 }}>Data entrada</p>
+                <p style={{ fontSize: 9, color: '#9a9a9a', marginBottom: 2 }}>Data entrada</p>
                 <p style={{ fontSize: 11, color: '#f5f5f5', fontWeight: 600 }}>
                   {new Date(lead.created_at).toLocaleDateString('pt-BR')}
                 </p>
               </div>
               <div style={{ background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 7, padding: '6px 8px' }}>
-                <p style={{ fontSize: 9, color: '#505050', marginBottom: 2 }}>Dias no pipeline</p>
+                <p style={{ fontSize: 9, color: '#9a9a9a', marginBottom: 2 }}>Dias no pipeline</p>
                 <p style={{ fontSize: 11, color: daysInPipeline > 7 ? '#F97316' : '#3df710', fontWeight: 600 }}>
                   {daysInPipeline}d {daysInPipeline > 7 ? '⚠️' : '✓'}
                 </p>
@@ -1091,7 +1091,7 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
             <p style={S.sectionTitle}>Interesse &amp; Negócio</p>
             {fieldConfig.show_vehicle && (
             <div style={S.row}>
-              <Car size={11} style={{ color: '#505050', flexShrink: 0 }} />
+              <Car size={11} style={{ color: '#9a9a9a', flexShrink: 0 }} />
               <span style={S.label}>{fieldConfig.interest_label}</span>
               <InlineEdit
                 value={lead.vehicle_interest ?? ''}
@@ -1102,7 +1102,7 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
             )}
             {fieldConfig.show_budget && (
             <div style={S.row}>
-              <DollarSign size={11} style={{ color: '#505050', flexShrink: 0 }} />
+              <DollarSign size={11} style={{ color: '#9a9a9a', flexShrink: 0 }} />
               <span style={S.label}>Orçamento</span>
               <InlineEdit
                 value={lead.budget_max ? String(lead.budget_max) : ''}
@@ -1127,7 +1127,7 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
             )}
             {fieldConfig.show_trade_in && lead.trade_in && (
               <div style={S.row}>
-                <RefreshCw size={11} style={{ color: '#505050', flexShrink: 0 }} />
+                <RefreshCw size={11} style={{ color: '#9a9a9a', flexShrink: 0 }} />
                 <span style={S.label}>Veículo troca</span>
                 <InlineEdit
                   value={lead.trade_in_vehicle ?? ''}
@@ -1148,7 +1148,7 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
               { icon: <MapPin size={10} />, label: 'Cidade', field: 'client_city' as keyof Lead },
             ].map(({ icon, label, field }) => (
               <div key={field} style={{ ...S.row, marginBottom: 6 }}>
-                <span style={{ color: '#505050', flexShrink: 0 }}>{icon}</span>
+                <span style={{ color: '#9a9a9a', flexShrink: 0 }}>{icon}</span>
                 <span style={S.label}>{label}</span>
                 <InlineEdit
                   value={(lead[field] as string) ?? ''}
@@ -1158,7 +1158,7 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
               </div>
             ))}
             <div style={S.row}>
-              <User size={10} style={{ color: '#505050', flexShrink: 0 }} />
+              <User size={10} style={{ color: '#9a9a9a', flexShrink: 0 }} />
               <span style={S.label}>Vendedor</span>
               <select
                 value={lead.salesperson_id ?? ''}
@@ -1170,7 +1170,7 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
               </select>
             </div>
             <div style={S.row}>
-              <TrendingUp size={10} style={{ color: '#505050', flexShrink: 0 }} />
+              <TrendingUp size={10} style={{ color: '#9a9a9a', flexShrink: 0 }} />
               <span style={S.label}>Temperatura</span>
               <select
                 value={lead.temperature}
