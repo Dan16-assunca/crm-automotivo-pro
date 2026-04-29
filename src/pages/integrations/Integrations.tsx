@@ -696,6 +696,137 @@ function FbPagePickerModal({
   )
 }
 
+// ─── FbManualForm — token manual via Graph API Explorer ──────────────────────
+
+function FbManualForm({ storeId, onSuccess }: { storeId: string; onSuccess: () => void }) {
+  const [pageId,    setPageId]    = useState('')
+  const [pageName,  setPageName]  = useState('')
+  const [token,     setToken]     = useState('')
+  const [showToken, setShowToken] = useState(false)
+  const [saving,    setSaving]    = useState(false)
+  const [tab,       setTab]       = useState<'auto'|'manual'>('auto')
+
+  async function handleSave() {
+    if (!pageId.trim() || !token.trim()) return
+    setSaving(true)
+    try {
+      const res = await fetch(`${FB_OAUTH_URL}?action=select_page`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ store_id: storeId, page_id: pageId.trim(), page_name: pageName.trim() || null, page_access_token: token.trim() }),
+      })
+      const data = await res.json() as { ok?: boolean; error?: string }
+      if (!data.ok) throw new Error(data.error ?? 'Erro ao conectar')
+      toast.success('Facebook conectado!', 'Leads chegarão automaticamente no Pipeline')
+      onSuccess()
+    } catch (e) {
+      toast.error('Erro ao salvar', e instanceof Error ? e.message : '')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Tabs */}
+      <div style={{ display: 'flex', background: 'var(--el)', borderRadius: 8, padding: 3, gap: 3 }}>
+        {(['auto', 'manual'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{
+            flex: 1, height: 32, borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+            background: tab === t ? 'var(--card)' : 'transparent',
+            color: tab === t ? 'var(--t)' : 'var(--t3)',
+            boxShadow: tab === t ? '0 1px 4px rgba(0,0,0,.3)' : 'none',
+            transition: 'all .15s',
+          }}>
+            {t === 'auto' ? '📘 Via Facebook Login' : '🔑 Token manual'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'auto' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center', textAlign: 'center', padding: '4px 0' }}>
+          <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(24,119,242,.1)', border: '2px solid rgba(24,119,242,.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>📘</div>
+          <div>
+            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--t)', marginBottom: 6 }}>Facebook OAuth</p>
+            <p style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.7 }}>
+              Requer App Review do Meta para funcionar com permissões de Páginas.<br/>
+              Use a aba <strong style={{ color: 'var(--t2)' }}>Token manual</strong> para conectar agora.
+            </p>
+          </div>
+          <div style={{ background: 'rgba(234,179,8,.07)', border: '1px solid rgba(234,179,8,.2)', borderRadius: 8, padding: '10px 14px', textAlign: 'left', width: '100%' }}>
+            <p style={{ fontSize: 11, color: 'var(--yel)', fontWeight: 600, marginBottom: 4 }}>⚠️ Pendente: App Review</p>
+            <p style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.6 }}>
+              Enquanto o Meta não aprovar as permissões <code style={{ fontSize: 10, color: 'var(--t2)' }}>pages_show_list</code> e <code style={{ fontSize: 10, color: 'var(--t2)' }}>pages_manage_metadata</code>, use o Token manual para testar.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ background: 'var(--el)', border: '1px solid var(--bs)', borderRadius: 8, padding: '10px 12px', fontSize: 11, color: 'var(--t3)', lineHeight: 1.7 }}>
+            <p style={{ fontWeight: 700, color: 'var(--t2)', marginBottom: 6 }}>Como gerar o token:</p>
+            <ol style={{ paddingLeft: 16, margin: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <li>Acesse <strong style={{ color: 'var(--t)' }}>developers.facebook.com/tools/explorer</strong></li>
+              <li>Selecione o app <strong style={{ color: 'var(--t)' }}>CRM Automotivo Pro</strong></li>
+              <li>Clique em <strong style={{ color: 'var(--t)' }}>Generate Access Token</strong> → autorize</li>
+              <li>No campo "User or Page", troque para a sua <strong style={{ color: 'var(--t)' }}>Página</strong></li>
+              <li>Copie o <strong style={{ color: 'var(--t)' }}>Page Access Token</strong> gerado</li>
+            </ol>
+          </div>
+
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--t2)', display: 'block', marginBottom: 5 }}>ID da Página *</label>
+            <input
+              value={pageId} onChange={e => setPageId(e.target.value)}
+              placeholder="Ex: 123456789012345"
+              style={{ width: '100%', padding: '9px 12px', fontSize: 12, background: 'var(--el)', border: '1px solid var(--bs)', borderRadius: 7, color: 'var(--t)', outline: 'none', boxSizing: 'border-box' }}
+            />
+            <p style={{ fontSize: 10, color: 'var(--t3)', marginTop: 3 }}>Encontre em: Facebook Business Suite → Configurações → ID da Página</p>
+          </div>
+
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--t2)', display: 'block', marginBottom: 5 }}>Nome da Página (opcional)</label>
+            <input
+              value={pageName} onChange={e => setPageName(e.target.value)}
+              placeholder="Ex: Vendas de Casa"
+              style={{ width: '100%', padding: '9px 12px', fontSize: 12, background: 'var(--el)', border: '1px solid var(--bs)', borderRadius: 7, color: 'var(--t)', outline: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--t2)', display: 'block', marginBottom: 5 }}>Page Access Token *</label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showToken ? 'text' : 'password'}
+                value={token} onChange={e => setToken(e.target.value)}
+                placeholder="Cole o token aqui..."
+                style={{ width: '100%', padding: '9px 36px 9px 12px', fontSize: 12, background: 'var(--el)', border: '1px solid var(--bs)', borderRadius: 7, color: 'var(--t)', outline: 'none', boxSizing: 'border-box', fontFamily: 'var(--fm)' }}
+              />
+              <button onClick={() => setShowToken(v => !v)} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', display: 'flex', padding: 2, minHeight: 'unset' }}>
+                {showToken ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+            <p style={{ fontSize: 10, color: 'var(--t3)', marginTop: 3 }}>Token de longa duração (60 dias). Veja a aba "Como conectar" para gerar.</p>
+          </div>
+
+          <button
+            onClick={handleSave}
+            disabled={!pageId.trim() || !token.trim() || saving}
+            style={{
+              width: '100%', height: 44, borderRadius: 9, fontSize: 13, fontWeight: 700,
+              background: (!pageId.trim() || !token.trim() || saving) ? 'var(--el)' : 'var(--neon)',
+              border: 'none', color: (!pageId.trim() || !token.trim() || saving) ? 'var(--t3)' : '#000',
+              cursor: (!pageId.trim() || !token.trim() || saving) ? 'default' : 'pointer',
+              transition: 'all .15s',
+            }}
+          >
+            {saving ? 'Conectando...' : '✓ Conectar página'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── FacebookConfigModal (OAuth-based) ───────────────────────────────────────
 
 function FacebookConfigModal({ onClose, storeId, onPages }: {
@@ -829,35 +960,10 @@ function FacebookConfigModal({ onClose, storeId, onPages }: {
           </div>
         ) : (
           /* ── Not connected state ── */
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, alignItems: 'center', textAlign: 'center', padding: '8px 0 4px' }}>
-            <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(24,119,242,.1)', border: '2px solid rgba(24,119,242,.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>
-              📘
-            </div>
-            <div>
-              <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--t)', marginBottom: 8 }}>Conecte sua Página do Facebook</p>
-              <p style={{ fontSize: 12, color: 'var(--t3)', lineHeight: 1.7, maxWidth: 340 }}>
-                Um popup vai abrir para você fazer login no Facebook e selecionar a Página da loja. Os leads chegarão automaticamente no Pipeline.
-              </p>
-            </div>
-
-            <button
-              onClick={handleConnect}
-              disabled={connecting}
-              style={{
-                width: '100%', height: 48, borderRadius: 10, fontSize: 15, fontWeight: 800,
-                background: connecting ? '#0f5fb8' : '#1877F2', border: 'none', color: '#fff', cursor: connecting ? 'default' : 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-                boxShadow: '0 4px 20px rgba(24,119,242,.4)',
-                transition: 'all .15s',
-              }}
-            >
-              {connecting ? '⏳ Aguardando login no popup...' : '📘 Conectar com Facebook'}
-            </button>
-
-            <p style={{ fontSize: 10, color: 'var(--t3)', lineHeight: 1.6 }}>
-              Permissões: pages_show_list, pages_manage_metadata, pages_read_engagement
-            </p>
-          </div>
+          <FbManualForm storeId={storeId} onSuccess={() => {
+            qc.invalidateQueries({ queryKey: ['fb-integration'] })
+            onClose()
+          }} />
         )}
       </div>
     </div>
