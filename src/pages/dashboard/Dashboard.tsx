@@ -669,7 +669,16 @@ export default function Dashboard() {
     { label: 'Este ano', val: 'year' },  { label: 'Tudo',    val: 'all' },
   ]
 
-  const CHART_COLORS = ['#3DF710', '#3B82F6', '#F59E0B', '#F97316', '#A855F7', '#F43F5E', '#14B8A6', '#EC4899']
+  const CHART_COLORS = [
+    '#3DF710',
+    'rgba(61,247,16,.70)',
+    'rgba(255,255,255,.75)',
+    'rgba(61,247,16,.42)',
+    'rgba(255,255,255,.45)',
+    'rgba(61,247,16,.22)',
+    'rgba(255,255,255,.25)',
+    'rgba(61,247,16,.12)',
+  ]
 
   if (!authLoading && !storeId) {
     return (
@@ -759,26 +768,26 @@ export default function Dashboard() {
 
         {/* ── Alertas de Leads ── */}
         {leadAlerts && leadAlerts.length > 0 && (
-          <div style={{ background: 'var(--card)', border: '1px solid rgba(239,68,68,.2)', borderRadius: 16, overflow: 'hidden' }}>
+          <div style={{ background: 'var(--card)', border: '1px solid var(--neon-card)', borderRadius: 16, overflow: 'hidden' }}>
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               padding: '12px 14px 10px', borderBottom: '1px solid var(--bs)',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Bell size={13} style={{ color: '#F43F5E' }} />
+                <Bell size={13} style={{ color: 'var(--neon)' }} />
                 <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--t)', textTransform: 'uppercase', letterSpacing: '.06em' }}>
                   Alertas IA
                 </p>
               </div>
-              <span style={{ fontSize: 10, fontWeight: 800, color: '#fff', background: 'var(--red)', padding: '3px 8px', borderRadius: 20 }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: '#000', background: 'var(--neon)', padding: '3px 8px', borderRadius: 20 }}>
                 {leadAlerts.length}
               </span>
             </div>
             {leadAlerts.slice(0, 5).map((alert, idx) => {
-              const severityColor = alert.severity === 'critical' ? '#F43F5E'
-                : alert.severity === 'warning' ? '#F97316'
-                : alert.severity === 'attention' ? '#FFD60A'
-                : 'var(--neon)'
+              const severityColor = alert.severity === 'critical' ? 'var(--neon)'
+                : alert.severity === 'warning' ? 'rgba(61,247,16,.72)'
+                : alert.severity === 'attention' ? 'rgba(61,247,16,.5)'
+                : 'rgba(61,247,16,.38)'
               return (
                 <div key={alert.id} style={{
                   padding: '10px 14px',
@@ -796,7 +805,7 @@ export default function Dashboard() {
         {/* ── Follow-ups urgentes ── */}
         {followUps && followUps.length > 0 && (
           <div style={{
-            background: 'var(--card)', border: overdueCount > 0 ? '1px solid rgba(239,68,68,.3)' : '1px solid var(--neon-card)',
+            background: 'var(--card)', border: '1px solid var(--neon-card)',
             borderRadius: 16, overflow: 'hidden',
           }}>
             <div style={{
@@ -809,8 +818,8 @@ export default function Dashboard() {
               </p>
               {overdueCount > 0 && (
                 <span style={{
-                  fontSize: 10, fontWeight: 800, color: '#fff',
-                  background: 'var(--red)', padding: '3px 8px', borderRadius: 20,
+                  fontSize: 10, fontWeight: 800, color: '#000',
+                  background: 'var(--neon)', padding: '3px 8px', borderRadius: 20,
                 }}>
                   {overdueCount} atrasado{overdueCount > 1 ? 's' : ''}
                 </span>
@@ -825,10 +834,10 @@ export default function Dashboard() {
               }}>
                 <div style={{
                   width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
-                  background: f.overdue ? 'rgba(239,68,68,.12)' : 'var(--ng)',
-                  border: `1px solid ${f.overdue ? 'rgba(239,68,68,.3)' : 'var(--nb)'}`,
+                  background: 'var(--ng)',
+                  border: `1px solid ${f.overdue ? 'var(--neon)' : 'var(--nb)'}`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 12, fontWeight: 800, color: f.overdue ? 'var(--red)' : 'var(--neon)',
+                  fontSize: 12, fontWeight: 800, color: 'var(--neon)',
                 }}>
                   {f.client_name.slice(0, 2).toUpperCase()}
                 </div>
@@ -842,8 +851,8 @@ export default function Dashboard() {
                 </div>
                 <span style={{
                   fontSize: 10, fontWeight: 700, flexShrink: 0, padding: '4px 10px', borderRadius: 20,
-                  background: f.overdue ? 'rgba(239,68,68,.15)' : f.isToday ? 'rgba(234,179,8,.12)' : 'var(--el)',
-                  color: f.overdue ? 'var(--red)' : f.isToday ? 'var(--yel)' : 'var(--t3)',
+                  background: f.overdue ? 'var(--ng)' : f.isToday ? 'var(--ng)' : 'var(--el)',
+                  color: f.overdue ? 'var(--neon)' : f.isToday ? 'var(--neon)' : 'var(--t3)',
                   minHeight: 'unset',
                 }}>
                   {f.overdue ? 'ATRASADO' : f.isToday ? 'HOJE' : timeAgo(f.next_followup_at!)}
@@ -1175,7 +1184,7 @@ export default function Dashboard() {
                   <Tooltip content={<CustomTooltip />} />
                   <Legend iconSize={8} iconType="circle"
                     formatter={v => <span style={{ color: 'var(--t2)', fontSize: 11 }}>{v}</span>} />
-                  <Bar dataKey="faturamento" name="Faturamento" fill="#3B82F6" radius={[4,4,0,0]} />
+                  <Bar dataKey="faturamento" name="Faturamento" fill="rgba(61,247,16,.45)" radius={[4,4,0,0]} />
                   <Bar dataKey="lucro"       name="Lucro"       fill="#3DF710" radius={[4,4,0,0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -1266,7 +1275,7 @@ export default function Dashboard() {
                   <Tooltip content={<CustomTooltip />} />
                   <Bar dataKey="avg" name="Dias" radius={[4,4,0,0]}>
                     {(stockGiro ?? []).map((entry, idx) => (
-                      <Cell key={idx} fill={entry.avg > 60 ? '#F43F5E' : entry.avg > 30 ? '#F59E0B' : '#3DF710'} />
+                      <Cell key={idx} fill={entry.avg > 60 ? 'rgba(61,247,16,.35)' : entry.avg > 30 ? 'rgba(61,247,16,.62)' : '#3DF710'} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -1283,16 +1292,16 @@ export default function Dashboard() {
               <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
                 Alertas de Leads
               </p>
-              <span style={{ fontSize: 10, fontWeight: 800, color: '#fff', background: 'var(--red)', padding: '2px 8px', borderRadius: 10 }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: '#000', background: 'var(--neon)', padding: '2px 8px', borderRadius: 10 }}>
                 {leadAlerts.filter(a => a.severity === 'critical' || a.severity === 'warning').length}
               </span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 8 }}>
               {leadAlerts.map(alert => {
-                const severityColor = alert.severity === 'critical' ? '#F43F5E'
-                  : alert.severity === 'warning' ? '#F97316'
-                  : alert.severity === 'attention' ? '#FFD60A'
-                  : 'var(--neon)'
+                const severityColor = alert.severity === 'critical' ? 'var(--neon)'
+                  : alert.severity === 'warning' ? 'rgba(61,247,16,.72)'
+                  : alert.severity === 'attention' ? 'rgba(61,247,16,.5)'
+                  : 'rgba(61,247,16,.38)'
                 return (
                   <div key={alert.id} style={{
                     background: 'var(--card)', border: `1px solid ${severityColor}30`,
@@ -1324,7 +1333,7 @@ export default function Dashboard() {
             <CardHeader style={{ padding: '14px 16px 0' }}>
               <CardTitle>Follow-ups urgentes</CardTitle>
               {followUps?.filter(f => f.overdue).length
-                ? <Badge variant="danger" dot>{followUps.filter(f => f.overdue).length} atrasados</Badge>
+                ? <Badge variant="neon" dot>{followUps.filter(f => f.overdue).length} atrasados</Badge>
                 : null
               }
             </CardHeader>
@@ -1337,10 +1346,10 @@ export default function Dashboard() {
                     <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <div style={{
                         width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-                        background: f.overdue ? 'rgba(244,63,94,.12)' : 'var(--ng)',
-                        border: `1px solid ${f.overdue ? 'rgba(244,63,94,.3)' : 'var(--nb)'}`,
+                        background: 'var(--ng)',
+                        border: `1px solid ${f.overdue ? 'var(--neon)' : 'var(--nb)'}`,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 11, fontWeight: 700, color: f.overdue ? 'var(--red)' : 'var(--neon)',
+                        fontSize: 11, fontWeight: 700, color: 'var(--neon)',
                       }}>
                         {f.client_name.slice(0, 2).toUpperCase()}
                       </div>
@@ -1352,7 +1361,7 @@ export default function Dashboard() {
                           {f.vehicle_interest ?? '—'}
                         </p>
                       </div>
-                      <Badge variant={f.overdue ? 'danger' : f.isToday ? 'warning' : 'default'} style={{ flexShrink: 0, fontSize: 10 }}>
+                      <Badge variant={f.overdue || f.isToday ? 'neon' : 'default'} style={{ flexShrink: 0, fontSize: 10 }}>
                         {f.overdue ? 'ATRASADO' : f.isToday ? 'HOJE' : timeAgo(f.next_followup_at!)}
                       </Badge>
                     </div>
