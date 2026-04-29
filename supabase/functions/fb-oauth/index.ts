@@ -112,13 +112,36 @@ async function connectPage(
   await subscribePageToWebhook(pageId, pageAccessToken)
 }
 
+// ─── Popup response helpers ───────────────────────────────────────────────────
+
+function popupHtml(script: string): Response {
+  return new Response(
+    `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Conectando...</title></head>` +
+    `<body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;height:100vh;">` +
+    `<p style="color:#3df710;font-family:sans-serif;font-size:14px;">Processando...</p>` +
+    `<script>${script}<\/script></body></html>`,
+    { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+  )
+}
+
+function popupDone(ok: boolean, error?: string): Response {
+  const msg = JSON.stringify({ type: 'fb-oauth-done', ok, error: error ?? null })
+  return popupHtml(`try{window.opener&&window.opener.postMessage(${msg},'*')}catch(e){}window.close();`)
+}
+
+function popupPages(pages: unknown[], storeId: string): Response {
+  const msg = JSON.stringify({ type: 'fb-oauth-pages', pages, storeId })
+  return popupHtml(`try{window.opener&&window.opener.postMessage(${msg},'*')}catch(e){}window.close();`)
+}
+
 // ─── action=start ─────────────────────────────────────────────────────────────
 
 function handleStart(storeId: string): Response {
   if (!storeId) return new Response('Missing store_id', { status: 400 })
   if (!FB_APP_ID) return new Response('FB_APP_ID not configured', { status: 500 })
 
-  const scope = 'leads_retrieval,pages_read_engagement,pages_show_list,pages_manage_metadata'
+  // leads_retrieval requires App Review — use only pages permissions for now
+  const scope = 'pages_show_list,pages_manage_metadata,pages_read_engagement'
   const fbUrl =
     `https://www.facebook.com/dialog/oauth` +
     `?client_id=${encodeURIComponent(FB_APP_ID)}` +
@@ -132,7 +155,7 @@ function handleStart(storeId: string): Response {
 // ─── action=callback ──────────────────────────────────────────────────────────
 
 async function handleCallback(code: string, storeId: string): Promise<Response> {
-  if (!code || !storeId) return redirect(`${APP_URL}/integracoes?fb_error=1`)
+  if (!code || !storeId) return popupDone(false, 'Parâmetros inválidos')
 
   try {
     // 1. Exchange code for short-lived user access token
@@ -144,13 +167,14 @@ async function handleCallback(code: string, storeId: string): Promise<Response> 
       `&code=${encodeURIComponent(code)}`,
     )
     if (!tokenRes.ok) {
-      console.error('[fb-oauth] token exchange error:', await tokenRes.text())
-      return redirect(`${APP_URL}/integracoes?fb_error=1`)
+      const errText = await tokenRes.text()
+      console.error('[fb-oauth] token exchange error:', errText)
+      return popupDone(false, 'Erro ao trocar código por token')
     }
     const tokenData = await tokenRes.json() as { access_token?: string; error?: unknown }
     if (!tokenData.access_token) {
       console.error('[fb-oauth] no access_token in response:', tokenData)
-      return redirect(`${APP_URL}/integracoes?fb_error=1`)
+      return popupDone(false, 'Token não retornado')
     }
 
     // 2. Exchange for long-lived token
@@ -161,11 +185,9 @@ async function handleCallback(code: string, storeId: string): Promise<Response> 
       `&client_secret=${encodeURIComponent(FB_APP_SECRET)}` +
       `&fb_exchange_token=${encodeURIComponent(tokenData.access_token)}`,
     )
-    if (!llRes.ok) {
-      console.error('[fb-oauth] long-lived token error:', await llRes.text())
-      return redirect(`${APP_URL}/integracoes?fb_error=1`)
-    }
-    const llData = await llRes.json() as { access_token?: string; error?: unknown }
+    const llData = llRes.ok
+      ? await llRes.json() as { access_token?: string }
+      : { access_token: undefined }
     const longLivedToken = llData.access_token ?? tokenData.access_token
 
     // 3. Fetch user's pages
@@ -176,30 +198,27 @@ async function handleCallback(code: string, storeId: string): Promise<Response> 
     )
     if (!pagesRes.ok) {
       console.error('[fb-oauth] pages fetch error:', await pagesRes.text())
-      return redirect(`${APP_URL}/integracoes?fb_error=1`)
+      return popupDone(false, 'Erro ao buscar páginas do Facebook')
     }
     const pagesData = await pagesRes.json() as { data?: Array<{ id: string; name: string; access_token: string }> }
     const pages = pagesData.data ?? []
 
     if (pages.length === 0) {
-      console.warn('[fb-oauth] No pages found for user')
-      return redirect(`${APP_URL}/integracoes?fb_error=1`)
+      return popupDone(false, 'Nenhuma página do Facebook encontrada. Certifique-se de ser administrador de uma Página.')
     }
 
     if (pages.length === 1) {
-      // Auto-connect the single page
       const page = pages[0]
       await connectPage(storeId, page.id, page.name, page.access_token)
-      return redirect(`${APP_URL}/integracoes?fb_connected=1`)
+      return popupDone(true)
     }
 
-    // Multiple pages → send to page picker
-    const encoded = btoa(JSON.stringify(pages))
-    return redirect(`${APP_URL}/integracoes?fb_pages=${encodeURIComponent(encoded)}&store_id=${encodeURIComponent(storeId)}`)
+    // Multiple pages → send list to opener for picker
+    return popupPages(pages, storeId)
 
   } catch (e) {
     console.error('[fb-oauth] handleCallback error:', e)
-    return redirect(`${APP_URL}/integracoes?fb_error=1`)
+    return popupDone(false, 'Erro interno')
   }
 }
 

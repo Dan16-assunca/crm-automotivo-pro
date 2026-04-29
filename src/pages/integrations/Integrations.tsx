@@ -698,9 +698,14 @@ function FbPagePickerModal({
 
 // ─── FacebookConfigModal (OAuth-based) ───────────────────────────────────────
 
-function FacebookConfigModal({ onClose, storeId }: { onClose: () => void; storeId: string }) {
+function FacebookConfigModal({ onClose, storeId, onPages }: {
+  onClose: () => void
+  storeId: string
+  onPages: (pages: FbPage[], sid: string) => void
+}) {
   const qc = useQueryClient()
   const [disconnecting, setDisconnecting] = useState(false)
+  const [connecting, setConnecting] = useState(false)
 
   // Dados da integração existente
   const { data: existing, isLoading } = useQuery<FbConfig | null>({
@@ -729,7 +734,39 @@ function FacebookConfigModal({ onClose, storeId }: { onClose: () => void; storeI
   }
 
   function handleConnect() {
-    window.location.href = `${FB_OAUTH_URL}?action=start&store_id=${storeId}`
+    const url = `${FB_OAUTH_URL}?action=start&store_id=${storeId}`
+    const w = 620, h = 700
+    const left = Math.round(window.screenX + (window.outerWidth - w) / 2)
+    const top  = Math.round(window.screenY + (window.outerHeight - h) / 2)
+    const popup = window.open(url, 'fb-oauth', `width=${w},height=${h},left=${left},top=${top},toolbar=no,menubar=no`)
+    if (!popup) { toast.error('Popup bloqueado', 'Permita pop-ups para este site e tente novamente'); return }
+
+    setConnecting(true)
+
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === 'fb-oauth-done') {
+        window.removeEventListener('message', handler)
+        setConnecting(false)
+        if (e.data.ok) {
+          toast.success('Facebook conectado!', 'Leads do formulário chegarão automaticamente')
+          qc.invalidateQueries({ queryKey: ['fb-integration'] })
+          onClose()
+        } else {
+          toast.error('Erro ao conectar', e.data.error ?? '')
+        }
+      } else if (e.data?.type === 'fb-oauth-pages') {
+        window.removeEventListener('message', handler)
+        setConnecting(false)
+        onPages(e.data.pages as FbPage[], e.data.storeId as string)
+        onClose()
+      }
+    }
+    window.addEventListener('message', handler)
+
+    // Cleanup if popup closed manually
+    const timer = setInterval(() => {
+      if (popup.closed) { clearInterval(timer); window.removeEventListener('message', handler); setConnecting(false) }
+    }, 800)
   }
 
   return (
@@ -783,9 +820,10 @@ function FacebookConfigModal({ onClose, storeId }: { onClose: () => void; storeI
               </button>
               <button
                 onClick={handleConnect}
-                style={{ flex: 1, height: 40, borderRadius: 8, background: '#1877F2', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}
+                disabled={connecting}
+                style={{ flex: 1, height: 40, borderRadius: 8, background: '#1877F2', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, opacity: connecting ? 0.7 : 1 }}
               >
-                📘 Reconectar com Facebook
+                {connecting ? '⏳ Aguardando...' : '📘 Reconectar com Facebook'}
               </button>
             </div>
           </div>
@@ -798,25 +836,26 @@ function FacebookConfigModal({ onClose, storeId }: { onClose: () => void; storeI
             <div>
               <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--t)', marginBottom: 8 }}>Conecte sua Página do Facebook</p>
               <p style={{ fontSize: 12, color: 'var(--t3)', lineHeight: 1.7, maxWidth: 340 }}>
-                Clique no botão abaixo para autorizar o CRM via OAuth. Você será redirecionado ao Facebook, selecionará sua Página e os leads começarão a chegar automaticamente.
+                Um popup vai abrir para você fazer login no Facebook e selecionar a Página da loja. Os leads chegarão automaticamente no Pipeline.
               </p>
             </div>
 
             <button
               onClick={handleConnect}
+              disabled={connecting}
               style={{
                 width: '100%', height: 48, borderRadius: 10, fontSize: 15, fontWeight: 800,
-                background: '#1877F2', border: 'none', color: '#fff', cursor: 'pointer',
+                background: connecting ? '#0f5fb8' : '#1877F2', border: 'none', color: '#fff', cursor: connecting ? 'default' : 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
                 boxShadow: '0 4px 20px rgba(24,119,242,.4)',
-                transition: 'opacity .15s',
+                transition: 'all .15s',
               }}
             >
-              📘 Conectar com Facebook
+              {connecting ? '⏳ Aguardando login no popup...' : '📘 Conectar com Facebook'}
             </button>
 
-            <p style={{ fontSize: 10, color: 'var(--t4)', lineHeight: 1.6 }}>
-              Permissões solicitadas: leads_retrieval, pages_read_engagement, pages_show_list, pages_manage_metadata
+            <p style={{ fontSize: 10, color: 'var(--t3)', lineHeight: 1.6 }}>
+              Permissões: pages_show_list, pages_manage_metadata, pages_read_engagement
             </p>
           </div>
         )}
@@ -1500,6 +1539,7 @@ export default function Integrations() {
         <FacebookConfigModal
           storeId={store?.id ?? ''}
           onClose={() => setShowFbModal(false)}
+          onPages={(pages, sid) => { setFbPages(pages); setFbPagesStoreId(sid) }}
         />
       )}
       {fbPages && (
