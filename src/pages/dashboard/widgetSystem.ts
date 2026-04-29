@@ -123,31 +123,31 @@ export function resolveWidget(widget: DashWidget, data: WidgetData): ResolvedWid
     case 'won_count':
       return { value: String(data.wonCount), sub: 'fechamentos', color: 'var(--neon)' }
     case 'lost_count':
-      return { value: String(data.lostCount), sub: 'perdidos', color: 'var(--red)' }
+      return { value: String(data.lostCount), sub: 'perdidos', color: 'var(--t2)' }
     case 'active_leads':
-      return { value: String(data.activeCount), sub: 'em andamento', color: 'var(--blu)' }
+      return { value: String(data.activeCount), sub: 'em andamento', color: 'var(--neon)' }
     case 'cpl':
       return {
         value: data.totalLeads > 0 ? formatCurrency((data.revenue * 0.03) / data.totalLeads) : '—',
         sub: 'custo por lead', color: 'var(--t)',
       }
     case 'hot_leads':
-      return { value: String(data.hotCount), sub: 'leads quentes', color: 'var(--red)' }
+      return { value: String(data.hotCount), sub: 'leads quentes', color: 'var(--neon)' }
     case 'warm_leads':
-      return { value: String(data.warmCount), sub: 'leads mornos', color: 'var(--ora)' }
+      return { value: String(data.warmCount), sub: 'leads mornos', color: 'var(--t)' }
     case 'cold_leads':
-      return { value: String(data.coldCount), sub: 'leads frios', color: 'var(--blu)' }
+      return { value: String(data.coldCount), sub: 'leads frios', color: 'var(--t2)' }
     case 'overdue_followups':
-      return { value: String(data.overdueFollowups), sub: 'atrasados', color: data.overdueFollowups > 0 ? 'var(--red)' : 'var(--t)' }
+      return { value: String(data.overdueFollowups), sub: 'atrasados', color: data.overdueFollowups > 0 ? 'var(--neon)' : 'var(--t)' }
     case 'todays_followups':
-      return { value: String(data.todaysFollowups), sub: 'agendados hoje', color: 'var(--yel)' }
+      return { value: String(data.todaysFollowups), sub: 'agendados hoje', color: 'var(--neon)' }
     case 'alerts_count':
-      return { value: String(data.alertsCount), sub: 'alertas ativos', color: data.alertsCount > 0 ? 'var(--ora)' : 'var(--t)' }
+      return { value: String(data.alertsCount), sub: 'alertas ativos', color: data.alertsCount > 0 ? 'var(--neon)' : 'var(--t)' }
     case 'custom':
       return {
         value: widget.customValue ?? '—',
         sub: widget.customSub ?? 'métrica personalizada',
-        color: widget.customColor ?? 'var(--pur)',
+        color: widget.customColor ?? 'var(--neon)',
       }
     default:
       return { value: '—', sub: '', color: 'var(--t)' }

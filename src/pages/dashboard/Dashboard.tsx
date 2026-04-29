@@ -885,7 +885,7 @@ export default function Dashboard() {
                     }}>
                       <div style={{
                         position: 'absolute', top: 0, left: 0, right: 0, height: 3,
-                        background: stage.color || 'var(--neon)',
+                        background: 'var(--neon)',
                       }} />
                       <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: '.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {stage.name}
@@ -1078,7 +1078,7 @@ export default function Dashboard() {
                   const count = funnelCounts?.[stage.id] ?? 0
                   const prevCount = i > 0 ? (funnelCounts?.[nonFinal[i-1]?.id] ?? 0) : 0
                   const convPct = i > 0 && prevCount > 0 ? Math.round((count / prevCount) * 100) : null
-                  const stageColor = stage.color || 'var(--neon)'
+                  const stageColor = 'var(--neon)'
                   return (
                     <motion.div key={stage.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
                       <div style={{
