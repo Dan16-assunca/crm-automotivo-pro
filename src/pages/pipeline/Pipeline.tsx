@@ -322,8 +322,8 @@ function LeadCard({ lead, onClick, isSelected }: { lead: Lead; onClick: () => vo
   const isUrgent = lead.priority === 'high'
 
   const initials = lead.client_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
-  const tempColor = lead.temperature === 'hot' ? 'var(--neon)' : lead.temperature === 'warm' ? 'rgba(61,247,16,.65)' : 'var(--t2)'
-  const tempBg    = lead.temperature === 'hot' ? 'rgba(61,247,16,0.12)' : lead.temperature === 'warm' ? 'rgba(61,247,16,0.07)' : 'rgba(184,184,184,0.10)'
+  const tempColor = lead.temperature === 'hot' ? 'var(--red)' : lead.temperature === 'warm' ? 'var(--ora)' : 'var(--blu)'
+  const tempBg    = lead.temperature === 'hot' ? 'rgba(244,63,94,0.12)' : lead.temperature === 'warm' ? 'rgba(249,115,22,0.12)' : 'rgba(59,130,246,0.12)'
   const tempLabel = lead.temperature === 'hot' ? '🔥 Quente' : lead.temperature === 'warm' ? '⚡ Morno' : '❄️ Frio'
 
   const budget = lead.budget_max
