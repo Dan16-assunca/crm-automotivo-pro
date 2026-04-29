@@ -1491,15 +1491,7 @@ export default function Integrations() {
             const isConnected = int.status === 'connected' || metaConnected || googleConnected
 
             function handleClick() {
-              if (isMeta) {
-                // If not connected, go directly to OAuth; if connected, open config modal
-                if (!metaConnected) {
-                  window.location.href = `${FB_OAUTH_URL}?action=start&store_id=${store?.id ?? ''}`
-                } else {
-                  setShowFbModal(true)
-                }
-                return
-              }
+              if (isMeta) { setShowFbModal(true); return }
               if (isGoogle) { setShowGoogleModal(true); return }
             }
 
