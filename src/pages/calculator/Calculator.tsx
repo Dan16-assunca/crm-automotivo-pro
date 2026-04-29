@@ -145,11 +145,11 @@ function CalcMargem() {
           {[
             { l: 'Preço de Venda',              v: formatCurrency(V),         c: 'var(--t)' },
             { l: 'Custo do Veículo',             v: `−${formatCurrency(C)}`,  c: 'var(--t2)' },
-            { l: 'Margem Bruta',                 v: formatCurrency(margBruta), c: margBruta > 0 ? 'var(--neon)' : 'var(--red)' },
-            { l: `Financiamento (${finan}%)`,    v: `−${formatCurrency(custoFin)}`, c: 'var(--blu)' },
-            { l: `Comissão (${comissao}%)`,      v: `−${formatCurrency(custoComis)}`, c: 'var(--yel)' },
-            ...(DET > 0 ? [{ l: 'DETRAN / Transferência', v: `−${formatCurrency(DET)}`, c: '#f97316' }] : []),
-            ...(EXT > 0 ? [{ l: 'Despesas Extras', v: `−${formatCurrency(EXT)}`, c: '#f97316' }] : []),
+            { l: 'Margem Bruta',                 v: formatCurrency(margBruta), c: margBruta > 0 ? 'var(--neon)' : 'var(--t2)' },
+            { l: `Financiamento (${finan}%)`,    v: `−${formatCurrency(custoFin)}`, c: 'rgba(61,247,16,.65)' },
+            { l: `Comissão (${comissao}%)`,      v: `−${formatCurrency(custoComis)}`, c: 'rgba(61,247,16,.65)' },
+            ...(DET > 0 ? [{ l: 'DETRAN / Transferência', v: `−${formatCurrency(DET)}`, c: 'rgba(61,247,16,.65)' }] : []),
+            ...(EXT > 0 ? [{ l: 'Despesas Extras', v: `−${formatCurrency(EXT)}`, c: 'rgba(61,247,16,.65)' }] : []),
           ].map(r => (
             <div key={r.l} style={S.row}>
               <span style={{ fontSize: 12, color: 'var(--t3)' }}>{r.l}</span>
@@ -159,22 +159,22 @@ function CalcMargem() {
         </div>
 
         {/* Lucro */}
-        <div style={{ ...S.card, borderColor: bom ? 'rgba(61,247,16,.25)' : 'rgba(239,68,68,.25)', background: bom ? 'rgba(61,247,16,.03)' : 'rgba(239,68,68,.03)' }}>
+        <div style={{ ...S.card, borderColor: bom ? 'rgba(61,247,16,.25)' : 'rgba(184,184,184,.25)', background: bom ? 'rgba(61,247,16,.03)' : 'rgba(184,184,184,.03)' }}>
           <p style={S.lbl}>Lucro Líquido</p>
-          <p style={{ fontSize: 34, fontWeight: 800, color: bom ? 'var(--neon)' : 'var(--red)', fontFamily: 'var(--fn)', margin: '4px 0' }}>
+          <p style={{ fontSize: 34, fontWeight: 800, color: bom ? 'var(--neon)' : 'var(--t2)', fontFamily: 'var(--fn)', margin: '4px 0' }}>
             {formatCurrency(lucro)}
           </p>
           <div style={{ display: 'flex', gap: 16, marginTop: 6 }}>
             <span style={{ fontSize: 12, color: 'var(--t3)' }}>
-              Margem: <b style={{ color: margPct > 5 ? 'var(--neon)' : margPct > 0 ? 'var(--yel)' : 'var(--red)' }}>{margPct.toFixed(1)}%</b>
+              Margem: <b style={{ color: margPct > 5 ? 'var(--neon)' : margPct > 0 ? 'rgba(61,247,16,.65)' : 'var(--t2)' }}>{margPct.toFixed(1)}%</b>
             </span>
             <span style={{ fontSize: 12, color: 'var(--t3)' }}>
-              Comissão: <b style={{ color: 'var(--yel)' }}>{formatCurrency(custoComis)}</b>
+              Comissão: <b style={{ color: 'rgba(61,247,16,.65)' }}>{formatCurrency(custoComis)}</b>
             </span>
           </div>
           {/* Barra de margem */}
           <div style={{ marginTop: 12, height: 6, background: 'var(--el)', borderRadius: 99, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${Math.min(100, Math.abs(margPct) * 5)}%`, background: bom ? 'var(--neon)' : 'var(--red)', borderRadius: 99, transition: 'width .4s' }} />
+            <div style={{ height: '100%', width: `${Math.min(100, Math.abs(margPct) * 5)}%`, background: bom ? 'var(--neon)' : 'var(--t2)', borderRadius: 99, transition: 'width .4s' }} />
           </div>
           <p style={{ fontSize: 10, color: 'var(--t3)', marginTop: 4 }}>
             {margPct >= 10 ? '✅ Margem saudável' : margPct >= 5 ? '⚠️ Margem apertada' : margPct > 0 ? '🔴 Margem abaixo do ideal' : '❌ Operação no prejuízo'}
@@ -251,15 +251,15 @@ function CalcFinanciamento() {
             </div>
           </div>
           <div style={{ background: 'var(--el)', borderRadius: 8, padding: '12px', fontSize: 11, color: 'var(--t3)' }}>
-            Taxa: <b style={{ color: 'var(--blu)' }}>{taxa.toFixed(2)}% a.m.</b> · {bInfo.nome}
+            Taxa: <b style={{ color: 'var(--neon)' }}>{taxa.toFixed(2)}% a.m.</b> · {bInfo.nome}
           </div>
         </div>
 
         {/* Resultado */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ ...S.card, borderColor: 'rgba(59,130,246,.25)' }}>
+          <div style={{ ...S.card, borderColor: 'var(--nb)' }}>
             <p style={S.lbl}>Parcela Mensal (Tabela Price)</p>
-            <p style={{ fontSize: 38, fontWeight: 800, color: 'var(--blu)', fontFamily: 'var(--fn)', margin: '4px 0' }}>
+            <p style={{ fontSize: 38, fontWeight: 800, color: 'var(--neon)', fontFamily: 'var(--fn)', margin: '4px 0' }}>
               {formatCurrency(parcela)}
             </p>
             <p style={{ fontSize: 11, color: 'var(--t3)' }}>{pr}x de {formatCurrency(parcela)}</p>
@@ -269,10 +269,10 @@ function CalcFinanciamento() {
               { l: 'Valor do veículo',      v: formatCurrency(V),          c: 'var(--t)' },
               { l: 'Entrada',               v: formatCurrency(E),          c: 'var(--t2)' },
               { l: 'Valor financiado',       v: formatCurrency(financiado), c: 'var(--t)' },
-              { l: 'Taxa mensal',            v: `${taxa.toFixed(2)}% a.m.`, c: 'var(--blu)' },
-              { l: 'Total pago',             v: formatCurrency(totalPago),  c: 'var(--yel)' },
-              { l: 'Juros totais',           v: formatCurrency(jurosTotal), c: 'var(--red)' },
-              { l: 'CET anual estimado',     v: `${cet.toFixed(1)}% a.a.`,  c: 'var(--red)' },
+              { l: 'Taxa mensal',            v: `${taxa.toFixed(2)}% a.m.`, c: 'var(--neon)' },
+              { l: 'Total pago',             v: formatCurrency(totalPago),  c: 'rgba(61,247,16,.65)' },
+              { l: 'Juros totais',           v: formatCurrency(jurosTotal), c: 'var(--t2)' },
+              { l: 'CET anual estimado',     v: `${cet.toFixed(1)}% a.a.`,  c: 'var(--t2)' },
             ].map(r => (
               <div key={r.l} style={S.row}>
                 <span style={{ fontSize: 11, color: 'var(--t3)' }}>{r.l}</span>
@@ -302,16 +302,16 @@ function CalcFinanciamento() {
               </thead>
               <tbody>
                 {comparativo.map((b, i) => (
-                  <tr key={b.nome} style={{ background: b.nome === bInfo.nome ? 'rgba(59,130,246,.06)' : 'transparent' }}
+                  <tr key={b.nome} style={{ background: b.nome === bInfo.nome ? 'rgba(61,247,16,.06)' : 'transparent' }}
                     onMouseEnter={e => (e.currentTarget.style.background = 'var(--el)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = b.nome === bInfo.nome ? 'rgba(59,130,246,.06)' : 'transparent')}>
-                    <td style={{ padding: '8px 8px', fontSize: 11, color: b.nome === bInfo.nome ? 'var(--blu)' : 'var(--t)', fontWeight: b.nome === bInfo.nome ? 700 : 400 }}>
+                    onMouseLeave={e => (e.currentTarget.style.background = b.nome === bInfo.nome ? 'rgba(61,247,16,.06)' : 'transparent')}>
+                    <td style={{ padding: '8px 8px', fontSize: 11, color: b.nome === bInfo.nome ? 'var(--neon)' : 'var(--t)', fontWeight: b.nome === bInfo.nome ? 700 : 400 }}>
                       {i === 0 ? '🏆 ' : ''}{b.nome}
                     </td>
                     <td style={{ padding: '8px 8px', fontSize: 11, color: 'var(--t2)', fontFamily: 'var(--fm)' }}>{b.taxa.toFixed(2)}%</td>
                     <td style={{ padding: '8px 8px', fontSize: 11, color: i === 0 ? 'var(--neon)' : 'var(--t)', fontFamily: 'var(--fm)', fontWeight: i === 0 ? 700 : 400 }}>{formatCurrency(b.parcela)}</td>
                     <td style={{ padding: '8px 8px', fontSize: 11, color: 'var(--t2)', fontFamily: 'var(--fm)' }}>{formatCurrency(b.total)}</td>
-                    <td style={{ padding: '8px 8px', fontSize: 11, color: 'var(--red)', fontFamily: 'var(--fm)' }}>{formatCurrency(b.total - V)}</td>
+                    <td style={{ padding: '8px 8px', fontSize: 11, color: 'var(--t2)', fontFamily: 'var(--fm)' }}>{formatCurrency(b.total - V)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -376,7 +376,7 @@ function CalcIPVA() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={S.card}>
           <p style={S.lbl}>IPVA Estimado — {uf}</p>
-          <p style={{ fontSize: 34, fontWeight: 800, color: 'var(--yel)', fontFamily: 'var(--fn)', margin: '4px 0' }}>
+          <p style={{ fontSize: 34, fontWeight: 800, color: 'var(--neon)', fontFamily: 'var(--fn)', margin: '4px 0' }}>
             {formatCurrency(ipvaAnual)}
           </p>
           <p style={{ fontSize: 11, color: 'var(--t3)' }}>por ano · {aliquota}% sobre valor venal</p>
@@ -386,21 +386,21 @@ function CalcIPVA() {
             { l: 'Valor do veículo (venda)', v: formatCurrency(V),                    c: 'var(--t)' },
             { l: `Valor venal estimado (${idadeAnos}${idadeAnos === 1 ? ' ano' : ' anos'} de uso)`, v: formatCurrency(valorVenal), c: 'var(--t2)' },
             { l: `Alíquota IPVA (${uf})`,   v: `${aliquota}%`,                        c: 'var(--t)' },
-            { l: 'IPVA anual',               v: formatCurrency(ipvaAnual),             c: 'var(--yel)' },
+            { l: 'IPVA anual',               v: formatCurrency(ipvaAnual),             c: 'var(--neon)' },
             { l: 'IPVA 1ª parcela (jan)',     v: formatCurrency(ipvaSemestral),         c: 'var(--t2)' },
-            { l: 'DETRAN / Transferência',   v: `~${formatCurrency(detran)}`,          c: '#f97316' },
-            { l: 'Garantia estendida (est.)',v: idadeAnos > 5 ? 'Não recomendado' : `~${formatCurrency(garantia)}`, c: '#f97316' },
+            { l: 'DETRAN / Transferência',   v: `~${formatCurrency(detran)}`,          c: 'rgba(61,247,16,.65)' },
+            { l: 'Garantia estendida (est.)',v: idadeAnos > 5 ? 'Não recomendado' : `~${formatCurrency(garantia)}`, c: 'rgba(61,247,16,.65)' },
           ].map(r => (
             <div key={r.l} style={S.row}>
               <span style={{ fontSize: 11, color: 'var(--t3)' }}>{r.l}</span>
               <span style={{ fontSize: 11, fontFamily: 'var(--fm)', color: r.c, fontWeight: 600 }}>{r.v}</span>
             </div>
           ))}
-          <div style={{ marginTop: 10, background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.2)', borderRadius: 7, padding: '10px 12px' }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--yel)', marginBottom: 3 }}>
+          <div style={{ marginTop: 10, background: 'rgba(61,247,16,.05)', border: '1px solid var(--nb)', borderRadius: 7, padding: '10px 12px' }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--neon)', marginBottom: 3 }}>
               💰 Custo 1º ano para o comprador:
             </p>
-            <p style={{ fontSize: 18, fontWeight: 800, color: 'var(--yel)', fontFamily: 'var(--fn)' }}>
+            <p style={{ fontSize: 18, fontWeight: 800, color: 'var(--neon)', fontFamily: 'var(--fn)' }}>
               {formatCurrency(ipvaAnual + detran)}
             </p>
             <p style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>IPVA + DETRAN/Transferência</p>
@@ -479,9 +479,9 @@ function CalcTCO() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div style={{ ...S.card, borderColor: 'rgba(139,92,246,.25)' }}>
+        <div style={{ ...S.card, borderColor: 'var(--nb)' }}>
           <p style={S.lbl}>Custo total em {A} {A === 1 ? 'ano' : 'anos'}</p>
-          <p style={{ fontSize: 34, fontWeight: 800, color: '#8b5cf6', fontFamily: 'var(--fn)', margin: '4px 0' }}>
+          <p style={{ fontSize: 34, fontWeight: 800, color: 'var(--neon)', fontFamily: 'var(--fn)', margin: '4px 0' }}>
             {formatCurrency(custoTotalPeriodo)}
           </p>
           <p style={{ fontSize: 11, color: 'var(--t3)' }}>
@@ -490,13 +490,13 @@ function CalcTCO() {
         </div>
         <div style={S.card}>
           {[
-            { l: `IPVA anual (${uf})`,          v: formatCurrency(ipvaAnual),         c: 'var(--yel)' },
-            { l: 'Seguro anual',                v: formatCurrency(seg),               c: 'var(--yel)' },
-            { l: 'Manutenção/revisão anual',    v: formatCurrency(man),               c: '#f97316' },
-            { l: `Combustível (${kmAno} km/ano)`, v: formatCurrency(combustivelAnual), c: '#f97316' },
-            { l: `Depreciação em ${A} anos`,    v: `−${formatCurrency(depreciacaoTotal)}`, c: 'var(--red)' },
+            { l: `IPVA anual (${uf})`,          v: formatCurrency(ipvaAnual),         c: 'rgba(61,247,16,.65)' },
+            { l: 'Seguro anual',                v: formatCurrency(seg),               c: 'rgba(61,247,16,.65)' },
+            { l: 'Manutenção/revisão anual',    v: formatCurrency(man),               c: 'rgba(61,247,16,.65)' },
+            { l: `Combustível (${kmAno} km/ano)`, v: formatCurrency(combustivelAnual), c: 'rgba(61,247,16,.65)' },
+            { l: `Depreciação em ${A} anos`,    v: `−${formatCurrency(depreciacaoTotal)}`, c: 'var(--t2)' },
             { l: 'Valor residual estimado',     v: formatCurrency(valorFinal),         c: 'var(--neon)' },
-            ...(financiado > 0 ? [{ l: 'Juros do financiamento', v: formatCurrency(juros), c: 'var(--red)' }] : []),
+            ...(financiado > 0 ? [{ l: 'Juros do financiamento', v: formatCurrency(juros), c: 'var(--t2)' }] : []),
           ].map(r => (
             <div key={r.l} style={S.row}>
               <span style={{ fontSize: 11, color: 'var(--t3)' }}>{r.l}</span>
@@ -504,8 +504,8 @@ function CalcTCO() {
             </div>
           ))}
         </div>
-        <div style={{ background: 'rgba(139,92,246,.08)', border: '1px solid rgba(139,92,246,.2)', borderRadius: 8, padding: '12px 14px', fontSize: 11, color: 'var(--t3)', lineHeight: 1.6 }}>
-          <b style={{ color: '#8b5cf6' }}>💡 Use para negociar:</b> Mostre ao cliente que o veículo mais barato pode ter custo total maior devido a consumo, seguro e manutenção mais altos.
+        <div style={{ background: 'rgba(61,247,16,.05)', border: '1px solid var(--nb)', borderRadius: 8, padding: '12px 14px', fontSize: 11, color: 'var(--t3)', lineHeight: 1.6 }}>
+          <b style={{ color: 'var(--neon)' }}>💡 Use para negociar:</b> Mostre ao cliente que o veículo mais barato pode ter custo total maior devido a consumo, seguro e manutenção mais altos.
         </div>
       </div>
     </div>
@@ -564,21 +564,21 @@ function CalcTradeIn() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div style={{ ...S.card, borderColor: 'rgba(16,185,129,.25)' }}>
+        <div style={{ ...S.card, borderColor: 'var(--nb)' }}>
           <p style={S.lbl}>A pagar em dinheiro / financiamento</p>
-          <p style={{ fontSize: 34, fontWeight: 800, color: '#10b981', fontFamily: 'var(--fn)', margin: '4px 0' }}>
+          <p style={{ fontSize: 34, fontWeight: 800, color: 'var(--neon)', fontFamily: 'var(--fn)', margin: '4px 0' }}>
             {formatCurrency(aDinheiro)}
           </p>
-          {financiar && <p style={{ fontSize: 13, color: 'var(--blu)' }}>{prazo}x de {formatCurrency(parcela)}</p>}
+          {financiar && <p style={{ fontSize: 13, color: 'var(--t)' }}>{prazo}x de {formatCurrency(parcela)}</p>}
         </div>
         <div style={S.card}>
           {[
             { l: 'Veículo novo',              v: formatCurrency(VN),               c: 'var(--t)' },
             { l: 'Desconto',                  v: DC > 0 ? `−${formatCurrency(DC)}` : '—', c: 'var(--neon)' },
             { l: 'Valor do veículo na troca', v: formatCurrency(VT),               c: 'var(--t2)' },
-            { l: 'Dívida do veículo trocado', v: DV > 0 ? `−${formatCurrency(DV)}` : '—', c: 'var(--red)' },
-            { l: 'Valor líquido da troca',    v: formatCurrency(valorLiquidoTroca), c: '#10b981' },
-            { l: 'A pagar',                   v: formatCurrency(aDinheiro),         c: 'var(--blu)' },
+            { l: 'Dívida do veículo trocado', v: DV > 0 ? `−${formatCurrency(DV)}` : '—', c: 'var(--t2)' },
+            { l: 'Valor líquido da troca',    v: formatCurrency(valorLiquidoTroca), c: 'var(--neon)' },
+            { l: 'A pagar',                   v: formatCurrency(aDinheiro),         c: 'var(--t)' },
           ].map(r => (
             <div key={r.l} style={S.row}>
               <span style={{ fontSize: 11, color: 'var(--t3)' }}>{r.l}</span>
@@ -586,8 +586,8 @@ function CalcTradeIn() {
             </div>
           ))}
           {economiaTroca > 0 && (
-            <div style={{ marginTop: 10, background: 'rgba(16,185,129,.08)', border: '1px solid rgba(16,185,129,.2)', borderRadius: 7, padding: '10px 12px' }}>
-              <p style={{ fontSize: 11, color: '#10b981', fontWeight: 700 }}>
+            <div style={{ marginTop: 10, background: 'rgba(61,247,16,.06)', border: '1px solid var(--nb)', borderRadius: 7, padding: '10px 12px' }}>
+              <p style={{ fontSize: 11, color: 'var(--neon)', fontWeight: 700 }}>
                 🎯 O cliente economiza {formatCurrency(economiaTroca)} em relação a comprar sem troca
               </p>
             </div>

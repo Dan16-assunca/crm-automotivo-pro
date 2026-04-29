@@ -17,7 +17,7 @@ import { calculateHealthScoreBatch, calculatePatioHealthScore } from '@/modules/
 import { ALERT_COLORS, ALERT_BG_COLORS, ALERT_LABELS } from '@/modules/inventory-intelligence/utils/alertThresholds'
 import type { AlertLevel } from '@/modules/inventory-intelligence/types/inventory.types'
 
-const COLORS = ['var(--neon)', 'var(--blu)', 'var(--yel)', 'var(--pur)', 'var(--ora)', 'var(--red)']
+const COLORS = ['var(--neon)', 'rgba(61,247,16,.65)', 'rgba(255,255,255,.75)', 'rgba(61,247,16,.38)', 'rgba(255,255,255,.45)', 'rgba(61,247,16,.22)']
 
 const tip: React.CSSProperties = {
   background: 'var(--el)', border: '1px solid var(--b)',
@@ -169,7 +169,7 @@ export default function InventoryIntelligence() {
     [...alertMap.values()].filter(a => a.level === 'critical' || a.level === 'emergency').length,
   [alertMap])
 
-  const healthColor = patioHealthScore >= 70 ? 'var(--neon)' : patioHealthScore >= 45 ? 'var(--yel)' : 'var(--red)'
+  const healthColor = patioHealthScore >= 70 ? 'var(--neon)' : patioHealthScore >= 45 ? 'rgba(61,247,16,.65)' : 'var(--t2)'
 
   // ── Selected vehicle state (for panel) ───────────────────────────────────
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
@@ -197,18 +197,18 @@ export default function InventoryIntelligence() {
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
         <KPICard label="Veículos disponíveis" value={String(available.length)} sub="no estoque" color="var(--neon)" icon={<Package size={16} />} />
-        <KPICard label="Capital imobilizado" value={formatCurrency(totalValue)} sub="valor de venda" color="var(--blu)" icon={<DollarSign size={16} />} />
-        <KPICard label="Giro médio" value={`${avgDays}d`} sub="dias no estoque" color={avgDays > 45 ? 'var(--red)' : avgDays > 25 ? 'var(--yel)' : 'var(--neon)'} icon={<Clock size={16} />} />
-        <KPICard label="Parados +60d" value={String(stalled.length)} sub={`${Math.round((stalled.length / (available.length || 1)) * 100)}% do estoque`} color={stalled.length > 0 ? 'var(--red)' : 'var(--neon)'} icon={<AlertTriangle size={16} />} />
-        <KPICard label="Margem média" value={`${avgMargin}%`} sub="sobre preço de venda" color="var(--grn)" icon={<TrendingDown size={16} />} />
+        <KPICard label="Capital imobilizado" value={formatCurrency(totalValue)} sub="valor de venda" color="var(--t)" icon={<DollarSign size={16} />} />
+        <KPICard label="Giro médio" value={`${avgDays}d`} sub="dias no estoque" color={avgDays > 45 ? 'var(--t2)' : avgDays > 25 ? 'rgba(61,247,16,.65)' : 'var(--neon)'} icon={<Clock size={16} />} />
+        <KPICard label="Parados +60d" value={String(stalled.length)} sub={`${Math.round((stalled.length / (available.length || 1)) * 100)}% do estoque`} color={stalled.length > 0 ? 'var(--t2)' : 'var(--neon)'} icon={<AlertTriangle size={16} />} />
+        <KPICard label="Margem média" value={`${avgMargin}%`} sub="sobre preço de venda" color="var(--neon)" icon={<TrendingDown size={16} />} />
       </div>
 
       {/* Alerts */}
       {stalled.length > 0 && (
-        <div style={{ background: 'rgba(244,63,94,.06)', border: '1px solid rgba(244,63,94,.25)', borderRadius: 10, padding: '14px 16px' }}>
+        <div style={{ background: 'rgba(61,247,16,.05)', border: '1px solid var(--nb)', borderRadius: 10, padding: '14px 16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <AlertTriangle size={15} style={{ color: 'var(--red)' }} />
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--red)' }}>
+            <AlertTriangle size={15} style={{ color: 'var(--neon)' }} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--neon)' }}>
               {stalled.length} veículo{stalled.length > 1 ? 's' : ''} parado{stalled.length > 1 ? 's' : ''} há mais de 60 dias
             </span>
           </div>
@@ -216,8 +216,8 @@ export default function InventoryIntelligence() {
             {stalled.slice(0, 5).map(v => (
               <div key={v.id} style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                background: 'rgba(244,63,94,.05)', borderRadius: 7, padding: '8px 12px',
-                border: '1px solid rgba(244,63,94,.15)',
+                background: 'rgba(61,247,16,.05)', borderRadius: 7, padding: '8px 12px',
+                border: '1px solid var(--nb)',
               }}>
                 <div>
                   <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--t)' }}>{v.brand} {v.model}</span>
@@ -227,7 +227,7 @@ export default function InventoryIntelligence() {
                   <span style={{ fontFamily: 'var(--fm)', fontSize: 12, color: 'var(--neon)', fontWeight: 700 }}>{formatCurrency(v.sale_price ?? 0)}</span>
                   <span style={{
                     fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-                    background: 'rgba(244,63,94,.15)', color: 'var(--red)',
+                    background: 'rgba(61,247,16,.15)', color: 'var(--neon)',
                   }}>{v.days_in_stock}d</span>
                 </div>
               </div>
@@ -237,10 +237,10 @@ export default function InventoryIntelligence() {
       )}
 
       {warning.length > 0 && (
-        <div style={{ background: 'rgba(234,179,8,.05)', border: '1px solid rgba(234,179,8,.2)', borderRadius: 10, padding: '12px 16px' }}>
+        <div style={{ background: 'rgba(61,247,16,.05)', border: '1px solid var(--nb)', borderRadius: 10, padding: '12px 16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <Clock size={14} style={{ color: 'var(--yel)' }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--yel)' }}>
+            <Clock size={14} style={{ color: 'rgba(61,247,16,.65)' }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(61,247,16,.65)' }}>
               {warning.length} veículo{warning.length > 1 ? 's' : ''} em atenção (31–60 dias)
             </span>
           </div>
@@ -248,7 +248,7 @@ export default function InventoryIntelligence() {
             {warning.map(v => (
               <span key={v.id} style={{
                 fontSize: 11, padding: '3px 10px', borderRadius: 20,
-                background: 'rgba(234,179,8,.1)', border: '1px solid rgba(234,179,8,.2)', color: 'var(--yel)',
+                background: 'rgba(61,247,16,.06)', border: '1px solid var(--nb)', color: 'rgba(61,247,16,.65)',
               }}>
                 {v.brand} {v.model} · {v.days_in_stock}d
               </span>
@@ -269,7 +269,7 @@ export default function InventoryIntelligence() {
               <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="count" name="Veículos" radius={[4, 4, 0, 0]}>
                 {daysBuckets.map((_, i) => (
-                  <Cell key={i} fill={i >= 3 ? 'var(--red)' : i === 2 ? 'var(--yel)' : 'var(--neon)'} />
+                  <Cell key={i} fill={i >= 3 ? 'var(--t2)' : i === 2 ? 'rgba(61,247,16,.65)' : 'var(--neon)'} />
                 ))}
               </Bar>
             </BarChart>
@@ -309,7 +309,7 @@ export default function InventoryIntelligence() {
               <XAxis type="number" tick={{ fontSize: 9, fill: 'var(--t3)' }} axisLine={false} tickLine={false} tickFormatter={v => `R$${Math.round(v / 1000)}k`} />
               <YAxis type="category" dataKey="brand" tick={{ fontSize: 10, fill: 'var(--t2)' }} axisLine={false} tickLine={false} width={68} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="value" name="Valor" fill="var(--blu)" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="value" name="Valor" fill="var(--neon)" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -321,7 +321,7 @@ export default function InventoryIntelligence() {
               <XAxis type="number" tick={{ fontSize: 9, fill: 'var(--t3)' }} axisLine={false} tickLine={false} unit="%" />
               <YAxis type="category" dataKey="brand" tick={{ fontSize: 10, fill: 'var(--t2)' }} axisLine={false} tickLine={false} width={68} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="margin" name="Margem" fill="var(--grn)" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="margin" name="Margem" fill="rgba(61,247,16,.65)" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -332,14 +332,14 @@ export default function InventoryIntelligence() {
             <AreaChart data={capitalCurve}>
               <defs>
                 <linearGradient id="capGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--ora)" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="var(--ora)" stopOpacity={0} />
+                  <stop offset="0%" stopColor="var(--neon)" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="var(--neon)" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <XAxis dataKey="dias" tick={{ fontSize: 9, fill: 'var(--t3)' }} axisLine={false} tickLine={false} unit="d" />
               <YAxis tick={{ fontSize: 9, fill: 'var(--t3)' }} axisLine={false} tickLine={false} tickFormatter={v => `${Math.round(v / 1000)}k`} />
               <Tooltip content={<CustomTooltip />} />
-              <Area dataKey="acc" name="Acumulado" stroke="var(--ora)" fill="url(#capGrad)" strokeWidth={2} dot={false} />
+              <Area dataKey="acc" name="Acumulado" stroke="var(--neon)" fill="url(#capGrad)" strokeWidth={2} dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         </Card>
@@ -363,7 +363,7 @@ export default function InventoryIntelligence() {
                   ? Math.round(((v.sale_price - v.purchase_price) / v.sale_price) * 100 * 10) / 10
                   : null
                 const days = v.days_in_stock ?? 0
-                const daysColor = days > 60 ? 'var(--red)' : days > 30 ? 'var(--yel)' : 'var(--neon)'
+                const daysColor = days > 60 ? 'var(--t2)' : days > 30 ? 'rgba(61,247,16,.65)' : 'var(--neon)'
                 return (
                   <tr key={v.id} style={{ borderBottom: '1px solid var(--bs)' }}
                     onMouseEnter={e => (e.currentTarget.style.background = 'var(--el)')}
@@ -374,21 +374,21 @@ export default function InventoryIntelligence() {
                     <td style={{ padding: '7px 10px', color: 'var(--t2)', fontFamily: 'var(--fm)' }}>{v.km?.toLocaleString('pt-BR')}</td>
                     <td style={{ padding: '7px 10px', color: 'var(--t2)', fontFamily: 'var(--fm)' }}>{v.purchase_price ? formatCurrency(v.purchase_price) : '—'}</td>
                     <td style={{ padding: '7px 10px', color: 'var(--neon)', fontFamily: 'var(--fm)', fontWeight: 700 }}>{formatCurrency(v.sale_price ?? 0)}</td>
-                    <td style={{ padding: '7px 10px', color: margin !== null ? (margin > 15 ? 'var(--grn)' : margin > 5 ? 'var(--yel)' : 'var(--red)') : 'var(--t3)', fontWeight: 700 }}>
+                    <td style={{ padding: '7px 10px', color: margin !== null ? (margin > 15 ? 'var(--neon)' : margin > 5 ? 'rgba(61,247,16,.65)' : 'var(--t2)') : 'var(--t3)', fontWeight: 700 }}>
                       {margin !== null ? `${margin}%` : '—'}
                     </td>
                     <td style={{ padding: '7px 10px' }}>
                       <span style={{
                         fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
-                        background: days > 60 ? 'rgba(244,63,94,.12)' : days > 30 ? 'rgba(234,179,8,.12)' : 'rgba(61,247,16,.1)',
+                        background: days > 60 ? 'rgba(184,184,184,.12)' : days > 30 ? 'rgba(61,247,16,.08)' : 'rgba(61,247,16,.1)',
                         color: daysColor,
                       }}>{days}d</span>
                     </td>
                     <td style={{ padding: '7px 10px' }}>
                       <span style={{
                         fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20,
-                        background: v.status === 'available' ? 'rgba(61,247,16,.1)' : v.status === 'reserved' ? 'rgba(234,179,8,.12)' : 'rgba(100,100,100,.15)',
-                        color: v.status === 'available' ? 'var(--neon)' : v.status === 'reserved' ? 'var(--yel)' : 'var(--t3)',
+                        background: v.status === 'available' ? 'rgba(61,247,16,.1)' : v.status === 'reserved' ? 'rgba(61,247,16,.06)' : 'rgba(100,100,100,.15)',
+                        color: v.status === 'available' ? 'var(--neon)' : v.status === 'reserved' ? 'rgba(61,247,16,.65)' : 'var(--t3)',
                       }}>
                         {v.status === 'available' ? 'Disponível' : v.status === 'reserved' ? 'Reservado' : v.status}
                       </span>
@@ -416,10 +416,10 @@ export default function InventoryIntelligence() {
           Inteligência Preditiva
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-          <KPICard label="Depreciação acumulada" value={formatCurrency(totalDepreciation)} sub="perda total no estoque" color="var(--red)" icon={<TrendingDown size={16} />} />
-          <KPICard label="Previsão próximos 30d" value={formatCurrency(projectedLoss30d)} sub="perda estimada/mês" color="var(--ora)" icon={<TrendingUp size={16} />} />
+          <KPICard label="Depreciação acumulada" value={formatCurrency(totalDepreciation)} sub="perda total no estoque" color="var(--t2)" icon={<TrendingDown size={16} />} />
+          <KPICard label="Previsão próximos 30d" value={formatCurrency(projectedLoss30d)} sub="perda estimada/mês" color="rgba(61,247,16,.65)" icon={<TrendingUp size={16} />} />
           <KPICard label="Score saúde do pátio" value={`${patioHealthScore}/100`} sub={patioHealthScore >= 70 ? 'pátio saudável' : patioHealthScore >= 45 ? 'atenção necessária' : 'situação crítica'} color={healthColor} icon={<Activity size={16} />} />
-          <KPICard label="Zona crítica" value={String(criticalCount)} sub="veículos críticos/emergência" color={criticalCount > 0 ? 'var(--red)' : 'var(--neon)'} icon={<Zap size={16} />} />
+          <KPICard label="Zona crítica" value={String(criticalCount)} sub="veículos críticos/emergência" color={criticalCount > 0 ? 'var(--t2)' : 'var(--neon)'} icon={<Zap size={16} />} />
         </div>
       </div>
 
@@ -465,12 +465,12 @@ export default function InventoryIntelligence() {
                   <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 10, background: ALERT_BG_COLORS[alert.level], color: alert.color }}>
                     {alert.daysInStock}d
                   </span>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: health ? (health.total >= 65 ? 'var(--neon)' : health.total >= 40 ? 'var(--yel)' : 'var(--red)') : 'var(--t3)' }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: health ? (health.total >= 65 ? 'var(--neon)' : health.total >= 40 ? 'rgba(61,247,16,.65)' : 'var(--t2)') : 'var(--t3)' }}>
                     ♥ {health?.total ?? '—'}
                   </span>
                 </div>
                 {dep && dep.accumulatedLossR$ > 100 && (
-                  <p style={{ fontSize: 9, color: 'var(--red)', marginTop: 3 }}>
+                  <p style={{ fontSize: 9, color: 'var(--t2)', marginTop: 3 }}>
                     -{formatCurrency(dep.accumulatedLossR$)}
                   </p>
                 )}
@@ -508,9 +508,9 @@ export default function InventoryIntelligence() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
             {[
               { label: 'Preço de compra',    value: formatCurrency(selectedDepreciation.basePrice),             color: 'var(--t)' },
-              { label: 'Valor est. mercado', value: formatCurrency(selectedDepreciation.estimatedCurrentValue), color: 'var(--blu)' },
-              { label: 'Perda acumulada',    value: formatCurrency(selectedDepreciation.accumulatedLossR$),     color: 'var(--red)' },
-              { label: 'Perda próx. 30d',    value: formatCurrency(selectedDepreciation.projectedLoss30dR$),    color: 'var(--ora)' },
+              { label: 'Valor est. mercado', value: formatCurrency(selectedDepreciation.estimatedCurrentValue), color: 'var(--t)' },
+              { label: 'Perda acumulada',    value: formatCurrency(selectedDepreciation.accumulatedLossR$),     color: 'var(--t2)' },
+              { label: 'Perda próx. 30d',    value: formatCurrency(selectedDepreciation.projectedLoss30dR$),    color: 'rgba(61,247,16,.65)' },
             ].map(item => (
               <div key={item.label} style={{ background: 'var(--el)', borderRadius: 8, padding: '10px 12px' }}>
                 <p style={{ fontSize: 9, color: 'var(--t3)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>{item.label}</p>
@@ -531,7 +531,7 @@ export default function InventoryIntelligence() {
                 { label: 'Nível de interesse', score: selectedHealth.components.interestScore,      max: 15 },
               ].map(c => {
                 const pct = (c.score / c.max) * 100
-                const barColor = pct >= 70 ? 'var(--neon)' : pct >= 40 ? 'var(--yel)' : 'var(--red)'
+                const barColor = pct >= 70 ? 'var(--neon)' : pct >= 40 ? 'rgba(61,247,16,.65)' : 'var(--t2)'
                 return (
                   <div key={c.label}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -599,11 +599,11 @@ export default function InventoryIntelligence() {
                         {v.brand} {v.model} <span style={{ fontSize: 9, color: 'var(--t3)', marginLeft: 4 }}>{v.year_model}</span>
                       </td>
                       <td style={{ padding: '8px 10px', fontFamily: 'var(--fm)', color: alert.color, fontWeight: 700 }}>{alert.daysInStock}d</td>
-                      <td style={{ padding: '8px 10px', fontFamily: 'var(--fm)', color: 'var(--red)' }}>{formatCurrency(dep.accumulatedLossR$)}</td>
-                      <td style={{ padding: '8px 10px', color: dep.marginRisk > 10 ? 'var(--red)' : dep.marginRisk > 0 ? 'var(--yel)' : 'var(--neon)', fontWeight: 700 }}>
+                      <td style={{ padding: '8px 10px', fontFamily: 'var(--fm)', color: 'var(--t2)' }}>{formatCurrency(dep.accumulatedLossR$)}</td>
+                      <td style={{ padding: '8px 10px', color: dep.marginRisk > 10 ? 'var(--t2)' : dep.marginRisk > 0 ? 'rgba(61,247,16,.65)' : 'var(--neon)', fontWeight: 700 }}>
                         {dep.marginRisk > 0 ? `+${dep.marginRisk.toFixed(1)}%` : `${dep.marginRisk.toFixed(1)}%`}
                       </td>
-                      <td style={{ padding: '8px 10px', color: health.total >= 65 ? 'var(--neon)' : health.total >= 40 ? 'var(--yel)' : 'var(--red)', fontWeight: 700 }}>
+                      <td style={{ padding: '8px 10px', color: health.total >= 65 ? 'var(--neon)' : health.total >= 40 ? 'rgba(61,247,16,.65)' : 'var(--t2)', fontWeight: 700 }}>
                         {health.total} ({health.grade})
                       </td>
                       <td style={{ padding: '8px 10px', color: 'var(--t2)', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

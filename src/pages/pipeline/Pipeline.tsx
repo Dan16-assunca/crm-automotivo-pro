@@ -322,8 +322,8 @@ function LeadCard({ lead, onClick, isSelected }: { lead: Lead; onClick: () => vo
   const isUrgent = lead.priority === 'high'
 
   const initials = lead.client_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
-  const tempColor = lead.temperature === 'hot' ? 'var(--red)' : lead.temperature === 'warm' ? 'var(--amber)' : 'var(--blue)'
-  const tempBg    = lead.temperature === 'hot' ? 'rgba(255,68,68,0.12)' : lead.temperature === 'warm' ? 'rgba(245,166,35,0.12)' : 'rgba(74,158,255,0.12)'
+  const tempColor = lead.temperature === 'hot' ? 'var(--neon)' : lead.temperature === 'warm' ? 'rgba(61,247,16,.65)' : 'var(--t2)'
+  const tempBg    = lead.temperature === 'hot' ? 'rgba(61,247,16,0.12)' : lead.temperature === 'warm' ? 'rgba(61,247,16,0.07)' : 'rgba(184,184,184,0.10)'
   const tempLabel = lead.temperature === 'hot' ? '🔥 Quente' : lead.temperature === 'warm' ? '⚡ Morno' : '❄️ Frio'
 
   const budget = lead.budget_max
@@ -335,7 +335,7 @@ function LeadCard({ lead, onClick, isSelected }: { lead: Lead; onClick: () => vo
   // Score de qualificação simples
   const intentMap: Record<string, number> = { hot: 90, warm: 58, cold: 28 }
   const score = Math.round((intentMap[lead.temperature] ?? 50 + (lead.budget_max ?? 0) > 80000 ? 15 : 0))
-  const scoreColor = score >= 80 ? 'var(--neon)' : score >= 55 ? 'var(--amber)' : 'var(--blue)'
+  const scoreColor = score >= 80 ? 'var(--neon)' : score >= 55 ? 'rgba(61,247,16,.65)' : 'var(--t2)'
 
   // Follow-up
   const hasFollowup = !!lead.next_followup_at
@@ -343,7 +343,7 @@ function LeadCard({ lead, onClick, isSelected }: { lead: Lead; onClick: () => vo
 
   const borderColor = isSelected
     ? 'var(--neon-border)'
-    : isUrgent ? 'rgba(255,68,68,0.4)' : 'var(--border)'
+    : isUrgent ? 'var(--nb)' : 'var(--border)'
 
   return (
     <div
@@ -422,7 +422,7 @@ function LeadCard({ lead, onClick, isSelected }: { lead: Lead; onClick: () => vo
             </span>
           )}
           {lead.payment_type === 'financiamento' && (
-            <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8, background: 'rgba(74,158,255,0.15)', color: '#60A5FA' }}>
+            <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8, background: 'rgba(61,247,16,0.10)', color: 'rgba(61,247,16,.65)' }}>
               Financiamento
             </span>
           )}
@@ -432,22 +432,22 @@ function LeadCard({ lead, onClick, isSelected }: { lead: Lead; onClick: () => vo
             </span>
           )}
           {lead.payment_type === 'consorcio' && (
-            <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8, background: 'rgba(168,85,247,0.15)', color: '#C084FC' }}>
+            <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8, background: 'rgba(61,247,16,0.10)', color: 'var(--neon)' }}>
               Consórcio
             </span>
           )}
           {lead.trade_in && (
-            <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8, background: 'rgba(168,85,247,0.15)', color: '#C084FC' }}>
+            <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8, background: 'rgba(61,247,16,0.10)', color: 'var(--neon)' }}>
               🔄 Troca
             </span>
           )}
           {isUrgent && (
-            <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8, background: 'rgba(255,68,68,0.15)', color: '#F87171' }}>
+            <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8, background: 'rgba(61,247,16,0.10)', color: 'var(--neon)' }}>
               🔴 Urgente
             </span>
           )}
           {hasFollowup && (
-            <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8, background: followupOverdue ? 'rgba(255,68,68,0.15)' : 'rgba(245,166,35,0.12)', color: followupOverdue ? '#F87171' : 'var(--amber)' }}>
+            <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8, background: followupOverdue ? 'rgba(61,247,16,0.10)' : 'rgba(61,247,16,0.06)', color: followupOverdue ? 'var(--neon)' : 'rgba(61,247,16,.65)' }}>
               {followupOverdue ? '⚠️ Atrasado' : '📅 Agendado'}
             </span>
           )}
@@ -457,7 +457,7 @@ function LeadCard({ lead, onClick, isSelected }: { lead: Lead; onClick: () => vo
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 7 }}>
           <span style={{ fontSize: 10, color: 'var(--text2)', display: 'flex', alignItems: 'center', gap: 3 }}>
             <Clock size={9} />
-            <strong style={{ color: days > 7 ? 'var(--amber)' : 'var(--text)' }}>{days}d</strong>
+            <strong style={{ color: days > 7 ? 'rgba(61,247,16,.65)' : 'var(--text)' }}>{days}d</strong>
             <span style={{ color: 'var(--text3)' }}>no pipeline</span>
           </span>
           <span style={{ fontSize: 10, fontWeight: 700, color: scoreColor }}>
@@ -628,9 +628,9 @@ function PipelineKPIs({ leads, isMobile }: { leads: Lead[]; isMobile: boolean })
 
   const kpis = [
     { label: 'Leads ativos',   value: active.length.toString(),              sub: `${hot} quentes`,       color: 'var(--neon)' },
-    { label: 'Pipeline',       value: `R$ ${Math.round(totalValue / 1000)}k`, sub: 'valor estimado',      color: 'var(--blu)' },
-    { label: 'Follow-ups',     value: withFollowup.toString(),                sub: 'agendados',            color: 'var(--yel)' },
-    { label: 'Propostas',      value: (proposals > 0 ? proposals : active.filter(l => l.payment_type).length).toString(), sub: 'em negociação', color: 'var(--yel)' },
+    { label: 'Pipeline',       value: `R$ ${Math.round(totalValue / 1000)}k`, sub: 'valor estimado',      color: 'var(--t)' },
+    { label: 'Follow-ups',     value: withFollowup.toString(),                sub: 'agendados',            color: 'var(--neon)' },
+    { label: 'Propostas',      value: (proposals > 0 ? proposals : active.filter(l => l.payment_type).length).toString(), sub: 'em negociação', color: 'var(--neon)' },
     { label: 'Fechamentos',    value: closedMonth.toString(),                 sub: 'conversões',           color: 'var(--neon)' },
     { label: 'Ticket médio',   value: `R$ ${cpl}k`,                          sub: 'por lead',             color: 'var(--t3)' },
   ]
@@ -886,7 +886,7 @@ export default function Pipeline() {
   if (stagesError) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 300, gap: 12, color: 'var(--text4)' }}>
-        <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--red)' }}>Erro ao carregar o pipeline</p>
+        <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--t2)' }}>Erro ao carregar o pipeline</p>
         <p style={{ fontSize: 12, color: 'var(--text4)', maxWidth: 360, textAlign: 'center' }}>
           {(stagesErr as Error)?.message ?? 'Erro desconhecido'}
         </p>
