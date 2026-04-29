@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
@@ -22,6 +23,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import { useLeadPanelStore } from '@/store/leadPanelStore'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -392,6 +394,8 @@ function SectionLabel({ icon: Icon, children }: { icon?: React.ElementType; chil
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const isMobile = useIsMobile()
+  const navigate = useNavigate()
+  const { openLeadPanel } = useLeadPanelStore()
   const { store, user, isLoading: authLoading } = useAuthStore()
   const [period, setPeriod] = useState<Period>('month')
   const [customFrom, setCustomFrom] = useState('')
@@ -789,11 +793,17 @@ export default function Dashboard() {
                 : alert.severity === 'attention' ? 'rgba(61,247,16,.5)'
                 : 'rgba(61,247,16,.38)'
               return (
-                <div key={alert.id} style={{
-                  padding: '10px 14px',
-                  borderBottom: idx < Math.min(leadAlerts.length, 5) - 1 ? '1px solid var(--bs)' : 'none',
-                  borderLeft: `3px solid ${severityColor}`,
-                }}>
+                <div
+                  key={alert.id}
+                  onClick={() => alert.lead_id ? openLeadPanel(alert.lead_id) : navigate('/pipeline')}
+                  style={{
+                    padding: '10px 14px',
+                    borderBottom: idx < Math.min(leadAlerts.length, 5) - 1 ? '1px solid var(--bs)' : 'none',
+                    borderLeft: `3px solid ${severityColor}`,
+                    cursor: 'pointer',
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                >
                   <p style={{ fontSize: 12, fontWeight: 700, color: severityColor }}>{alert.title}</p>
                   <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 3, lineHeight: 1.3 }}>{alert.message}</p>
                 </div>
@@ -826,12 +836,18 @@ export default function Dashboard() {
               )}
             </div>
             {followUps.slice(0, 5).map((f, idx) => (
-              <div key={f.id} style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '11px 14px',
-                borderBottom: idx < Math.min(followUps.length, 5) - 1 ? '1px solid var(--bs)' : 'none',
-                background: f.overdue ? 'rgba(239,68,68,.03)' : 'transparent',
-              }}>
+              <div
+                key={f.id}
+                onClick={() => openLeadPanel(f.id)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '11px 14px',
+                  borderBottom: idx < Math.min(followUps.length, 5) - 1 ? '1px solid var(--bs)' : 'none',
+                  background: f.overdue ? 'rgba(61,247,16,.03)' : 'transparent',
+                  cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+              >
                 <div style={{
                   width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
                   background: 'var(--ng)',
@@ -869,24 +885,26 @@ export default function Dashboard() {
           </p>
           {(() => {
             const nonFinal = stages?.filter(s => !s.is_final) ?? []
-            const cols = funnelLoading || !stages ? 6 : nonFinal.length || 1
             return (
-              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 8 }}>
-                {funnelLoading || !stages ? [...Array(6)].map((_, i) => (
-                  <Skeleton key={i} style={{ height: 82, borderRadius: 14 }} />
+              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch', paddingBottom: 4 }}>
+                {funnelLoading || !stages ? [...Array(5)].map((_, i) => (
+                  <Skeleton key={i} style={{ height: 90, width: 110, flexShrink: 0, borderRadius: 14 }} />
                 )) : nonFinal.map((stage, i) => {
                   const count = funnelCounts?.[stage.id] ?? 0
                   const prevCount = i > 0 ? (funnelCounts?.[nonFinal[i-1]?.id] ?? 0) : 0
                   const convPct = i > 0 && prevCount > 0 ? Math.round((count / prevCount) * 100) : null
                   return (
-                    <div key={stage.id} style={{
-                      background: 'var(--card)', border: '1px solid var(--neon-card)', borderRadius: 14,
-                      padding: '12px 14px', position: 'relative', overflow: 'hidden', minWidth: 0,
-                    }}>
-                      <div style={{
-                        position: 'absolute', top: 0, left: 0, right: 0, height: 3,
-                        background: 'var(--neon)',
-                      }} />
+                    <div
+                      key={stage.id}
+                      onClick={() => navigate('/pipeline')}
+                      style={{
+                        flexShrink: 0, width: 110,
+                        background: 'var(--card)', border: '1px solid var(--neon-card)', borderRadius: 14,
+                        padding: '12px 14px', position: 'relative', overflow: 'hidden',
+                        cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+                      }}
+                    >
+                      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'var(--neon)' }} />
                       <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: '.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {stage.name}
                       </p>
@@ -894,7 +912,7 @@ export default function Dashboard() {
                         {count}
                       </p>
                       {convPct !== null && (
-                        <p style={{ fontSize: 11, color: 'var(--neon)', marginTop: 2, fontWeight: 600 }}>{convPct}% conv.</p>
+                        <p style={{ fontSize: 10, color: 'var(--neon)', marginTop: 2, fontWeight: 600 }}>{convPct}% conv.</p>
                       )}
                     </div>
                   )
@@ -1303,11 +1321,18 @@ export default function Dashboard() {
                   : alert.severity === 'attention' ? 'rgba(61,247,16,.5)'
                   : 'rgba(61,247,16,.38)'
                 return (
-                  <div key={alert.id} style={{
-                    background: 'var(--card)', border: `1px solid ${severityColor}30`,
-                    borderLeft: `3px solid ${severityColor}`,
-                    borderRadius: 9, padding: '10px 12px',
-                  }}>
+                  <div
+                    key={alert.id}
+                    onClick={() => alert.lead_id ? openLeadPanel(alert.lead_id) : navigate('/pipeline')}
+                    style={{
+                      background: 'var(--card)', border: `1px solid ${severityColor}30`,
+                      borderLeft: `3px solid ${severityColor}`,
+                      borderRadius: 9, padding: '10px 12px',
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--el)' }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--card)' }}
+                  >
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                       <p style={{ fontSize: 11, fontWeight: 700, color: severityColor, lineHeight: 1.3 }}>{alert.title}</p>
                       <span style={{
@@ -1343,7 +1368,13 @@ export default function Dashboard() {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
                   {followUps.map(f => (
-                    <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div
+                      key={f.id}
+                      onClick={() => openLeadPanel(f.id)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', borderRadius: 7, padding: '3px 4px', marginInline: -4 }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--el)' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+                    >
                       <div style={{
                         width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
                         background: 'var(--ng)',
