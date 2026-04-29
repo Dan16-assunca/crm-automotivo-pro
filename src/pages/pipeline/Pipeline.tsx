@@ -12,7 +12,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   Plus, Search, Phone, MessageSquare, Clock, X,
   Car, BarChart2, Download, SlidersHorizontal,
-  User, MapPin, DollarSign,
+  User, MapPin, DollarSign, ChevronRight,
 } from 'lucide-react'
 import { useLeadPanelStore } from '@/store/leadPanelStore'
 import { useForm } from 'react-hook-form'
