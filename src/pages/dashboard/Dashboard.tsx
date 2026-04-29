@@ -391,6 +391,14 @@ function SectionLabel({ icon: Icon, children }: { icon?: React.ElementType; chil
   )
 }
 
+// ─── Greeting helper ──────────────────────────────────────────────────────────
+function getGreeting(): string {
+  const h = new Date().getHours()
+  if (h < 12) return 'Bom dia'
+  if (h < 18) return 'Boa tarde'
+  return 'Boa noite'
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const isMobile = useIsMobile()
@@ -701,7 +709,31 @@ export default function Dashboard() {
     const overdueCount = followUps?.filter(f => f.overdue).length ?? 0
 
     return (
+      <>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 8 }}>
+
+        {/* ── Header ── */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 2 }}>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ fontSize: 19, fontWeight: 800, color: 'var(--t)', letterSpacing: '-.02em', lineHeight: 1.2 }}>
+              {getGreeting()}, {user?.full_name?.split(' ')[0] ?? 'vendedor'}
+            </p>
+            <p style={{ fontSize: 12, color: 'var(--t3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {store?.name}
+            </p>
+          </div>
+          <button
+            onClick={() => setShowWidgetEditor(true)}
+            style={{
+              width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'var(--el)', border: '1px solid var(--b)', cursor: 'pointer',
+              color: 'var(--t2)', minHeight: 'unset', marginLeft: 10,
+            }}
+          >
+            <Settings2 size={17} />
+          </button>
+        </div>
 
         {/* ── Período ── */}
         <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
@@ -746,27 +778,32 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* ── KPIs secundários ── */}
+        {/* ── KPI widget cards (personalizáveis) ── */}
         {kpisLoading ? (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {[...Array(4)].map((_, i) => <Skeleton key={i} style={{ height: 76, borderRadius: 14 }} />)}
+            {[...Array(widgets.length || 4)].map((_, i) => <Skeleton key={i} style={{ height: 80, borderRadius: 14 }} />)}
           </div>
-        ) : (
+        ) : widgets.length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {[
-              { label: 'Total Leads', value: String(kpis?.totalLeads ?? 0) },
-              { label: 'Fechamentos', value: String(kpis?.wonCount ?? 0) },
-              { label: 'Ticket Médio', value: kpis ? formatCurrency(kpis.avgTicket) : '—' },
-              { label: 'CPL', value: kpis && kpis.totalLeads > 0 ? formatCurrency((kpis.revenue || 0) / kpis.totalLeads) : '—' },
-            ].map(k => (
-              <div key={k.label} style={{
-                background: 'var(--card)', border: '1px solid var(--neon-card)',
-                borderRadius: 14, padding: '14px',
-              }}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: '.05em' }}>{k.label}</p>
-                <p style={{ fontSize: 22, fontWeight: 800, color: 'var(--t)', marginTop: 6, lineHeight: 1, letterSpacing: '-.02em' }}>{k.value}</p>
-              </div>
-            ))}
+            {widgets.map(widget => {
+              const resolved = resolveWidget(widget, widgetData)
+              const label = getWidgetLabel(widget)
+              return (
+                <div key={widget.id} style={{
+                  background: 'var(--card)', border: '1px solid var(--neon-card)',
+                  borderRadius: 14, padding: '14px', position: 'relative', overflow: 'hidden',
+                }}>
+                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: resolved.color, opacity: 0.7 }} />
+                  <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: '.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {label}
+                  </p>
+                  <p style={{ fontSize: 22, fontWeight: 800, color: resolved.color, marginTop: 6, lineHeight: 1, letterSpacing: '-.02em' }}>
+                    {resolved.value}
+                  </p>
+                  <p style={{ fontSize: 10, color: 'var(--t3)', marginTop: 4 }}>{resolved.sub}</p>
+                </div>
+              )
+            })}
           </div>
         )}
 
@@ -983,6 +1020,16 @@ export default function Dashboard() {
         )}
 
       </div>
+
+      {/* Widget editor (mobile) */}
+      {showWidgetEditor && (
+        <WidgetEditorPanel
+          widgets={widgets}
+          onSave={saveAndSetWidgets}
+          onClose={() => setShowWidgetEditor(false)}
+        />
+      )}
+      </>
     )
   }
 
