@@ -612,7 +612,221 @@ function ScoreBar({ label, value, color = 'var(--neon)' }: { label: string; valu
   )
 }
 
-// ─── Inline Lead Panel ─────────────────────────────────────────────────────────
+// ─── Mobile Lead Card ─────────────────────────────────────────────────────────
+function MobileLeadCard({ lead, onClick }: { lead: Lead; onClick: () => void }) {
+  const tempColor = lead.temperature === 'hot' ? 'var(--red)' : lead.temperature === 'warm' ? 'var(--ora)' : 'var(--blu)'
+  const tempBg    = lead.temperature === 'hot' ? 'rgba(244,63,94,0.12)' : lead.temperature === 'warm' ? 'rgba(249,115,22,0.12)' : 'rgba(59,130,246,0.12)'
+  const tempLabel = lead.temperature === 'hot' ? '🔥 Quente' : lead.temperature === 'warm' ? '⚡ Morno' : '❄️ Frio'
+  const initials  = lead.client_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+  const hasFollowup   = !!lead.next_followup_at
+  const followupOverdue = hasFollowup && new Date(lead.next_followup_at!) < new Date()
+  const budget = lead.budget_max
+    ? `R$ ${lead.budget_max.toLocaleString('pt-BR')}`
+    : null
+
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '14px 14px',
+        background: 'var(--card)',
+        border: '1px solid var(--bs)',
+        borderLeft: `4px solid ${tempColor}`,
+        borderRadius: 14,
+        marginBottom: 8,
+        cursor: 'pointer',
+        WebkitTapHighlightColor: 'transparent',
+      }}
+    >
+      {/* Avatar */}
+      <div style={{
+        width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
+        background: tempBg, border: `2px solid ${tempColor}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 13, fontWeight: 700, color: tempColor,
+      }}>
+        {initials}
+      </div>
+
+      {/* Info */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+          <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--t)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+            {lead.client_name}
+          </p>
+          <span style={{ fontSize: 10, fontWeight: 700, color: tempColor, background: tempBg, padding: '2px 7px', borderRadius: 20, flexShrink: 0 }}>
+            {tempLabel}
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {lead.client_phone && (
+            <span style={{ fontSize: 12, color: 'var(--t2)' }}>{lead.client_phone}</span>
+          )}
+          {lead.vehicle_interest && (
+            <span style={{ fontSize: 12, color: 'var(--neon)', fontWeight: 600 }}>
+              <Car size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 3 }} />
+              {lead.vehicle_interest}
+            </span>
+          )}
+          {budget && (
+            <span style={{ fontSize: 12, color: 'var(--t2)' }}>{budget}</span>
+          )}
+        </div>
+        {(hasFollowup || lead.priority === 'high') && (
+          <div style={{ display: 'flex', gap: 4, marginTop: 5 }}>
+            {lead.priority === 'high' && (
+              <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 8, background: 'rgba(61,247,16,0.10)', color: 'var(--neon)' }}>🔴 Urgente</span>
+            )}
+            {hasFollowup && (
+              <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 8, background: followupOverdue ? 'rgba(61,247,16,0.10)' : 'rgba(61,247,16,0.06)', color: followupOverdue ? 'var(--neon)' : 'rgba(61,247,16,.6)' }}>
+                {followupOverdue ? '⚠️ Follow-up atrasado' : '📅 Follow-up agendado'}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Chevron */}
+      <ChevronRight size={16} style={{ color: 'var(--t3)', flexShrink: 0 }} />
+    </div>
+  )
+}
+
+// ─── Mobile Pipeline View ──────────────────────────────────────────────────────
+function MobilePipelineView({ stages, leads, onLeadClick, onAddLead, search, onSearch }: {
+  stages: PipelineStage[]
+  leads: Lead[]
+  onLeadClick: (l: Lead) => void
+  onAddLead: (stageId: string) => void
+  search: string
+  onSearch: (v: string) => void
+}) {
+  const nonFinal = stages.filter(s => !s.is_final)
+  const finals   = stages.filter(s => s.is_final)
+  const [selectedId, setSelectedId] = useState(nonFinal[0]?.id ?? '')
+
+  // Keep selectedId valid when stages load
+  useEffect(() => {
+    if (selectedId === '' && nonFinal.length > 0) setSelectedId(nonFinal[0].id)
+  }, [nonFinal, selectedId])
+
+  const currentStage = stages.find(s => s.id === selectedId)
+  const stageLeads   = leads.filter(l => l.stage_id === selectedId)
+  const searchedLeads = search
+    ? leads.filter(l =>
+        l.client_name.toLowerCase().includes(search.toLowerCase()) ||
+        l.client_phone?.includes(search) ||
+        l.vehicle_interest?.toLowerCase().includes(search.toLowerCase())
+      )
+    : stageLeads
+
+  const displayLeads = search ? searchedLeads : stageLeads
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      {/* Search */}
+      <div style={{ position: 'relative', marginBottom: 12 }}>
+        <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)', pointerEvents: 'none' }} />
+        <input
+          placeholder="Buscar lead, veículo, telefone..."
+          value={search}
+          onChange={e => onSearch(e.target.value)}
+          style={{
+            width: '100%', height: 44, paddingLeft: 36, paddingRight: 12,
+            borderRadius: 12, background: 'var(--card)', border: '1px solid var(--bs)',
+            color: 'var(--t)', fontSize: 14, outline: 'none', fontFamily: 'inherit',
+          }}
+        />
+      </div>
+
+      {/* Stage tabs */}
+      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 10, scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch', flexShrink: 0 }}>
+        {nonFinal.map(s => {
+          const count = leads.filter(l => l.stage_id === s.id).length
+          const active = s.id === selectedId
+          return (
+            <button
+              key={s.id}
+              onClick={() => setSelectedId(s.id)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '8px 14px', borderRadius: 20, flexShrink: 0,
+                border: active ? `1.5px solid ${s.color}` : '1px solid var(--bs)',
+                background: active ? s.color + '20' : 'var(--card)',
+                color: active ? s.color : 'var(--t2)',
+                fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                transition: 'all .15s',
+              }}
+            >
+              {s.name}
+              <span style={{
+                fontSize: 10, fontWeight: 800,
+                background: active ? s.color + '30' : 'var(--el)',
+                color: active ? s.color : 'var(--t3)',
+                borderRadius: 10, padding: '1px 6px',
+              }}>{count}</span>
+            </button>
+          )
+        })}
+        {/* Final stages (Ganho/Perdido) */}
+        {finals.map(s => {
+          const count = leads.filter(l => l.stage_id === s.id).length
+          const active = s.id === selectedId
+          return (
+            <button key={s.id} onClick={() => setSelectedId(s.id)} style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '8px 14px', borderRadius: 20, flexShrink: 0,
+              border: active ? '1.5px solid var(--neon)' : '1px solid var(--bs)',
+              background: active ? 'var(--ng)' : 'var(--card)',
+              color: active ? 'var(--neon)' : 'var(--t3)',
+              fontSize: 12, fontWeight: 700, cursor: 'pointer',
+            }}>
+              {s.name}
+              <span style={{ fontSize: 10, fontWeight: 800, background: 'var(--el)', color: 'var(--t3)', borderRadius: 10, padding: '1px 6px' }}>{count}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Lead count header */}
+      {!search && currentStage && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <p style={{ fontSize: 12, color: 'var(--t2)', fontWeight: 600 }}>
+            {displayLeads.length} lead{displayLeads.length !== 1 ? 's' : ''} em <span style={{ color: currentStage.color }}>{currentStage.name}</span>
+          </p>
+          <button
+            onClick={() => onAddLead(selectedId)}
+            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 20, border: 'none', background: 'var(--neon)', color: '#000', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+          >
+            <Plus size={11} /> Novo lead
+          </button>
+        </div>
+      )}
+      {search && (
+        <p style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 10 }}>
+          {displayLeads.length} resultado{displayLeads.length !== 1 ? 's' : ''} para "{search}"
+        </p>
+      )}
+
+      {/* Lead list */}
+      <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        {displayLeads.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--t3)' }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>🎯</div>
+            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--t2)', marginBottom: 4 }}>Nenhum lead aqui</p>
+            <p style={{ fontSize: 12 }}>Arraste leads do pipeline ou adicione um novo</p>
+          </div>
+        )}
+        {displayLeads.map(l => (
+          <MobileLeadCard key={l.id} lead={l} onClick={() => onLeadClick(l)} />
+        ))}
+        <div style={{ height: 80 }} />
+      </div>
+    </div>
+  )
+}
+
 // ─── KPI Bar (6 metrics) ───────────────────────────────────────────────────────
 function PipelineKPIs({ leads, isMobile }: { leads: Lead[]; isMobile: boolean }) {
   const active = leads.filter(l => l.status === 'active')
@@ -905,6 +1119,19 @@ export default function Pipeline() {
   }
 
   if (stagesLoading) {
+    if (isMobile) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+            {[...Array(6)].map((_, i) => <Skeleton key={i} style={{ height: 72, borderRadius: 12 }} />)}
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+            {[...Array(4)].map((_, i) => <Skeleton key={i} style={{ height: 36, width: 90, borderRadius: 20 }} />)}
+          </div>
+          {[...Array(5)].map((_, i) => <Skeleton key={i} style={{ height: 78, borderRadius: 14 }} />)}
+        </div>
+      )
+    }
     return (
       <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 16 }}>
         {[...Array(5)].map((_, i) => (
@@ -917,6 +1144,34 @@ export default function Pipeline() {
     )
   }
 
+  // ── MOBILE LAYOUT ─────────────────────────────────────────────────────────────
+  if (isMobile) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        {/* KPI Grid */}
+        {leads && <PipelineKPIs leads={leads} isMobile={true} />}
+
+        {/* Mobile pipeline view */}
+        {stages && (
+          <MobilePipelineView
+            stages={stages}
+            leads={filteredLeads}
+            onLeadClick={handleLeadClick}
+            onAddLead={handleAddLead}
+            search={search}
+            onSearch={setSearch}
+          />
+        )}
+
+        {/* New lead modal */}
+        {showNewLead && stages && (
+          <NewLeadModal open={showNewLead} onClose={() => setShowNewLead(false)} stages={stages} defaultStageId={newLeadStageId} />
+        )}
+      </div>
+    )
+  }
+
+  // ── DESKTOP LAYOUT ────────────────────────────────────────────────────────────
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Toolbar */}
@@ -939,11 +1194,10 @@ export default function Pipeline() {
       </div>
 
       {/* KPI bar */}
-      {leads && <PipelineKPIs leads={leads} isMobile={isMobile} />}
+      {leads && <PipelineKPIs leads={leads} isMobile={false} />}
 
       {/* Filter bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-        {/* Chips */}
         <div style={{ display: 'flex', gap: 4 }}>
           {CHIPS.map(c => (
             <button key={c.id} onClick={() => setFilter(c.id)} style={{
@@ -957,8 +1211,6 @@ export default function Pipeline() {
             </button>
           ))}
         </div>
-
-        {/* Date range */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 4 }}>
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{
             height: 30, padding: '0 8px', borderRadius: 7, background: 'var(--bg3)', border: '1px solid var(--border)',
@@ -976,11 +1228,7 @@ export default function Pipeline() {
             }}><X size={10} /></button>
           )}
         </div>
-
-        {/* Spacer */}
         <div style={{ flex: 1 }} />
-
-        {/* Action buttons */}
         <button onClick={exportLeads} style={{
           height: 30, padding: '0 11px', borderRadius: 7, border: '1px solid var(--border)',
           background: 'transparent', color: 'var(--text3)', fontSize: 11, cursor: 'pointer',
@@ -1026,17 +1274,7 @@ export default function Pipeline() {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div style={{
-            display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 12, height: '100%',
-            WebkitOverflowScrolling: 'touch',
-            // Mobile: scroll-snap suave (proximity = não força snap, só ajuda a parar numa coluna)
-            // overscrollBehaviorX evita que o scroll do kanban propague para a página
-            ...(isMobile ? {
-              scrollSnapType:       'x proximity',
-              overscrollBehaviorX:  'contain',
-              scrollPaddingLeft:    '14px',
-            } : {}),
-          }}>
+          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 12, height: '100%', WebkitOverflowScrolling: 'touch' }}>
             {stages?.map(stage => (
               <KanbanColumn
                 key={stage.id}
@@ -1049,7 +1287,6 @@ export default function Pipeline() {
               />
             ))}
           </div>
-
           <DragOverlay>
             {draggingLead && (
               <div style={{
