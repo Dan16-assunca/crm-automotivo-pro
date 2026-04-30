@@ -77,6 +77,10 @@ function calcMarginTrend(vehicles: Vehicle[]): { pct: number; up: boolean } | nu
 
 function calcFipeVs(v: Vehicle): { pct: number; aboveFipe: boolean } | null {
   if (!v.fipe_price || !v.sale_price) return null
+  // Sanity check: FIPE deve estar entre 20% e 500% do preço de venda
+  // (evita dados digitados errados, ex: 120 em vez de 120000)
+  const ratio = v.sale_price / v.fipe_price
+  if (ratio > 5 || ratio < 0.2) return null
   const pct = ((v.sale_price - v.fipe_price) / v.fipe_price) * 100
   return { pct: Math.round(Math.abs(pct) * 10) / 10, aboveFipe: pct > 0 }
 }
