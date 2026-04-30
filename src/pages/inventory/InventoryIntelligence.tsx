@@ -180,8 +180,8 @@ function HealthGauge({ score }: { score: number }) {
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 
-function KPICard({ label, value, sub, color = N, iconColor, icon, pulse = false, accent = false }: {
-  label: string; value: string; sub?: string; color?: string; iconColor?: string; icon: React.ReactNode; pulse?: boolean; accent?: boolean
+function KPICard({ label, value, sub, color = N, iconColor, icon, pulse = false, accent = false, compact = false }: {
+  label: string; value: string; sub?: string; color?: string; iconColor?: string; icon: React.ReactNode; pulse?: boolean; accent?: boolean; compact?: boolean
 }) {
   const ic = iconColor ?? color
   return (
@@ -189,17 +189,22 @@ function KPICard({ label, value, sub, color = N, iconColor, icon, pulse = false,
       background: NEON_DIM,
       borderRadius: 12,
       border: pulse ? `1px solid ${RED}` : `1px solid ${NEON_BDR}`,
-      padding: '16px 18px',
+      padding: compact ? '12px 14px' : '16px 18px',
       animation: pulse ? 'pulse-border 2s infinite' : 'none',
       position: 'relative', overflow: 'hidden',
     }}>
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${N}, transparent)` }} />
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
-        <p style={{ fontSize: 10, fontWeight: 700, color: W4, textTransform: 'uppercase', letterSpacing: '.09em' }}>{label}</p>
-        <div style={{ color: ic }}>{icon}</div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: compact ? 6 : 10 }}>
+        <p style={{ fontSize: compact ? 9 : 10, fontWeight: 700, color: W4, textTransform: 'uppercase', letterSpacing: '.07em', lineHeight: 1.3 }}>{label}</p>
+        <div style={{ color: ic, flexShrink: 0, marginLeft: 4 }}>{icon}</div>
       </div>
-      <p style={{ fontSize: 26, fontWeight: 900, color, lineHeight: 1, fontFamily: 'var(--fm)', letterSpacing: '-.01em' }}>{value}</p>
-      {sub && <p style={{ fontSize: 11, color: W4, marginTop: 6, fontWeight: 500 }}>{sub}</p>}
+      <p style={{
+        fontSize: compact ? 18 : 26,
+        fontWeight: 900, color, lineHeight: 1,
+        fontFamily: 'var(--fm)', letterSpacing: '-.01em',
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      }}>{value}</p>
+      {sub && <p style={{ fontSize: compact ? 10 : 11, color: W4, marginTop: compact ? 4 : 6, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</p>}
     </div>
   )
 }
@@ -554,41 +559,41 @@ export default function InventoryIntelligence() {
 
       {/* ── 6 KPIs ──────────────────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: mob ? 'repeat(2, 1fr)' : 'repeat(6, 1fr)', gap: 10 }}>
-        <KPICard label="Capital imobilizado" icon={<DollarSign size={16} />}
-          value={formatCurrency(totalValue)} sub="valor de venda" color={W} accent />
+        <KPICard label="Capital imobilizado" icon={<DollarSign size={mob ? 14 : 16} />}
+          value={formatCurrency(totalValue)} sub="valor de venda" color={W} accent compact={mob} />
 
-        <KPICard label="Giro médio" icon={<Clock size={16} />}
+        <KPICard label="Giro médio" icon={<Clock size={mob ? 14 : 16} />}
           value={`${avgDays}d`}
           sub={`meta ${PATIO_META_GIRO}d ${avgDays > PATIO_META_GIRO ? '⚠ acima' : '✓ dentro'}`}
           color={W}
           iconColor={avgDays > PATIO_META_GIRO ? RED : N}
           pulse={avgDays > PATIO_META_GIRO}
-          accent />
+          accent compact={mob} />
 
-        <KPICard label="Parados +60d" icon={stalled.length > 0 ? <AlertTriangle size={16} /> : <CheckCircle size={16} />}
+        <KPICard label="Parados +60d" icon={stalled.length > 0 ? <AlertTriangle size={mob ? 14 : 16} /> : <CheckCircle size={mob ? 14 : 16} />}
           value={String(stalled.length)}
           sub={stalled.length === 0 ? 'nenhum parado ✓' : `${Math.round((stalled.length / (available.length || 1)) * 100)}% do estoque`}
           color={W}
           iconColor={stalled.length > 0 ? RED : N}
           pulse={stalled.length > 0}
-          accent />
+          accent compact={mob} />
 
-        <KPICard label="Margem média" icon={<TrendingDown size={16} />}
+        <KPICard label="Margem média" icon={<TrendingDown size={mob ? 14 : 16} />}
           value={`${avgMargin}%`} sub={`meta 15% ${avgMargin >= 15 ? '✓' : '▼'}`}
           color={W}
           iconColor={avgMargin >= 15 ? N : avgMargin >= 8 ? YELLOW : RED}
-          accent />
+          accent compact={mob} />
 
-        <KPICard label="Lucro potencial" icon={<Zap size={16} />}
-          value={formatCurrency(lucro)} sub="a realizar" color={N} accent />
+        <KPICard label="Lucro potencial" icon={<Zap size={mob ? 14 : 16} />}
+          value={formatCurrency(lucro)} sub="a realizar" color={N} accent compact={mob} />
 
         <KPICard label="Tendência margem"
-          icon={trend ? (trend.up ? <ArrowUp size={16} /> : <ArrowDown size={16} />) : <Activity size={16} />}
+          icon={trend ? (trend.up ? <ArrowUp size={mob ? 14 : 16} /> : <ArrowDown size={mob ? 14 : 16} />) : <Activity size={mob ? 14 : 16} />}
           value={trend ? `${trend.up ? '+' : '-'}${trend.pct}%` : '—'}
           sub={trend ? (trend.up ? 'vs mês anterior ↑' : 'vs mês anterior ↓') : 'sem dados anteriores'}
           color={W}
           iconColor={trend ? (trend.up ? N : RED) : W4}
-          accent />
+          accent compact={mob} />
       </div>
 
       {/* ── Ranking de Urgência ──────────────────────────────────────────── */}
@@ -913,20 +918,20 @@ export default function InventoryIntelligence() {
         <div style={{ display: 'grid', gridTemplateColumns: mob ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 10 }}>
           <KPICard label="Depreciação acumulada"
             value={formatCurrency([...depMap.values()].reduce((s, d) => s + d.accumulatedLossR$, 0))}
-            sub="perda total no estoque" color={W7} icon={<TrendingDown size={16} />} />
+            sub="perda total no estoque" color={W7} icon={<TrendingDown size={16} />} compact={mob} />
           <KPICard label="Previsão próximos 30d"
             value={formatCurrency([...depMap.values()].reduce((s, d) => s + d.projectedLoss30dR$, 0))}
-            sub="perda estimada/mês" color={YELLOW} icon={<TrendingUp size={16} />} />
+            sub="perda estimada/mês" color={YELLOW} icon={<TrendingUp size={16} />} compact={mob} />
           <KPICard label="Score pátio"
             value={`${patioHP}/100`}
             sub={patioHP >= 70 ? 'pátio saudável ✓' : patioHP >= 45 ? 'atenção necessária' : 'situação crítica'}
             color={patioHP >= 70 ? N : patioHP >= 45 ? YELLOW : RED}
-            icon={<Activity size={16} />} accent={patioHP >= 70} />
+            icon={<Activity size={16} />} accent={patioHP >= 70} compact={mob} />
           <KPICard label="Zona crítica"
             value={String(critCount)}
             sub="veículos críticos/emergência"
             color={critCount > 0 ? RED : N}
-            icon={<Target size={16} />} pulse={critCount > 0} />
+            icon={<Target size={16} />} pulse={critCount > 0} compact={mob} />
         </div>
       </div>
 
