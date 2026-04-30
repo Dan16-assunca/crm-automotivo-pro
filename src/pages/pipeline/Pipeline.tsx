@@ -86,6 +86,7 @@ const SOURCE_LABEL: Record<string, string> = {
   meta_ads: 'Meta Ads', google_ads: 'Google Ads', olx: 'OLX',
   webmotors: 'WebMotors', icarros: 'iCarros', indicacao: 'Indicação',
   site: 'Site', telefone: 'Tel.', presencial: 'Presencial',
+  landing_page: 'Landing Page',
 }
 const PAYMENT_LABEL: Record<string, string> = { financiamento: 'Financ.', avista: 'À vista', consorcio: 'Consórcio' }
 
@@ -419,6 +420,11 @@ function LeadCard({ lead, onClick, isSelected }: { lead: Lead; onClick: () => vo
           {lead.source && (
             <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8, background: 'rgba(255,255,255,0.07)', color: 'var(--text2)' }}>
               {SOURCE_LABEL[lead.source] ?? lead.source}
+            </span>
+          )}
+          {lead.utm_campaign && (
+            <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8, background: 'rgba(99,179,237,0.12)', color: 'rgba(99,179,237,0.9)', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={lead.utm_campaign}>
+              📣 {lead.utm_campaign}
             </span>
           )}
           {lead.payment_type === 'financiamento' && (
