@@ -589,18 +589,6 @@ export default function InventoryIntelligence() {
           accent />
       </div>
 
-      {/* ── Semáforo de Pátio ────────────────────────────────────────────── */}
-      <Panel>
-        <SectionTitle sub="Clique em uma faixa para filtrar a tabela de análise abaixo">Semáforo de Pátio</SectionTitle>
-        <PatioSemaphore available={available} onFilter={setPatioFilter} activeFilter={patioFilter} />
-        {patioFilter && (
-          <button onClick={() => setPatioFilter(null)}
-            style={{ marginTop: 12, fontSize: 11, color: W4, background: W1, border: `1px solid ${CARD_BDR}`, borderRadius: 7, padding: '5px 12px', cursor: 'pointer', fontWeight: 600 }}>
-            × Limpar filtro
-          </button>
-        )}
-      </Panel>
-
       {/* ── Ranking de Urgência ──────────────────────────────────────────── */}
       {urgency.length > 0 && (
         <Panel>
@@ -746,6 +734,18 @@ export default function InventoryIntelligence() {
             </div>
           )}
         </div>
+      </Panel>
+
+      {/* ── Semáforo de Pátio ────────────────────────────────────────────── */}
+      <Panel>
+        <SectionTitle sub="Clique em uma faixa para filtrar a tabela de análise acima">Semáforo de Pátio</SectionTitle>
+        <PatioSemaphore available={available} onFilter={setPatioFilter} activeFilter={patioFilter} />
+        {patioFilter && (
+          <button onClick={() => setPatioFilter(null)}
+            style={{ marginTop: 12, fontSize: 11, color: W4, background: W1, border: `1px solid ${CARD_BDR}`, borderRadius: 7, padding: '5px 12px', cursor: 'pointer', fontWeight: 600 }}>
+            × Limpar filtro
+          </button>
+        )}
       </Panel>
 
       {/* ── Saúde do Estoque + Desempenho por Marca ─────────────────────── */}
