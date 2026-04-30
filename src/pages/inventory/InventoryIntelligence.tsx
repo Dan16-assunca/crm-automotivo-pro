@@ -1,10 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
-  ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip as RTooltip,
-  ResponsiveContainer, ReferenceLine,
-} from 'recharts'
-import {
   AlertTriangle, TrendingDown, Clock, DollarSign, Zap,
   Activity, TrendingUp, X as XIcon, CheckCircle, Bell,
   ChevronDown, ChevronRight, ArrowUp, ArrowDown, Target,
@@ -87,22 +83,24 @@ function calcHealthScore(available: Vehicle[]): number {
     (parados === 0 ? 30 : Math.max(0, 30 - parados * 5))
   )
 }
-function buildBubbleData(available: Vehicle[]) {
-  const map: Record<string, { margin: number[]; days: number[]; count: number }> = {}
-  available.filter(v => v.sale_price && v.purchase_price).forEach(v => {
-    const m = ((v.sale_price! - v.purchase_price!) / v.sale_price!) * 100
-    if (!map[v.brand]) map[v.brand] = { margin: [], days: [], count: 0 }
-    map[v.brand].margin.push(m)
+function buildBrandCards(available: Vehicle[]) {
+  const map: Record<string, { margin: number[]; days: number[]; value: number; count: number }> = {}
+  available.forEach(v => {
+    if (!map[v.brand]) map[v.brand] = { margin: [], days: [], value: 0, count: 0 }
+    if (v.sale_price && v.purchase_price)
+      map[v.brand].margin.push(((v.sale_price - v.purchase_price) / v.sale_price) * 100)
     map[v.brand].days.push(v.days_in_stock ?? 0)
+    map[v.brand].value += v.sale_price ?? 0
     map[v.brand].count++
   })
   return Object.entries(map).map(([brand, d], i) => ({
     brand,
-    x: Math.round((d.margin.reduce((a, b) => a + b, 0) / d.margin.length) * 10) / 10,
-    y: Math.round(d.days.reduce((a, b) => a + b, 0) / d.days.length),
-    z: d.count,
+    margin: d.margin.length ? Math.round((d.margin.reduce((a, b) => a + b, 0) / d.margin.length) * 10) / 10 : null,
+    avgDays: Math.round(d.days.reduce((a, b) => a + b, 0) / d.days.length),
+    value: d.value,
+    count: d.count,
     color: BRAND_COLORS[i % BRAND_COLORS.length],
-  }))
+  })).sort((a, b) => b.count - a.count)
 }
 function buildUrgencyRanking(available: Vehicle[]) {
   return [...available]
@@ -286,19 +284,65 @@ function PatioSemaphore({ available, onFilter, activeFilter }: {
   )
 }
 
-// ─── Bubble tooltip ───────────────────────────────────────────────────────────
+// ─── Brand performance cards ──────────────────────────────────────────────────
 
-function BubbleTip({ active, payload }: any) {
-  if (!active || !payload?.length) return null
-  const d = payload[0]?.payload
-  if (!d) return null
+type BrandCard = ReturnType<typeof buildBrandCards>[number]
+
+function BrandCards({ brands, avgMarginRef }: { brands: BrandCard[]; avgMarginRef: number }) {
+  if (!brands.length) return null
   return (
-    <div style={{ background: '#1a1a1a', border: `1px solid ${CARD_BDR}`, borderRadius: 10, padding: '10px 14px', fontSize: 12 }}>
-      <p style={{ fontWeight: 800, color: d.color, marginBottom: 6, fontSize: 13 }}>{d.brand}</p>
-      <p style={{ color: W7 }}><span style={{ color: W4 }}>Veículos: </span><strong style={{ color: W }}>{d.z}</strong></p>
-      <p style={{ color: W7 }}><span style={{ color: W4 }}>Margem: </span><strong style={{ color: N }}>{d.x.toFixed(1)}%</strong></p>
-      <p style={{ color: W7 }}><span style={{ color: W4 }}>Giro: </span><strong style={{ color: W }}>{d.y}d</strong></p>
-    </div>
+    <Panel>
+      <SectionTitle sub="Margem, giro e valor em estoque por marca">Desempenho por Marca</SectionTitle>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
+        {brands.map(b => {
+          const marginColor = b.margin === null ? W4 : b.margin >= 15 ? N : b.margin >= 8 ? YELLOW : RED
+          const giroColor   = b.avgDays <= PATIO_META_GIRO ? N : b.avgDays <= 30 ? YELLOW : RED
+          const marginPct   = b.margin !== null ? Math.min(100, (b.margin / 20) * 100) : 0
+          const giroPct     = Math.max(0, 100 - Math.min(100, (b.avgDays / 60) * 100))
+          return (
+            <div key={b.brand} style={{ background: W1, border: `1px solid ${CARD_BDR}`, borderTop: `3px solid ${b.color}`, borderRadius: 12, padding: '16px 18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <p style={{ fontSize: 15, fontWeight: 900, color: W }}>{b.brand}</p>
+                <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20, background: `${b.color}18`, color: b.color }}>
+                  {b.count} veíc.
+                </span>
+              </div>
+
+              {/* Margem */}
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                  <span style={{ fontSize: 11, color: W4, fontWeight: 600 }}>Margem média</span>
+                  <span style={{ fontSize: 13, fontWeight: 900, color: marginColor }}>
+                    {b.margin !== null ? `${b.margin}%` : '—'}
+                  </span>
+                </div>
+                <div style={{ height: 6, background: 'rgba(255,255,255,.08)', borderRadius: 6, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${marginPct}%`, background: marginColor, borderRadius: 6, boxShadow: marginColor === N ? `0 0 8px ${N}60` : 'none', transition: 'width .5s' }} />
+                </div>
+              </div>
+
+              {/* Giro */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                  <span style={{ fontSize: 11, color: W4, fontWeight: 600 }}>Giro médio</span>
+                  <span style={{ fontSize: 13, fontWeight: 900, color: giroColor }}>{b.avgDays}d</span>
+                </div>
+                <div style={{ height: 6, background: 'rgba(255,255,255,.08)', borderRadius: 6, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${giroPct}%`, background: giroColor, borderRadius: 6, boxShadow: giroColor === N ? `0 0 8px ${N}60` : 'none', transition: 'width .5s' }} />
+                </div>
+                <p style={{ fontSize: 10, color: W4, marginTop: 4 }}>meta: {PATIO_META_GIRO}d</p>
+              </div>
+
+              {/* Valor */}
+              <div style={{ borderTop: `1px solid ${CARD_BDR}`, paddingTop: 10 }}>
+                <p style={{ fontSize: 10, color: W4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 2 }}>Valor em estoque</p>
+                <p style={{ fontSize: 14, fontWeight: 800, color: W, fontFamily: 'var(--fm)' }}>{formatCurrency(b.value)}</p>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </Panel>
   )
 }
 
@@ -408,7 +452,7 @@ export default function InventoryIntelligence() {
   const lucro       = useMemo(() => calcLucro(available), [available])
   const trend       = useMemo(() => calcMarginTrend(vehicles), [vehicles])
   const healthScore = useMemo(() => calcHealthScore(available), [available])
-  const bubbleData  = useMemo(() => buildBubbleData(available), [available])
+  const brandCards  = useMemo(() => buildBrandCards(available), [available])
   const urgency     = useMemo(() => buildUrgencyRanking(available), [available])
   const alerts      = useMemo(() => buildSmartAlerts(available), [available])
 
@@ -536,93 +580,65 @@ export default function InventoryIntelligence() {
           color={trend ? (trend.up ? N : RED) : W4} />
       </div>
 
-      {/* ── Semáforo + Health Gauge ──────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 12, alignItems: 'start' }}>
-        <Panel>
-          <SectionTitle sub="Clique em uma faixa para filtrar a tabela abaixo">Semáforo de Pátio</SectionTitle>
-          <PatioSemaphore available={available} onFilter={setPatioFilter} activeFilter={patioFilter} />
-          {patioFilter && (
-            <button onClick={() => setPatioFilter(null)}
-              style={{ marginTop: 12, fontSize: 11, color: W4, background: W1, border: `1px solid ${CARD_BDR}`, borderRadius: 7, padding: '5px 12px', cursor: 'pointer', fontWeight: 600 }}>
-              × Limpar filtro
-            </button>
-          )}
-        </Panel>
-
-        <Panel style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '22px 18px' }}>
-          <p style={{ fontSize: 13, fontWeight: 800, color: W, marginBottom: 16, textTransform: 'uppercase', letterSpacing: '.06em' }}>Saúde do Estoque</p>
-          <HealthGauge score={healthScore} />
-          <div style={{ width: '100%', marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {/* ── SAÚDE DO ESTOQUE — destaque full-width ───────────────────────── */}
+      <Panel style={{ background: `linear-gradient(135deg, rgba(57,255,20,.06) 0%, rgba(255,255,255,.03) 60%)`, border: `1px solid ${NEON_BDR}` }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 32, alignItems: 'center' }}>
+          {/* Gauge centralizado e grande */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingRight: 24, borderRight: `1px solid ${CARD_BDR}` }}>
+            <p style={{ fontSize: 11, fontWeight: 800, color: W4, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 12 }}>Saúde do Estoque</p>
+            <HealthGauge score={healthScore} />
+          </div>
+          {/* Breakdown dos critérios */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: W4, marginBottom: 2 }}>Como o score é calculado</p>
             {[
-              { label: 'Veíc. abaixo de 30d',  pts: Math.min(40, Math.round((available.filter(v => (v.days_in_stock ?? 0) <= 30).length / (available.length || 1)) * 40)), max: 40 },
-              { label: 'Margem vs meta 15%',    pts: Math.min(30, Math.round((avgMargin / 15) * 30)), max: 30 },
-              { label: 'Sem parados +60d',      pts: stalled.length === 0 ? 30 : Math.max(0, 30 - stalled.length * 5), max: 30 },
+              { label: 'Veículos abaixo de 30 dias no estoque', pts: Math.min(40, Math.round((available.filter(v => (v.days_in_stock ?? 0) <= 30).length / (available.length || 1)) * 40)), max: 40, desc: `${available.filter(v => (v.days_in_stock ?? 0) <= 30).length} de ${available.length} veíc.` },
+              { label: 'Margem média vs meta de 15%', pts: Math.min(30, Math.round((avgMargin / 15) * 30)), max: 30, desc: `${avgMargin}% atual` },
+              { label: 'Nenhum veículo parado +60 dias', pts: stalled.length === 0 ? 30 : Math.max(0, 30 - stalled.length * 5), max: 30, desc: stalled.length === 0 ? 'Sem parados ✓' : `${stalled.length} parado${stalled.length > 1 ? 's' : ''}` },
             ].map(c => {
               const pct = (c.pts / c.max) * 100
               const bc  = pct >= 70 ? N : pct >= 40 ? YELLOW : RED
               return (
                 <div key={c.label}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span style={{ fontSize: 11, color: W7, fontWeight: 500 }}>{c.label}</span>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: bc }}>{c.pts}/{c.max}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 6 }}>
+                    <div>
+                      <p style={{ fontSize: 12, fontWeight: 700, color: W }}>{c.label}</p>
+                      <p style={{ fontSize: 11, color: W4, marginTop: 1 }}>{c.desc}</p>
+                    </div>
+                    <span style={{ fontSize: 15, fontWeight: 900, color: bc, fontFamily: 'var(--fm)', flexShrink: 0, marginLeft: 12 }}>{c.pts}<span style={{ fontSize: 11, color: W4, fontWeight: 600 }}>/{c.max}</span></span>
                   </div>
-                  <div style={{ height: 5, background: 'rgba(255,255,255,.08)', borderRadius: 5, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${pct}%`, background: bc, borderRadius: 5, transition: 'width .5s cubic-bezier(.4,0,.2,1)', boxShadow: bc === N ? `0 0 8px ${N}60` : 'none' }} />
+                  <div style={{ height: 7, background: 'rgba(255,255,255,.08)', borderRadius: 7, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${pct}%`, background: bc, borderRadius: 7, transition: 'width .6s cubic-bezier(.4,0,.2,1)', boxShadow: bc === N ? `0 0 10px ${N}70` : 'none' }} />
                   </div>
                 </div>
               )
             })}
+            <div style={{ display: 'flex', gap: 16, marginTop: 4 }}>
+              {[{ c: N, l: '80–100 Saudável' }, { c: YELLOW, l: '60–79 Atenção' }, { c: RED, l: '0–59 Crítico' }].map(({ c, l }) => (
+                <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <div style={{ width: 9, height: 9, borderRadius: '50%', background: c, boxShadow: c === N ? `0 0 6px ${N}` : 'none' }} />
+                  <span style={{ fontSize: 11, color: W4, fontWeight: 600 }}>{l}</span>
+                </div>
+              ))}
+            </div>
           </div>
-          <div style={{ width: '100%', marginTop: 14, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {[{ c: N, l: '80–100' }, { c: YELLOW, l: '60–79' }, { c: RED, l: '0–59' }].map(({ c, l }) => (
-              <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: c, boxShadow: c === N ? `0 0 6px ${N}` : 'none' }} />
-                <span style={{ fontSize: 10, color: W4 }}>{l}</span>
-              </div>
-            ))}
-          </div>
-        </Panel>
-      </div>
+        </div>
+      </Panel>
 
-      {/* ── Bubble chart ─────────────────────────────────────────────────── */}
-      {bubbleData.length > 0 && (
-        <Panel>
-          <SectionTitle sub="Eixo X = margem % · Eixo Y = giro (dias) · Tamanho = quantidade de veículos">Desempenho por Marca</SectionTitle>
-          <div style={{ position: 'relative' }}>
-            <div style={{ position: 'absolute', top: 0, right: '50%', bottom: '50%', left: 0, background: 'rgba(239,68,68,.03)', zIndex: 0, borderRadius: '6px 0 0 0' }} />
-            <div style={{ position: 'absolute', top: '50%', right: 0, bottom: 0, left: '50%', background: 'rgba(57,255,20,.03)', zIndex: 0, borderRadius: '0 0 6px 0' }} />
-            <div style={{ position: 'relative', zIndex: 1 }}>
-              <ResponsiveContainer width="100%" height={280}>
-                <ScatterChart margin={{ top: 20, right: 24, bottom: 24, left: 10 }}>
-                  <XAxis dataKey="x" name="Margem" unit="%" type="number"
-                    tick={{ fontSize: 11, fill: W4 }} axisLine={{ stroke: CARD_BDR }} tickLine={false}
-                    label={{ value: 'Margem %', position: 'insideBottomRight', offset: -2, fontSize: 11, fill: W4 }} />
-                  <YAxis dataKey="y" name="Giro" unit="d" type="number"
-                    tick={{ fontSize: 11, fill: W4 }} axisLine={{ stroke: CARD_BDR }} tickLine={false}
-                    label={{ value: 'Giro (dias)', angle: -90, position: 'insideLeft', fontSize: 11, fill: W4 }} />
-                  <ZAxis dataKey="z" range={[100, 600]} />
-                  <ReferenceLine x={avgMargin} stroke={CARD_BDR} strokeDasharray="5 5" label={{ value: 'Margem méd.', fontSize: 9, fill: W4 }} />
-                  <ReferenceLine y={PATIO_META_GIRO} stroke={CARD_BDR} strokeDasharray="5 5" label={{ value: 'Meta giro', fontSize: 9, fill: W4 }} />
-                  <RTooltip content={<BubbleTip />} cursor={false} />
-                  {bubbleData.map(d => <Scatter key={d.brand} name={d.brand} data={[d]} fill={d.color} opacity={0.9} />)}
-                </ScatterChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 10 }}>
-            {bubbleData.map(d => (
-              <div key={d.brand} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 9, height: 9, borderRadius: '50%', background: d.color, boxShadow: d.color === N ? `0 0 6px ${N}` : 'none' }} />
-                <span style={{ fontSize: 11, color: W7, fontWeight: 600 }}>{d.brand}</span>
-              </div>
-            ))}
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: 12 }}>
-              <span style={{ fontSize: 10, color: `${N}80` }}>↘ Ideal: ↑ margem + ↓ giro</span>
-              <span style={{ fontSize: 10, color: `${RED}80` }}>↖ Crítico: ↓ margem + ↑ giro</span>
-            </div>
-          </div>
-        </Panel>
-      )}
+      {/* ── Semáforo de Pátio — full width ───────────────────────────────── */}
+      <Panel>
+        <SectionTitle sub="Clique em uma faixa para filtrar a tabela de análise abaixo">Semáforo de Pátio</SectionTitle>
+        <PatioSemaphore available={available} onFilter={setPatioFilter} activeFilter={patioFilter} />
+        {patioFilter && (
+          <button onClick={() => setPatioFilter(null)}
+            style={{ marginTop: 12, fontSize: 11, color: W4, background: W1, border: `1px solid ${CARD_BDR}`, borderRadius: 7, padding: '5px 12px', cursor: 'pointer', fontWeight: 600 }}>
+            × Limpar filtro
+          </button>
+        )}
+      </Panel>
+
+      {/* ── Desempenho por Marca — cards simples ─────────────────────────── */}
+      {brandCards.length > 0 && <BrandCards brands={brandCards} avgMarginRef={avgMargin} />}
 
       {/* ── Ranking de Urgência ──────────────────────────────────────────── */}
       {urgency.length > 0 && (
