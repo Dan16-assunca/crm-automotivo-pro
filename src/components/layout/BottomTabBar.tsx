@@ -1,15 +1,16 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Users, Car, Columns3, MessageCircle } from 'lucide-react'
+import { LayoutDashboard, Users, Car, Columns3, MessageCircle, TrendingUp } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
 import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import { useAuthStore } from '@/store/authStore'
 
 const TABS = [
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Início'   },
-  { to: '/leads',     icon: Users,           label: 'Leads'    },
-  { to: '/estoque',   icon: Car,             label: 'Estoque'  },
-  { to: '/pipeline',  icon: Columns3,        label: 'Pipeline' },
-  { to: '/whatsapp',  icon: MessageCircle,   label: 'Chat'     },
+  { to: '/dashboard',    icon: LayoutDashboard, label: 'Início'      },
+  { to: '/leads',        icon: Users,           label: 'Leads'       },
+  { to: '/estoque',      icon: Car,             label: 'Estoque'     },
+  { to: '/inteligencia', icon: TrendingUp,      label: 'Inteligência', roles: ['admin','manager'] as string[] },
+  { to: '/pipeline',     icon: Columns3,        label: 'Pipeline'    },
+  { to: '/whatsapp',     icon: MessageCircle,   label: 'Chat'        },
 ]
 
 async function hapticTap() {
@@ -22,6 +23,8 @@ export function BottomTabBar() {
   const location = useLocation()
   const { user } = useAuthStore()
   if (!user) return null
+
+  const visibleTabs = TABS.filter(t => !t.roles || t.roles.includes(user.role ?? ''))
 
   return (
     <nav
@@ -40,7 +43,7 @@ export function BottomTabBar() {
         zIndex:          100,
       }}
     >
-      {TABS.map(({ to, icon: Icon, label }) => {
+      {visibleTabs.map(({ to, icon: Icon, label }) => {
         const isActive = location.pathname === to ||
           (to !== '/dashboard' && location.pathname.startsWith(to))
 

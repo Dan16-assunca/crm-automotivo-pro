@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import { useQuery } from '@tanstack/react-query'
 import {
   AlertTriangle, TrendingDown, Clock, DollarSign, Zap,
@@ -237,8 +238,8 @@ const SEMAFORO = [
   { label: '+60d',   min: 61, max: Infinity,  color: RED,    bg: 'rgba(239,68,68,.10)',        bdr: 'rgba(239,68,68,.35)' },
 ]
 
-function PatioSemaphore({ available, onFilter, activeFilter }: {
-  available: Vehicle[]; onFilter: (b: string | null) => void; activeFilter: string | null
+function PatioSemaphore({ available, onFilter, activeFilter, mob = false }: {
+  available: Vehicle[]; onFilter: (b: string | null) => void; activeFilter: string | null; mob?: boolean
 }) {
   const bands = SEMAFORO.map(s => {
     const vs = available.filter(v => { const d = v.days_in_stock ?? 0; return d >= s.min && d <= s.max })
@@ -246,7 +247,7 @@ function PatioSemaphore({ available, onFilter, activeFilter }: {
   })
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: mob ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 10 }}>
       {bands.map(b => {
         const isActive = activeFilter === b.label
         return (
@@ -426,6 +427,7 @@ function DaysBadge({ days }: { days: number }) {
 export default function InventoryIntelligence() {
   const { store } = useAuthStore()
   const storeId = store?.id ?? ''
+  const mob = useIsMobile()
 
   const [patioFilter, setPatioFilter]         = useState<string | null>(null)
   const [expandedRow, setExpandedRow]         = useState<string | null>(null)
@@ -551,7 +553,7 @@ export default function InventoryIntelligence() {
       )}
 
       {/* ── 6 KPIs ──────────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: mob ? 'repeat(2, 1fr)' : 'repeat(6, 1fr)', gap: 10 }}>
         <KPICard label="Capital imobilizado" icon={<DollarSign size={16} />}
           value={formatCurrency(totalValue)} sub="valor de venda" color={W} accent />
 
@@ -593,47 +595,86 @@ export default function InventoryIntelligence() {
       {urgency.length > 0 && (
         <Panel>
           <SectionTitle sub="Ordenado por custo acumulado — maior perda diária × tempo no estoque">Ranking de Urgência de Venda</SectionTitle>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${CARD_BDR}` }}>
-                  {['#','Veículo','Dias','Perda est./dia','Preço atual','vs FIPE','Ação'].map(h => (
-                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: W4, textTransform: 'uppercase', letterSpacing: '.08em', whiteSpace: 'nowrap' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {urgency.map((v, idx) => (
-                  <tr key={v.id} style={{ borderBottom: `1px solid ${W1}` }}
-                    onMouseEnter={e => (e.currentTarget.style.background = W1)}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <td style={{ padding: '10px 12px', color: W4, fontWeight: 800, fontSize: 13 }}>{idx + 1}</td>
-                    <td style={{ padding: '10px 12px' }}>
-                      <p style={{ fontWeight: 700, color: W, fontSize: 13 }}>{v.brand} {v.model}</p>
-                      {v.version && <p style={{ fontSize: 10, color: W4, marginTop: 1 }}>{v.version} · {v.year_model}</p>}
-                    </td>
-                    <td style={{ padding: '10px 12px' }}><DaysBadge days={v.days_in_stock ?? 0} /></td>
-                    <td style={{ padding: '10px 12px', color: RED, fontWeight: 700, fontFamily: 'var(--fm)' }}>
-                      -{formatCurrency(v.perdaDia)}/d
-                    </td>
-                    <td style={{ padding: '10px 12px', color: N, fontFamily: 'var(--fm)', fontWeight: 800 }}>
-                      {formatCurrency(v.sale_price ?? 0)}
-                    </td>
-                    <td style={{ padding: '10px 12px' }}><FipeBadge fipe={v.fipe} /></td>
-                    <td style={{ padding: '10px 12px' }}>
-                      <button onClick={() => setOfferVehicle(v)}
-                        style={{ fontSize: 11, fontWeight: 700, padding: '5px 12px', borderRadius: 7, border: `1px solid ${NEON_BDR}`, background: NEON_DIM, color: N, cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all .15s' }}
-                        onMouseEnter={e => { e.currentTarget.style.background = `${N}25` }}
-                        onMouseLeave={e => { e.currentTarget.style.background = NEON_DIM }}>
-                        Criar oferta
-                      </button>
-                    </td>
+
+          {mob ? (
+            /* ── Mobile: cards empilhados ── */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {urgency.map((v, idx) => (
+                <div key={v.id} style={{ background: W1, borderRadius: 12, border: `1px solid ${CARD_BDR}`, padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                        <span style={{ fontSize: 11, fontWeight: 900, color: W4 }}>#{idx + 1}</span>
+                        <p style={{ fontSize: 14, fontWeight: 800, color: W }}>{v.brand} {v.model}</p>
+                      </div>
+                      {v.version && <p style={{ fontSize: 11, color: W4 }}>{v.version} · {v.year_model}</p>}
+                    </div>
+                    <DaysBadge days={v.days_in_stock ?? 0} />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+                    <div style={{ background: CARD_BG, borderRadius: 8, padding: '8px 10px' }}>
+                      <p style={{ fontSize: 10, color: W4, marginBottom: 3 }}>Preço atual</p>
+                      <p style={{ fontSize: 14, fontWeight: 800, color: N, fontFamily: 'var(--fm)' }}>{formatCurrency(v.sale_price ?? 0)}</p>
+                    </div>
+                    <div style={{ background: CARD_BG, borderRadius: 8, padding: '8px 10px' }}>
+                      <p style={{ fontSize: 10, color: W4, marginBottom: 3 }}>Perda est./dia</p>
+                      <p style={{ fontSize: 14, fontWeight: 800, color: RED, fontFamily: 'var(--fm)' }}>-{formatCurrency(v.perdaDia)}</p>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <FipeBadge fipe={v.fipe} />
+                    <button onClick={() => setOfferVehicle(v)}
+                      style={{ fontSize: 12, fontWeight: 700, padding: '8px 16px', borderRadius: 8, border: `1px solid ${NEON_BDR}`, background: NEON_DIM, color: N, cursor: 'pointer' }}>
+                      Criar oferta
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* ── Desktop: tabela ── */
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${CARD_BDR}` }}>
+                    {['#','Veículo','Dias','Perda est./dia','Preço atual','vs FIPE','Ação'].map(h => (
+                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: W4, textTransform: 'uppercase', letterSpacing: '.08em', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {urgency.map((v, idx) => (
+                    <tr key={v.id} style={{ borderBottom: `1px solid ${W1}` }}
+                      onMouseEnter={e => (e.currentTarget.style.background = W1)}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <td style={{ padding: '10px 12px', color: W4, fontWeight: 800, fontSize: 13 }}>{idx + 1}</td>
+                      <td style={{ padding: '10px 12px' }}>
+                        <p style={{ fontWeight: 700, color: W, fontSize: 13 }}>{v.brand} {v.model}</p>
+                        {v.version && <p style={{ fontSize: 10, color: W4, marginTop: 1 }}>{v.version} · {v.year_model}</p>}
+                      </td>
+                      <td style={{ padding: '10px 12px' }}><DaysBadge days={v.days_in_stock ?? 0} /></td>
+                      <td style={{ padding: '10px 12px', color: RED, fontWeight: 700, fontFamily: 'var(--fm)' }}>
+                        -{formatCurrency(v.perdaDia)}/d
+                      </td>
+                      <td style={{ padding: '10px 12px', color: N, fontFamily: 'var(--fm)', fontWeight: 800 }}>
+                        {formatCurrency(v.sale_price ?? 0)}
+                      </td>
+                      <td style={{ padding: '10px 12px' }}><FipeBadge fipe={v.fipe} /></td>
+                      <td style={{ padding: '10px 12px' }}>
+                        <button onClick={() => setOfferVehicle(v)}
+                          style={{ fontSize: 11, fontWeight: 700, padding: '5px 12px', borderRadius: 7, border: `1px solid ${NEON_BDR}`, background: NEON_DIM, color: N, cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all .15s' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = `${N}25` }}
+                          onMouseLeave={e => { e.currentTarget.style.background = NEON_DIM }}>
+                          Criar oferta
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Panel>
       )}
 
@@ -653,93 +694,163 @@ export default function InventoryIntelligence() {
             </button>
           )}
         </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${CARD_BDR}` }}>
-                {['','Veículo','Ano','KM','Compra','Venda','Margem','Perda/dia','vs FIPE','Dias'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: W4, textTransform: 'uppercase', letterSpacing: '.08em', whiteSpace: 'nowrap' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {tableVehicles.map(v => {
-                const margin = v.sale_price && v.purchase_price
-                  ? Math.round(((v.sale_price - v.purchase_price) / v.sale_price) * 100 * 10) / 10 : null
-                const dias    = v.days_in_stock ?? 0
-                const perdaDia = calcPerdaDia(v)
-                const fipe    = calcFipeVs(v)
-                const isExp   = expandedRow === v.id
-                return (
-                  <>
-                    <tr key={v.id} style={{ borderBottom: `1px solid ${W1}`, cursor: 'pointer', transition: 'background .12s' }}
-                      onClick={() => setExpandedRow(isExp ? null : v.id)}
-                      onMouseEnter={e => (e.currentTarget.style.background = W1)}
-                      onMouseLeave={e => (e.currentTarget.style.background = isExp ? `${N}05` : 'transparent')}
-                    >
-                      <td style={{ padding: '10px 12px', color: W4 }}>
-                        {isExp ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                      </td>
-                      <td style={{ padding: '10px 12px' }}>
-                        <p style={{ fontWeight: 700, color: W }}>{v.brand} {v.model}</p>
-                        {v.version && <p style={{ fontSize: 10, color: W4, marginTop: 1 }}>{v.version}</p>}
-                      </td>
-                      <td style={{ padding: '10px 12px', color: W7 }}>{v.year_model ?? '—'}</td>
-                      <td style={{ padding: '10px 12px', color: W7, fontFamily: 'var(--fm)' }}>{v.km?.toLocaleString('pt-BR') ?? '—'}</td>
-                      <td style={{ padding: '10px 12px', color: W7, fontFamily: 'var(--fm)' }}>{v.purchase_price ? formatCurrency(v.purchase_price) : '—'}</td>
-                      <td style={{ padding: '10px 12px', color: N, fontFamily: 'var(--fm)', fontWeight: 800 }}>{formatCurrency(v.sale_price ?? 0)}</td>
-                      <td style={{ padding: '10px 12px', fontWeight: 800, color: margin !== null ? (margin >= 15 ? N : margin >= 8 ? YELLOW : RED) : W4 }}>
-                        {margin !== null ? `${margin}%` : '—'}
-                      </td>
-                      <td style={{ padding: '10px 12px', color: perdaDia > 0 ? RED : W4, fontFamily: 'var(--fm)', fontWeight: 600 }}>
-                        {perdaDia > 0 ? `-${formatCurrency(perdaDia)}` : '—'}
-                      </td>
-                      <td style={{ padding: '10px 12px' }}><FipeBadge fipe={fipe} /></td>
-                      <td style={{ padding: '10px 12px' }}><DaysBadge days={dias} /></td>
-                    </tr>
-                    {isExp && (
-                      <tr key={`${v.id}-exp`} style={{ borderBottom: `1px solid ${CARD_BDR}` }}>
-                        <td colSpan={10} style={{ padding: '0 12px 16px 36px', background: `${N}04` }}>
-                          <div style={{ display: 'flex', gap: 12, paddingTop: 12 }}>
-                            <div style={{ flex: 1, background: W1, borderRadius: 10, padding: '12px 16px', border: `1px solid ${CARD_BDR}` }}>
-                              <p style={{ fontSize: 10, fontWeight: 800, color: W4, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>Informações</p>
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                                {[['Cor', v.color],['Combustível', v.fuel],['Câmbio', v.transmission],['Placa', v.plate]].map(([k, val]) => (
-                                  <p key={k} style={{ fontSize: 12, color: W7 }}><span style={{ color: W4 }}>{k}: </span>{val ?? '—'}</p>
-                                ))}
-                              </div>
-                            </div>
-                            <div style={{ flex: 1, background: W1, borderRadius: 10, padding: '12px 16px', border: `1px solid ${CARD_BDR}` }}>
-                              <p style={{ fontSize: 10, fontWeight: 800, color: W4, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>Análise Financeira</p>
-                              {v.fipe_price && <p style={{ fontSize: 12, color: W7, marginBottom: 4 }}>FIPE: <strong style={{ color: W }}>{formatCurrency(v.fipe_price)}</strong></p>}
-                              {perdaDia > 0 && <p style={{ fontSize: 12, color: W7, marginBottom: 4 }}>Perda acum. est.: <strong style={{ color: RED }}>{formatCurrency(perdaDia * (v.days_in_stock ?? 0))}</strong></p>}
-                              {margin !== null && <p style={{ fontSize: 12, color: W7 }}>Margem bruta: <strong style={{ color: margin >= 15 ? N : YELLOW }}>{margin}%</strong></p>}
-                            </div>
-                            <button onClick={() => setOfferVehicle(v)}
-                              style={{ alignSelf: 'center', fontSize: 12, fontWeight: 800, padding: '10px 16px', borderRadius: 9, border: `1px solid ${NEON_BDR}`, background: NEON_DIM, color: N, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                              Criar ação de venda
-                            </button>
-                          </div>
+        {mob ? (
+          /* ── Mobile: cards expansíveis ── */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {tableVehicles.length === 0 && (
+              <p style={{ textAlign: 'center', padding: '28px 0', color: W4, fontSize: 13 }}>
+                {patioFilter ? `Nenhum veículo na faixa ${patioFilter}` : 'Nenhum veículo disponível'}
+              </p>
+            )}
+            {tableVehicles.map(v => {
+              const margin   = v.sale_price && v.purchase_price ? Math.round(((v.sale_price - v.purchase_price) / v.sale_price) * 100 * 10) / 10 : null
+              const dias     = v.days_in_stock ?? 0
+              const perdaDia = calcPerdaDia(v)
+              const fipe     = calcFipeVs(v)
+              const isExp    = expandedRow === v.id
+              const mc       = margin !== null ? (margin >= 15 ? N : margin >= 8 ? YELLOW : RED) : W4
+              return (
+                <div key={v.id} style={{ background: W1, borderRadius: 12, border: `1px solid ${isExp ? NEON_BDR : CARD_BDR}`, overflow: 'hidden', transition: 'border-color .15s' }}>
+                  {/* Row header */}
+                  <div onClick={() => setExpandedRow(isExp ? null : v.id)}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', cursor: 'pointer' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 14, fontWeight: 800, color: W, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.brand} {v.model}</p>
+                      {v.version && <p style={{ fontSize: 11, color: W4, marginTop: 2 }}>{v.version} · {v.year_model}</p>}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, marginLeft: 12 }}>
+                      <DaysBadge days={dias} />
+                      <span style={{ color: W4 }}>{isExp ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
+                    </div>
+                  </div>
+                  {/* Resumo sempre visível */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1, borderTop: `1px solid ${CARD_BDR}` }}>
+                    {[
+                      { l: 'Venda', v: formatCurrency(v.sale_price ?? 0), c: N },
+                      { l: 'Margem', v: margin !== null ? `${margin}%` : '—', c: mc },
+                      { l: 'Perda/dia', v: perdaDia > 0 ? `-${formatCurrency(perdaDia)}` : '—', c: perdaDia > 0 ? RED : W4 },
+                    ].map(item => (
+                      <div key={item.l} style={{ padding: '10px 14px', background: CARD_BG }}>
+                        <p style={{ fontSize: 10, color: W4, marginBottom: 3 }}>{item.l}</p>
+                        <p style={{ fontSize: 13, fontWeight: 800, color: item.c, fontFamily: 'var(--fm)' }}>{item.v}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Expansão */}
+                  {isExp && (
+                    <div style={{ padding: '14px 16px', borderTop: `1px solid ${CARD_BDR}`, background: `${N}04` }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+                        {[['Ano', String(v.year_model ?? '—')],['KM', v.km?.toLocaleString('pt-BR') ?? '—'],['Compra', v.purchase_price ? formatCurrency(v.purchase_price) : '—'],['Cor', v.color ?? '—'],['Combustível', v.fuel ?? '—'],['Câmbio', v.transmission ?? '—']].map(([k, val]) => (
+                          <p key={k} style={{ fontSize: 12, color: W7 }}><span style={{ color: W4 }}>{k}: </span>{val}</p>
+                        ))}
+                      </div>
+                      {(v.fipe_price || perdaDia > 0 || margin !== null) && (
+                        <div style={{ background: W1, borderRadius: 10, padding: '10px 14px', border: `1px solid ${CARD_BDR}`, marginBottom: 12 }}>
+                          {v.fipe_price && <p style={{ fontSize: 12, color: W7, marginBottom: 3 }}>FIPE: <strong style={{ color: W }}>{formatCurrency(v.fipe_price)}</strong> <FipeBadge fipe={fipe} /></p>}
+                          {perdaDia > 0 && <p style={{ fontSize: 12, color: W7, marginBottom: 3 }}>Perda acum.: <strong style={{ color: RED }}>{formatCurrency(perdaDia * dias)}</strong></p>}
+                          {margin !== null && <p style={{ fontSize: 12, color: W7 }}>Margem bruta: <strong style={{ color: mc }}>{margin}%</strong></p>}
+                        </div>
+                      )}
+                      <button onClick={() => setOfferVehicle(v)}
+                        style={{ width: '100%', fontSize: 13, fontWeight: 800, padding: '12px', borderRadius: 9, border: `1px solid ${NEON_BDR}`, background: NEON_DIM, color: N, cursor: 'pointer' }}>
+                        Criar ação de venda
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          /* ── Desktop: tabela ── */
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${CARD_BDR}` }}>
+                  {['','Veículo','Ano','KM','Compra','Venda','Margem','Perda/dia','vs FIPE','Dias'].map(h => (
+                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: W4, textTransform: 'uppercase', letterSpacing: '.08em', whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {tableVehicles.map(v => {
+                  const margin = v.sale_price && v.purchase_price
+                    ? Math.round(((v.sale_price - v.purchase_price) / v.sale_price) * 100 * 10) / 10 : null
+                  const dias    = v.days_in_stock ?? 0
+                  const perdaDia = calcPerdaDia(v)
+                  const fipe    = calcFipeVs(v)
+                  const isExp   = expandedRow === v.id
+                  return (
+                    <>
+                      <tr key={v.id} style={{ borderBottom: `1px solid ${W1}`, cursor: 'pointer', transition: 'background .12s' }}
+                        onClick={() => setExpandedRow(isExp ? null : v.id)}
+                        onMouseEnter={e => (e.currentTarget.style.background = W1)}
+                        onMouseLeave={e => (e.currentTarget.style.background = isExp ? `${N}05` : 'transparent')}
+                      >
+                        <td style={{ padding: '10px 12px', color: W4 }}>
+                          {isExp ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                         </td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <p style={{ fontWeight: 700, color: W }}>{v.brand} {v.model}</p>
+                          {v.version && <p style={{ fontSize: 10, color: W4, marginTop: 1 }}>{v.version}</p>}
+                        </td>
+                        <td style={{ padding: '10px 12px', color: W7 }}>{v.year_model ?? '—'}</td>
+                        <td style={{ padding: '10px 12px', color: W7, fontFamily: 'var(--fm)' }}>{v.km?.toLocaleString('pt-BR') ?? '—'}</td>
+                        <td style={{ padding: '10px 12px', color: W7, fontFamily: 'var(--fm)' }}>{v.purchase_price ? formatCurrency(v.purchase_price) : '—'}</td>
+                        <td style={{ padding: '10px 12px', color: N, fontFamily: 'var(--fm)', fontWeight: 800 }}>{formatCurrency(v.sale_price ?? 0)}</td>
+                        <td style={{ padding: '10px 12px', fontWeight: 800, color: margin !== null ? (margin >= 15 ? N : margin >= 8 ? YELLOW : RED) : W4 }}>
+                          {margin !== null ? `${margin}%` : '—'}
+                        </td>
+                        <td style={{ padding: '10px 12px', color: perdaDia > 0 ? RED : W4, fontFamily: 'var(--fm)', fontWeight: 600 }}>
+                          {perdaDia > 0 ? `-${formatCurrency(perdaDia)}` : '—'}
+                        </td>
+                        <td style={{ padding: '10px 12px' }}><FipeBadge fipe={fipe} /></td>
+                        <td style={{ padding: '10px 12px' }}><DaysBadge days={dias} /></td>
                       </tr>
-                    )}
-                  </>
-                )
-              })}
-            </tbody>
-          </table>
-          {tableVehicles.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '36px 0', color: W4, fontSize: 13 }}>
-              {patioFilter ? `Nenhum veículo na faixa ${patioFilter}` : 'Nenhum veículo disponível'}
-            </div>
-          )}
-        </div>
+                      {isExp && (
+                        <tr key={`${v.id}-exp`} style={{ borderBottom: `1px solid ${CARD_BDR}` }}>
+                          <td colSpan={10} style={{ padding: '0 12px 16px 36px', background: `${N}04` }}>
+                            <div style={{ display: 'flex', gap: 12, paddingTop: 12 }}>
+                              <div style={{ flex: 1, background: W1, borderRadius: 10, padding: '12px 16px', border: `1px solid ${CARD_BDR}` }}>
+                                <p style={{ fontSize: 10, fontWeight: 800, color: W4, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>Informações</p>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                                  {[['Cor', v.color],['Combustível', v.fuel],['Câmbio', v.transmission],['Placa', v.plate]].map(([k, val]) => (
+                                    <p key={k} style={{ fontSize: 12, color: W7 }}><span style={{ color: W4 }}>{k}: </span>{val ?? '—'}</p>
+                                  ))}
+                                </div>
+                              </div>
+                              <div style={{ flex: 1, background: W1, borderRadius: 10, padding: '12px 16px', border: `1px solid ${CARD_BDR}` }}>
+                                <p style={{ fontSize: 10, fontWeight: 800, color: W4, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>Análise Financeira</p>
+                                {v.fipe_price && <p style={{ fontSize: 12, color: W7, marginBottom: 4 }}>FIPE: <strong style={{ color: W }}>{formatCurrency(v.fipe_price)}</strong></p>}
+                                {perdaDia > 0 && <p style={{ fontSize: 12, color: W7, marginBottom: 4 }}>Perda acum. est.: <strong style={{ color: RED }}>{formatCurrency(perdaDia * (v.days_in_stock ?? 0))}</strong></p>}
+                                {margin !== null && <p style={{ fontSize: 12, color: W7 }}>Margem bruta: <strong style={{ color: margin >= 15 ? N : YELLOW }}>{margin}%</strong></p>}
+                              </div>
+                              <button onClick={() => setOfferVehicle(v)}
+                                style={{ alignSelf: 'center', fontSize: 12, fontWeight: 800, padding: '10px 16px', borderRadius: 9, border: `1px solid ${NEON_BDR}`, background: NEON_DIM, color: N, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                Criar ação de venda
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  )
+                })}
+              </tbody>
+            </table>
+            {tableVehicles.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '36px 0', color: W4, fontSize: 13 }}>
+                {patioFilter ? `Nenhum veículo na faixa ${patioFilter}` : 'Nenhum veículo disponível'}
+              </div>
+            )}
+          </div>
+        )}
       </Panel>
 
       {/* ── Semáforo de Pátio ────────────────────────────────────────────── */}
       <Panel>
         <SectionTitle sub="Clique em uma faixa para filtrar a tabela de análise acima">Semáforo de Pátio</SectionTitle>
-        <PatioSemaphore available={available} onFilter={setPatioFilter} activeFilter={patioFilter} />
+        <PatioSemaphore available={available} onFilter={setPatioFilter} activeFilter={patioFilter} mob={mob} />
         {patioFilter && (
           <button onClick={() => setPatioFilter(null)}
             style={{ marginTop: 12, fontSize: 11, color: W4, background: W1, border: `1px solid ${CARD_BDR}`, borderRadius: 7, padding: '5px 12px', cursor: 'pointer', fontWeight: 600 }}>
@@ -749,9 +860,9 @@ export default function InventoryIntelligence() {
       </Panel>
 
       {/* ── Saúde do Estoque + Desempenho por Marca ─────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 14, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: mob ? '1fr' : 'auto 1fr', gap: 14, alignItems: 'start' }}>
         {/* Saúde — coluna compacta à esquerda */}
-        <Panel style={{ background: `linear-gradient(135deg, rgba(57,255,20,.06) 0%, rgba(255,255,255,.03) 60%)`, border: `1px solid ${NEON_BDR}`, minWidth: 280 }}>
+        <Panel style={{ background: `linear-gradient(135deg, rgba(57,255,20,.06) 0%, rgba(255,255,255,.03) 60%)`, border: `1px solid ${NEON_BDR}`, minWidth: mob ? 'unset' : 280 }}>
           <p style={{ fontSize: 11, fontWeight: 800, color: W4, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 12 }}>Saúde do Estoque</p>
           <div style={{ display: 'flex', justifyContent: 'center' }}>
             <HealthGauge score={healthScore} />
@@ -799,7 +910,7 @@ export default function InventoryIntelligence() {
         <p style={{ fontSize: 10, fontWeight: 800, color: W4, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
           <Zap size={12} style={{ color: N }} /> Inteligência Preditiva
         </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: mob ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 10 }}>
           <KPICard label="Depreciação acumulada"
             value={formatCurrency([...depMap.values()].reduce((s, d) => s + d.accumulatedLossR$, 0))}
             sub="perda total no estoque" color={W7} icon={<TrendingDown size={16} />} />
@@ -875,7 +986,7 @@ export default function InventoryIntelligence() {
             </div>
             <button onClick={() => setSelectedVehicleId(null)} style={{ background: W1, border: `1px solid ${CARD_BDR}`, borderRadius: 8, color: W4, cursor: 'pointer', padding: '6px 8px', display: 'flex' }}><XIcon size={14} /></button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 18 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: mob ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 12, marginBottom: 18 }}>
             {[
               { label: 'Preço de compra',    value: formatCurrency(selDep.basePrice),             color: W },
               { label: 'Valor est. mercado', value: formatCurrency(selDep.estimatedCurrentValue), color: W },
