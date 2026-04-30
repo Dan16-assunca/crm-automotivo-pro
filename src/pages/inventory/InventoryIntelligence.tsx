@@ -179,22 +179,23 @@ function HealthGauge({ score }: { score: number }) {
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 
-function KPICard({ label, value, sub, color = N, icon, pulse = false, accent = false }: {
-  label: string; value: string; sub?: string; color?: string; icon: React.ReactNode; pulse?: boolean; accent?: boolean
+function KPICard({ label, value, sub, color = N, iconColor, icon, pulse = false, accent = false }: {
+  label: string; value: string; sub?: string; color?: string; iconColor?: string; icon: React.ReactNode; pulse?: boolean; accent?: boolean
 }) {
+  const ic = iconColor ?? color
   return (
     <div style={{
-      background: accent ? NEON_DIM : CARD_BG,
+      background: NEON_DIM,
       borderRadius: 12,
-      border: pulse ? `1px solid ${RED}` : accent ? `1px solid ${NEON_BDR}` : `1px solid ${CARD_BDR}`,
+      border: pulse ? `1px solid ${RED}` : `1px solid ${NEON_BDR}`,
       padding: '16px 18px',
       animation: pulse ? 'pulse-border 2s infinite' : 'none',
       position: 'relative', overflow: 'hidden',
     }}>
-      {accent && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${N}, transparent)` }} />}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${N}, transparent)` }} />
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
         <p style={{ fontSize: 10, fontWeight: 700, color: W4, textTransform: 'uppercase', letterSpacing: '.09em' }}>{label}</p>
-        <div style={{ color, opacity: accent ? 1 : .8 }}>{icon}</div>
+        <div style={{ color: ic }}>{icon}</div>
       </div>
       <p style={{ fontSize: 26, fontWeight: 900, color, lineHeight: 1, fontFamily: 'var(--fm)', letterSpacing: '-.01em' }}>{value}</p>
       {sub && <p style={{ fontSize: 11, color: W4, marginTop: 6, fontWeight: 500 }}>{sub}</p>}
@@ -552,23 +553,29 @@ export default function InventoryIntelligence() {
       {/* ── 6 KPIs ──────────────────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
         <KPICard label="Capital imobilizado" icon={<DollarSign size={16} />}
-          value={formatCurrency(totalValue)} sub="valor de venda" color={W} />
+          value={formatCurrency(totalValue)} sub="valor de venda" color={W} accent />
 
         <KPICard label="Giro médio" icon={<Clock size={16} />}
           value={`${avgDays}d`}
           sub={`meta ${PATIO_META_GIRO}d ${avgDays > PATIO_META_GIRO ? '⚠ acima' : '✓ dentro'}`}
-          color={avgDays > PATIO_META_GIRO ? RED : N}
-          accent={avgDays <= PATIO_META_GIRO} />
+          color={W}
+          iconColor={avgDays > PATIO_META_GIRO ? RED : N}
+          pulse={avgDays > PATIO_META_GIRO}
+          accent />
 
         <KPICard label="Parados +60d" icon={stalled.length > 0 ? <AlertTriangle size={16} /> : <CheckCircle size={16} />}
           value={String(stalled.length)}
           sub={stalled.length === 0 ? 'nenhum parado ✓' : `${Math.round((stalled.length / (available.length || 1)) * 100)}% do estoque`}
-          color={stalled.length > 0 ? RED : N}
-          pulse={stalled.length > 0} />
+          color={W}
+          iconColor={stalled.length > 0 ? RED : N}
+          pulse={stalled.length > 0}
+          accent />
 
         <KPICard label="Margem média" icon={<TrendingDown size={16} />}
           value={`${avgMargin}%`} sub={`meta 15% ${avgMargin >= 15 ? '✓' : '▼'}`}
-          color={avgMargin >= 15 ? N : avgMargin >= 8 ? YELLOW : RED} />
+          color={W}
+          iconColor={avgMargin >= 15 ? N : avgMargin >= 8 ? YELLOW : RED}
+          accent />
 
         <KPICard label="Lucro potencial" icon={<Zap size={16} />}
           value={formatCurrency(lucro)} sub="a realizar" color={N} accent />
@@ -577,7 +584,9 @@ export default function InventoryIntelligence() {
           icon={trend ? (trend.up ? <ArrowUp size={16} /> : <ArrowDown size={16} />) : <Activity size={16} />}
           value={trend ? `${trend.up ? '+' : '-'}${trend.pct}%` : '—'}
           sub={trend ? (trend.up ? 'vs mês anterior ↑' : 'vs mês anterior ↓') : 'sem dados anteriores'}
-          color={trend ? (trend.up ? N : RED) : W4} />
+          color={W}
+          iconColor={trend ? (trend.up ? N : RED) : W4}
+          accent />
       </div>
 
       {/* ── SAÚDE DO ESTOQUE — destaque full-width ───────────────────────── */}
