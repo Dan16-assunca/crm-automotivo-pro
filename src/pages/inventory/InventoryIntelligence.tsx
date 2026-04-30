@@ -589,52 +589,7 @@ export default function InventoryIntelligence() {
           accent />
       </div>
 
-      {/* ── SAÚDE DO ESTOQUE — destaque full-width ───────────────────────── */}
-      <Panel style={{ background: `linear-gradient(135deg, rgba(57,255,20,.06) 0%, rgba(255,255,255,.03) 60%)`, border: `1px solid ${NEON_BDR}` }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 32, alignItems: 'center' }}>
-          {/* Gauge centralizado e grande */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingRight: 24, borderRight: `1px solid ${CARD_BDR}` }}>
-            <p style={{ fontSize: 11, fontWeight: 800, color: W4, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 12 }}>Saúde do Estoque</p>
-            <HealthGauge score={healthScore} />
-          </div>
-          {/* Breakdown dos critérios */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <p style={{ fontSize: 13, fontWeight: 700, color: W4, marginBottom: 2 }}>Como o score é calculado</p>
-            {[
-              { label: 'Veículos abaixo de 30 dias no estoque', pts: Math.min(40, Math.round((available.filter(v => (v.days_in_stock ?? 0) <= 30).length / (available.length || 1)) * 40)), max: 40, desc: `${available.filter(v => (v.days_in_stock ?? 0) <= 30).length} de ${available.length} veíc.` },
-              { label: 'Margem média vs meta de 15%', pts: Math.min(30, Math.round((avgMargin / 15) * 30)), max: 30, desc: `${avgMargin}% atual` },
-              { label: 'Nenhum veículo parado +60 dias', pts: stalled.length === 0 ? 30 : Math.max(0, 30 - stalled.length * 5), max: 30, desc: stalled.length === 0 ? 'Sem parados ✓' : `${stalled.length} parado${stalled.length > 1 ? 's' : ''}` },
-            ].map(c => {
-              const pct = (c.pts / c.max) * 100
-              const bc  = pct >= 70 ? N : pct >= 40 ? YELLOW : RED
-              return (
-                <div key={c.label}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 6 }}>
-                    <div>
-                      <p style={{ fontSize: 12, fontWeight: 700, color: W }}>{c.label}</p>
-                      <p style={{ fontSize: 11, color: W4, marginTop: 1 }}>{c.desc}</p>
-                    </div>
-                    <span style={{ fontSize: 15, fontWeight: 900, color: bc, fontFamily: 'var(--fm)', flexShrink: 0, marginLeft: 12 }}>{c.pts}<span style={{ fontSize: 11, color: W4, fontWeight: 600 }}>/{c.max}</span></span>
-                  </div>
-                  <div style={{ height: 7, background: 'rgba(255,255,255,.08)', borderRadius: 7, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${pct}%`, background: bc, borderRadius: 7, transition: 'width .6s cubic-bezier(.4,0,.2,1)', boxShadow: bc === N ? `0 0 10px ${N}70` : 'none' }} />
-                  </div>
-                </div>
-              )
-            })}
-            <div style={{ display: 'flex', gap: 16, marginTop: 4 }}>
-              {[{ c: N, l: '80–100 Saudável' }, { c: YELLOW, l: '60–79 Atenção' }, { c: RED, l: '0–59 Crítico' }].map(({ c, l }) => (
-                <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <div style={{ width: 9, height: 9, borderRadius: '50%', background: c, boxShadow: c === N ? `0 0 6px ${N}` : 'none' }} />
-                  <span style={{ fontSize: 11, color: W4, fontWeight: 600 }}>{l}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </Panel>
-
-      {/* ── Semáforo de Pátio — full width ───────────────────────────────── */}
+      {/* ── Semáforo de Pátio ────────────────────────────────────────────── */}
       <Panel>
         <SectionTitle sub="Clique em uma faixa para filtrar a tabela de análise abaixo">Semáforo de Pátio</SectionTitle>
         <PatioSemaphore available={available} onFilter={setPatioFilter} activeFilter={patioFilter} />
@@ -645,9 +600,6 @@ export default function InventoryIntelligence() {
           </button>
         )}
       </Panel>
-
-      {/* ── Desempenho por Marca — cards simples ─────────────────────────── */}
-      {brandCards.length > 0 && <BrandCards brands={brandCards} avgMarginRef={avgMargin} />}
 
       {/* ── Ranking de Urgência ──────────────────────────────────────────── */}
       {urgency.length > 0 && (
@@ -795,6 +747,52 @@ export default function InventoryIntelligence() {
           )}
         </div>
       </Panel>
+
+      {/* ── Saúde do Estoque + Desempenho por Marca ─────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 14, alignItems: 'start' }}>
+        {/* Saúde — coluna compacta à esquerda */}
+        <Panel style={{ background: `linear-gradient(135deg, rgba(57,255,20,.06) 0%, rgba(255,255,255,.03) 60%)`, border: `1px solid ${NEON_BDR}`, minWidth: 280 }}>
+          <p style={{ fontSize: 11, fontWeight: 800, color: W4, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 12 }}>Saúde do Estoque</p>
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <HealthGauge score={healthScore} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14 }}>
+            {[
+              { label: 'Veíc. abaixo de 30d', pts: Math.min(40, Math.round((available.filter(v => (v.days_in_stock ?? 0) <= 30).length / (available.length || 1)) * 40)), max: 40, desc: `${available.filter(v => (v.days_in_stock ?? 0) <= 30).length}/${available.length}` },
+              { label: 'Margem vs meta 15%',  pts: Math.min(30, Math.round((avgMargin / 15) * 30)), max: 30, desc: `${avgMargin}% atual` },
+              { label: 'Sem parados +60d',    pts: stalled.length === 0 ? 30 : Math.max(0, 30 - stalled.length * 5), max: 30, desc: stalled.length === 0 ? 'Nenhum ✓' : `${stalled.length} parado${stalled.length > 1 ? 's' : ''}` },
+            ].map(c => {
+              const pct = (c.pts / c.max) * 100
+              const bc  = pct >= 70 ? N : pct >= 40 ? YELLOW : RED
+              return (
+                <div key={c.label}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                    <div>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: W }}>{c.label}</p>
+                      <p style={{ fontSize: 10, color: W4 }}>{c.desc}</p>
+                    </div>
+                    <span style={{ fontSize: 14, fontWeight: 900, color: bc, fontFamily: 'var(--fm)', flexShrink: 0, marginLeft: 10 }}>{c.pts}<span style={{ fontSize: 10, color: W4 }}>/{c.max}</span></span>
+                  </div>
+                  <div style={{ height: 6, background: 'rgba(255,255,255,.08)', borderRadius: 6, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${pct}%`, background: bc, borderRadius: 6, boxShadow: bc === N ? `0 0 8px ${N}60` : 'none' }} />
+                  </div>
+                </div>
+              )
+            })}
+            <div style={{ display: 'flex', gap: 12, marginTop: 2, flexWrap: 'wrap' }}>
+              {[{ c: N, l: '≥80 Saudável' }, { c: YELLOW, l: '60–79 Atenção' }, { c: RED, l: '<60 Crítico' }].map(({ c, l }) => (
+                <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: c, boxShadow: c === N ? `0 0 5px ${N}` : 'none' }} />
+                  <span style={{ fontSize: 10, color: W4, fontWeight: 600 }}>{l}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Panel>
+
+        {/* Desempenho por marca — coluna direita */}
+        {brandCards.length > 0 && <BrandCards brands={brandCards} avgMarginRef={avgMargin} />}
+      </div>
 
       {/* ── Inteligência Preditiva (engines) ────────────────────────────── */}
       <div>
