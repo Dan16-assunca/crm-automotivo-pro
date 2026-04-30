@@ -3,8 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Search, Grid, List, Car, Clock, Edit, X,
-  ChevronLeft, ChevronRight, Camera, Trash2, Save, ImageIcon,
+  ChevronLeft, ChevronRight, Camera, Trash2, Save, ImageIcon, TrendingUp,
 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/Button'
@@ -770,7 +771,28 @@ export default function Inventory() {
       )}
 
       {isMobile && (
-        <p style={{ fontSize: 11, color: 'var(--t3)' }}>{total} veículo{total !== 1 ? 's' : ''}</p>
+        <>
+          <p style={{ fontSize: 11, color: 'var(--t3)' }}>{total} veículo{total !== 1 ? 's' : ''}</p>
+          {/* Banner de acesso rápido à Inteligência de Estoque */}
+          <Link to="/inteligencia" style={{ textDecoration: 'none' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: 'rgba(57,255,20,.08)', border: '1px solid rgba(57,255,20,.30)',
+              borderRadius: 12, padding: '12px 16px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 34, height: 34, borderRadius: 9, background: 'rgba(57,255,20,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <TrendingUp size={17} style={{ color: '#39ff14' }} />
+                </div>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: '#fff', margin: 0 }}>Inteligência de Estoque</p>
+                  <p style={{ fontSize: 11, color: 'rgba(255,255,255,.45)', marginTop: 1 }}>Ranking · margem · urgência · saúde</p>
+                </div>
+              </div>
+              <ChevronRight size={16} style={{ color: '#39ff14', flexShrink: 0 }} />
+            </div>
+          </Link>
+        </>
       )}
 
       {/* Filters row */}

@@ -8,7 +8,7 @@ const TABS = [
   { to: '/dashboard',    icon: LayoutDashboard, label: 'Início'      },
   { to: '/leads',        icon: Users,           label: 'Leads'       },
   { to: '/estoque',      icon: Car,             label: 'Estoque'     },
-  { to: '/inteligencia', icon: TrendingUp,      label: 'Inteligência', roles: ['admin','manager'] as string[] },
+  { to: '/inteligencia', icon: TrendingUp,      label: 'Intel. Est.', roles: ['admin','manager'] as string[] },
   { to: '/pipeline',     icon: Columns3,        label: 'Pipeline'    },
   { to: '/whatsapp',     icon: MessageCircle,   label: 'Chat'        },
 ]
