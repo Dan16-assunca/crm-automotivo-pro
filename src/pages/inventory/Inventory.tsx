@@ -606,7 +606,7 @@ function VehicleCard({ vehicle, onEdit }: { vehicle: Vehicle; onEdit: () => void
       >
         {photos.length > 0 ? (
           <>
-            <img src={thumbUrl(photos[photoIdx], 600)} alt={`${vehicle.brand} ${vehicle.model}`}
+            <img src={photos[photoIdx]} alt={`${vehicle.brand} ${vehicle.model}`}
               loading="lazy"
               style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform .3s' }}
               onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.04)')}
