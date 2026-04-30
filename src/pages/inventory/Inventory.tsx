@@ -74,6 +74,21 @@ const lblS: React.CSSProperties = {
   display: 'block', marginBottom: 5,
 }
 
+// ─── Helpers de número no formato BR ─────────────────────────────────────────
+// Aceita "58500", "58.500", "58,500" → 58500
+function parseBRInt(s: string): number | null {
+  if (!s || !s.trim()) return null
+  const clean = s.replace(/\./g, '').replace(',', '.')
+  const n = parseInt(clean, 10)
+  return isNaN(n) ? null : n
+}
+function parseBRFloat(s: string): number | null {
+  if (!s || !s.trim()) return null
+  const clean = s.replace(/\./g, '').replace(',', '.')
+  const n = parseFloat(clean)
+  return isNaN(n) ? null : n
+}
+
 // ─── Vehicle Form Modal ───────────────────────────────────────────────────────
 function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onClose: () => void }) {
   const { store } = useAuthStore()
@@ -89,6 +104,7 @@ function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onCl
   const [uploading, setUploading] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // Form
   const [form, setForm] = useState({
@@ -217,19 +233,19 @@ function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onCl
         brand:           form.brand,
         model:           form.model,
         version:         form.version || null,
-        year_fabrication: form.year_fabrication ? parseInt(form.year_fabrication) : null,
-        year_model:      form.year_model ? parseInt(form.year_model) : null,
+        year_fabrication: parseBRInt(form.year_fabrication),
+        year_model:      parseBRInt(form.year_model),
         color:           form.color || null,
         plate:           form.plate || null,
-        km:              form.km ? parseInt(form.km) : null,
+        km:              parseBRInt(form.km),
         fuel:            form.fuel,
         transmission:    form.transmission,
         condition:       'used' as Vehicle['condition'],
         status:          form.status as Vehicle['status'],
-        purchase_price:  form.purchase_price ? parseFloat(form.purchase_price) : null,
-        sale_price:      form.sale_price ? parseFloat(form.sale_price) : null,
+        purchase_price:  parseBRFloat(form.purchase_price),
+        sale_price:      parseBRFloat(form.sale_price),
         promotional_price: null,
-        fipe_price:      form.fipe_price ? parseFloat(form.fipe_price) : null,
+        fipe_price:      parseBRFloat(form.fipe_price),
         purchase_date:   form.purchase_date || null,
         description:     form.description || null,
         photos,
@@ -246,10 +262,16 @@ function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onCl
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vehicles'] })
+      setSaveError(null)
       toast.success(isEdit ? 'Veículo atualizado!' : 'Veículo cadastrado!')
       onClose()
     },
-    onError: (e) => toast.error('Erro ao salvar', (e as Error).message),
+    onError: (e) => {
+      const msg = (e as { message?: string })?.message ?? String(e)
+      console.error('[VehicleForm] Erro ao salvar:', e)
+      setSaveError(msg)
+      toast.error('Erro ao salvar veículo', msg)
+    },
   })
 
   return (
@@ -558,18 +580,40 @@ function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onCl
           </div>
 
           {/* ── Footer ──────────────────────────────────────────────────── */}
-          <div style={{ padding: '12px 20px', borderTop: '1px solid var(--b)', display: 'flex', gap: 10, justifyContent: 'flex-end', flexShrink: 0 }}>
-            <button onClick={onClose} style={{ padding: '9px 20px', borderRadius: 8, border: '1px solid var(--b)', background: 'transparent', color: 'var(--t2)', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
-              Cancelar
-            </button>
-            <button
-              onClick={() => mut.mutate()}
-              disabled={!form.brand || !form.model || mut.isPending || uploading}
-              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 22px', borderRadius: 8, border: 'none', background: 'var(--neon)', color: '#000', fontSize: 12, fontWeight: 800, cursor: 'pointer', opacity: (!form.brand || !form.model || mut.isPending || uploading) ? 0.5 : 1 }}
-            >
-              <Save size={13} />
-              {uploading ? 'Enviando fotos...' : mut.isPending ? 'Salvando...' : isEdit ? 'Salvar veículo' : 'Cadastrar veículo'}
-            </button>
+          <div style={{ borderTop: '1px solid var(--b)', flexShrink: 0 }}>
+            {/* Erro inline */}
+            {saveError && (
+              <div style={{ padding: '10px 20px', background: 'rgba(239,68,68,.08)', borderBottom: '1px solid rgba(239,68,68,.25)', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <span style={{ color: '#ef4444', fontSize: 13, flexShrink: 0 }}>✕</span>
+                <div>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: '#ef4444', marginBottom: 2 }}>Erro ao salvar</p>
+                  <p style={{ fontSize: 11, color: 'var(--t2)' }}>{saveError}</p>
+                </div>
+              </div>
+            )}
+            {/* Aviso campos obrigatórios */}
+            {(!form.brand || !form.model) && (
+              <div style={{ padding: '6px 20px', background: 'rgba(234,179,8,.06)' }}>
+                <p style={{ fontSize: 11, color: '#eab308' }}>
+                  {!form.brand && !form.model ? '⚠ Preencha Marca e Modelo para salvar'
+                    : !form.brand ? '⚠ Preencha a Marca para salvar'
+                    : '⚠ Preencha o Modelo para salvar'}
+                </p>
+              </div>
+            )}
+            <div style={{ padding: '12px 20px', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={onClose} style={{ padding: '9px 20px', borderRadius: 8, border: '1px solid var(--b)', background: 'transparent', color: 'var(--t2)', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
+                Cancelar
+              </button>
+              <button
+                onClick={() => { setSaveError(null); mut.mutate() }}
+                disabled={!form.brand || !form.model || mut.isPending || uploading}
+                style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 22px', borderRadius: 8, border: 'none', background: 'var(--neon)', color: '#000', fontSize: 12, fontWeight: 800, cursor: 'pointer', opacity: (!form.brand || !form.model || mut.isPending || uploading) ? 0.5 : 1 }}
+              >
+                <Save size={13} />
+                {uploading ? 'Enviando fotos...' : mut.isPending ? 'Salvando...' : isEdit ? 'Salvar veículo' : 'Cadastrar veículo'}
+              </button>
+            </div>
           </div>
         </motion.div>
       </motion.div>
@@ -740,6 +784,7 @@ export default function Inventory() {
         .select('*')
         .eq('store_id', store!.id)
         .order('created_at', { ascending: false })
+        .limit(500)
       if (debouncedSearch) query = query.or(`brand.ilike.%${debouncedSearch}%,model.ilike.%${debouncedSearch}%,plate.ilike.%${debouncedSearch}%`)
       if (filterBrand)  query = query.eq('brand', filterBrand)
       if (filterStatus) query = query.eq('status', filterStatus)
