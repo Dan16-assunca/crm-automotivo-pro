@@ -16,6 +16,42 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 import { useVehicleCamera } from '@/hooks/useVehicleCamera'
 import type { Vehicle } from '@/types'
 
+// ─── Image helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Compresses an image File using canvas before upload.
+ * Resizes to maxWidth preserving aspect ratio, JPEG quality 0.82.
+ */
+async function compressImage(file: File, maxWidth = 1280, quality = 0.82): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const scale = Math.min(1, maxWidth / img.width)
+      const w = Math.round(img.width  * scale)
+      const h = Math.round(img.height * scale)
+      const canvas = document.createElement('canvas')
+      canvas.width  = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(img, 0, 0, w, h)
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('toBlob failed')), 'image/jpeg', quality)
+    }
+    img.onerror = reject
+    img.src = url
+  })
+}
+
+/**
+ * Returns a Supabase Storage thumbnail URL (via image transform API).
+ * Falls back to original URL if it's not a Supabase storage URL.
+ */
+function thumbUrl(url: string, width = 400): string {
+  if (!url.includes('/storage/v1/object/public/')) return url
+  return url.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/') + `?width=${width}&quality=75`
+}
+
 // ─── Form constants ───────────────────────────────────────────────────────────
 const FUEL_OPTIONS = ['Flex', 'Gasolina', 'Álcool', 'Diesel', 'Elétrico', 'Híbrido', 'GNV']
 const TRANSMISSION_OPTIONS = ['Automático', 'Manual', 'CVT', 'Automatizado']
@@ -89,16 +125,17 @@ function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onCl
     const arr = Array.from(files).filter(f => f.type.startsWith('image/')).slice(0, 10 - photos.length)
     if (!arr.length) return
     setUploading(true)
-    const newUrls: string[] = []
     try {
-      for (const file of arr) {
-        const ext  = file.name.split('.').pop() ?? 'jpg'
-        const path = `${store!.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-        const { error } = await supabase.storage.from('vehicle-photos').upload(path, file, { upsert: false })
-        if (error) { toast.error('Erro ao enviar foto', error.message); continue }
+      // Compress + upload all in parallel
+      const results = await Promise.all(arr.map(async file => {
+        const compressed = await compressImage(file)
+        const path = `${store!.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`
+        const { error } = await supabase.storage.from('vehicle-photos').upload(path, compressed, { contentType: 'image/jpeg', upsert: false })
+        if (error) { toast.error('Erro ao enviar foto', error.message); return null }
         const { data } = supabase.storage.from('vehicle-photos').getPublicUrl(path)
-        newUrls.push(data.publicUrl)
-      }
+        return data.publicUrl
+      }))
+      const newUrls = results.filter(Boolean) as string[]
       setPhotos(p => {
         const updated = [...p, ...newUrls]
         setPhotoIdx(clampIdx(updated, updated.length - 1))
@@ -112,17 +149,23 @@ function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onCl
   }
 
   // Captura via Capacitor Camera (nativo) ou galeria
+  const uploadBlob = async (blob: Blob) => {
+    const path = `${store!.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`
+    const compressed = blob.type === 'image/jpeg' && blob.size < 300_000 ? blob : await compressImage(new File([blob], 'photo.jpg', { type: 'image/jpeg' }))
+    const { error } = await supabase.storage.from('vehicle-photos').upload(path, compressed, { contentType: 'image/jpeg', upsert: false })
+    if (error) { toast.error('Erro ao enviar foto', error.message); return null }
+    const { data } = supabase.storage.from('vehicle-photos').getPublicUrl(path)
+    return data.publicUrl
+  }
+
   const handleCameraCapture = async () => {
     if (photos.length >= 10) return
     const photo = isNative ? await takePhoto() : await pickFromGallery()
     if (!photo) return
     setUploading(true)
     try {
-      const path = `${store!.id}/${Date.now()}.${photo.filename.split('.').pop() ?? 'jpg'}`
-      const { error } = await supabase.storage.from('vehicle-photos').upload(path, photo.blob, { upsert: false })
-      if (error) { toast.error('Erro ao enviar foto', error.message); return }
-      const { data } = supabase.storage.from('vehicle-photos').getPublicUrl(path)
-      setPhotos(p => { const updated = [...p, data.publicUrl]; setPhotoIdx(updated.length - 1); return updated })
+      const url = await uploadBlob(photo.blob)
+      if (url) setPhotos(p => { const updated = [...p, url]; setPhotoIdx(updated.length - 1); return updated })
     } catch (e) {
       toast.error('Erro ao enviar foto', (e as Error).message)
     } finally {
@@ -136,11 +179,8 @@ function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onCl
     if (!photo) return
     setUploading(true)
     try {
-      const path = `${store!.id}/${Date.now()}.${photo.filename.split('.').pop() ?? 'jpg'}`
-      const { error } = await supabase.storage.from('vehicle-photos').upload(path, photo.blob, { upsert: false })
-      if (error) { toast.error('Erro ao enviar foto', error.message); return }
-      const { data } = supabase.storage.from('vehicle-photos').getPublicUrl(path)
-      setPhotos(p => { const updated = [...p, data.publicUrl]; setPhotoIdx(updated.length - 1); return updated })
+      const url = await uploadBlob(photo.blob)
+      if (url) setPhotos(p => { const updated = [...p, url]; setPhotoIdx(updated.length - 1); return updated })
     } catch (e) {
       toast.error('Erro ao enviar foto', (e as Error).message)
     } finally {
@@ -566,7 +606,8 @@ function VehicleCard({ vehicle, onEdit }: { vehicle: Vehicle; onEdit: () => void
       >
         {photos.length > 0 ? (
           <>
-            <img src={photos[photoIdx]} alt={`${vehicle.brand} ${vehicle.model}`}
+            <img src={thumbUrl(photos[photoIdx], 600)} alt={`${vehicle.brand} ${vehicle.model}`}
+              loading="lazy"
               style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform .3s' }}
               onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.04)')}
               onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
