@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, Users, Download, ChevronRight, Columns3, Check } from 'lucide-react'
+import { Plus, Search, Users, Download, ChevronRight, Columns3, Check, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { useLeadPanelStore } from '@/store/leadPanelStore'
@@ -142,6 +142,40 @@ export default function Leads() {
   const [sheetOpen, setSheetOpen]     = useState(false)
   const [showColPicker, setShowColPicker] = useState(false)
   const colPickerRef = useRef<HTMLDivElement>(null)
+
+  // ── Seleção e exclusão ───────────────────────────────────────────────────────
+  const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set())
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  const toggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setConfirmDelete(false)
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    setConfirmDelete(false)
+    if (!leads?.length) return
+    setSelectedIds(prev =>
+      prev.size === leads.length ? new Set() : new Set(leads.map(l => l.id))
+    )
+  }
+
+  const deleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase.from('leads').update({ status: 'archived' }).in('id', ids)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      setSelectedIds(new Set())
+      setConfirmDelete(false)
+      queryClient.invalidateQueries({ queryKey: ['leads-list', store?.id] })
+    },
+  })
 
   // ── Colunas visíveis (persistido por store no localStorage) ─────────────────
   const storageKey = `leads_cols_${store?.id ?? 'default'}`
@@ -316,6 +350,39 @@ export default function Leads() {
           <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>{leads?.length ?? 0} leads encontrados</p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+
+          {/* ── Botão Excluir selecionados ── */}
+          {selectedIds.size > 0 && (
+            confirmDelete ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 11, color: 'var(--t2)' }}>
+                  Excluir {selectedIds.size} lead{selectedIds.size > 1 ? 's' : ''}?
+                </span>
+                <button
+                  onClick={() => deleteMutation.mutate([...selectedIds])}
+                  disabled={deleteMutation.isPending}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: 'rgba(239,68,68,.15)', border: '1px solid rgba(239,68,68,.4)', borderRadius: 7, color: '#f87171', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}
+                >
+                  {deleteMutation.isPending ? 'Excluindo...' : 'Confirmar'}
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  style={{ padding: '6px 10px', background: 'var(--el)', border: '1px solid var(--bs)', borderRadius: 7, color: 'var(--t2)', fontSize: 12, cursor: 'pointer' }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.3)', borderRadius: 7, color: '#f87171', fontSize: 12, cursor: 'pointer' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,.15)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,.08)' }}
+              >
+                <Trash2 size={12} /> Excluir {selectedIds.size} selecionado{selectedIds.size > 1 ? 's' : ''}
+              </button>
+            )
+          )}
 
           {/* ── Botão Exportar ── */}
           <button
@@ -498,6 +565,25 @@ export default function Leads() {
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: activeCols.length * 120 }}>
             <thead>
               <tr>
+                {/* Checkbox "selecionar todos" */}
+                <th style={{ padding: '8px 10px', width: 36, background: 'var(--el)', borderBottom: '1px solid var(--b)' }}>
+                  <div
+                    onClick={toggleSelectAll}
+                    style={{
+                      width: 16, height: 16, borderRadius: 4, cursor: 'pointer',
+                      border: `1.5px solid ${leads?.length && selectedIds.size === leads.length ? 'var(--neon)' : 'var(--b)'}`,
+                      background: leads?.length && selectedIds.size === leads.length ? 'var(--neon)' : 'transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >
+                    {leads?.length && selectedIds.size === leads.length
+                      ? <Check size={10} style={{ color: '#000' }} strokeWidth={3} />
+                      : selectedIds.size > 0
+                        ? <div style={{ width: 8, height: 2, background: 'var(--t2)', borderRadius: 1 }} />
+                        : null
+                    }
+                  </div>
+                </th>
                 {activeCols.map(col => (
                   <th key={col.key} style={{
                     padding: '8px 12px', textAlign: 'left',
@@ -517,26 +603,46 @@ export default function Leads() {
               {isLoading
                 ? [...Array(8)].map((_, i) => (
                     <tr key={i} style={{ borderBottom: '1px solid var(--bs)' }}>
+                      <td style={{ padding: '8px 10px' }}><Skeleton style={{ width: 16, height: 16, borderRadius: 4 }} /></td>
                       {activeCols.map((_, j) => (
                         <td key={j} style={{ padding: '8px 12px' }}><Skeleton style={{ height: 12, borderRadius: 4 }} /></td>
                       ))}
                     </tr>
                   ))
-                : leads?.map(lead => (
-                    <tr
-                      key={lead.id}
-                      onClick={() => openLeadPanel(lead.id)}
-                      style={{ borderBottom: '1px solid var(--bs)', cursor: 'pointer', background: 'transparent', transition: 'background .12s' }}
-                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--el)' }}
-                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-                    >
-                      {activeCols.map(col => (
-                        <td key={col.key} style={{ padding: '8px 12px', ...col.cellStyle }}>
-                          {col.render(lead)}
+                : leads?.map(lead => {
+                    const isSelected = selectedIds.has(lead.id)
+                    return (
+                      <tr
+                        key={lead.id}
+                        onClick={() => openLeadPanel(lead.id)}
+                        style={{
+                          borderBottom: '1px solid var(--bs)', cursor: 'pointer',
+                          background: isSelected ? 'rgba(57,255,20,.04)' : 'transparent',
+                          transition: 'background .12s',
+                        }}
+                        onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--el)' }}
+                        onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
+                      >
+                        {/* Checkbox da linha */}
+                        <td style={{ padding: '8px 10px', width: 36 }} onClick={e => toggleSelect(lead.id, e)}>
+                          <div style={{
+                            width: 16, height: 16, borderRadius: 4,
+                            border: `1.5px solid ${isSelected ? 'var(--neon)' : 'var(--b)'}`,
+                            background: isSelected ? 'var(--neon)' : 'transparent',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            flexShrink: 0, cursor: 'pointer',
+                          }}>
+                            {isSelected && <Check size={10} style={{ color: '#000' }} strokeWidth={3} />}
+                          </div>
                         </td>
-                      ))}
-                    </tr>
-                  ))
+                        {activeCols.map(col => (
+                          <td key={col.key} style={{ padding: '8px 12px', ...col.cellStyle }}>
+                            {col.render(lead)}
+                          </td>
+                        ))}
+                      </tr>
+                    )
+                  })
               }
             </tbody>
           </table>
