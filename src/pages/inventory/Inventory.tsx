@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Search, Grid, List, Car, Clock, Edit, X,
   ChevronLeft, ChevronRight, Camera, Trash2, Save, ImageIcon, TrendingUp,
+  Sparkles, CheckCircle, AlertCircle, Loader2,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
@@ -15,6 +16,7 @@ import { formatCurrency, computeDaysInStock } from '@/utils/format'
 import { toast } from '@/components/ui/Toast'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useVehicleCamera } from '@/hooks/useVehicleCamera'
+import { useVehicleAIScan } from '@/hooks/useVehicleAIScan'
 import type { Vehicle } from '@/types'
 
 // ─── Image helpers ────────────────────────────────────────────────────────────
@@ -89,6 +91,90 @@ function parseBRFloat(s: string): number | null {
   return isNaN(n) ? null : n
 }
 
+// ─── AI field highlight helpers ───────────────────────────────────────────────
+
+/** Estilo de input com destaque neon quando preenchido pela IA */
+function aiInpS(ai: boolean): React.CSSProperties {
+  return {
+    width: '100%', height: 38, padding: '0 10px',
+    background: ai ? 'rgba(57,255,20,.07)' : 'var(--el)',
+    border: ai ? '1px solid rgba(57,255,20,.55)' : '1px solid var(--b)',
+    borderRadius: 8, color: 'var(--t)', fontSize: 13,
+    outline: 'none', fontFamily: 'var(--fn)', boxSizing: 'border-box' as const,
+    transition: 'border-color .2s, background .2s',
+  }
+}
+
+/** Wrapper de campo com badge ✨ quando preenchido pela IA */
+function AiField({ label, ai, children }: { label: string; ai: boolean; children: React.ReactNode }) {
+  return (
+    <div>
+      <label style={{
+        fontSize: 10, fontWeight: 600, color: ai ? 'var(--neon)' : 'var(--t3)',
+        textTransform: 'uppercase' as const, letterSpacing: '.07em',
+        display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5,
+        transition: 'color .2s',
+      }}>
+        {label}
+        {ai && <span style={{ fontSize: 9, background: 'rgba(57,255,20,.15)', color: 'var(--neon)', padding: '1px 5px', borderRadius: 4, fontWeight: 700, letterSpacing: '.05em' }}>✨ IA</span>}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+// ─── Brazilian currency input (R$ 58.498) ─────────────────────────────────────
+function BRPriceInput({ value, onChange, placeholder, style }: {
+  value: string
+  onChange: (raw: string) => void
+  placeholder?: string
+  style?: React.CSSProperties
+}) {
+  const [focused, setFocused] = useState(false)
+  const digits = value.replace(/\D/g, '')
+  const displayValue = focused
+    ? digits
+    : digits ? 'R$ ' + parseInt(digits, 10).toLocaleString('pt-BR') : ''
+  return (
+    <input
+      style={style}
+      type="text"
+      inputMode="numeric"
+      value={displayValue}
+      placeholder={placeholder}
+      onFocus={e => { setFocused(true); e.target.select() }}
+      onBlur={() => setFocused(false)}
+      onChange={e => onChange(e.target.value.replace(/\D/g, ''))}
+    />
+  )
+}
+
+// ─── Brazilian number input (45.000) ──────────────────────────────────────────
+function BRNumberInput({ value, onChange, placeholder, style }: {
+  value: string
+  onChange: (raw: string) => void
+  placeholder?: string
+  style?: React.CSSProperties
+}) {
+  const [focused, setFocused] = useState(false)
+  const digits = value.replace(/\D/g, '')
+  const displayValue = focused
+    ? digits
+    : digits ? parseInt(digits, 10).toLocaleString('pt-BR') : ''
+  return (
+    <input
+      style={style}
+      type="text"
+      inputMode="numeric"
+      value={displayValue}
+      placeholder={placeholder}
+      onFocus={e => { setFocused(true); e.target.select() }}
+      onBlur={() => setFocused(false)}
+      onChange={e => onChange(e.target.value.replace(/\D/g, ''))}
+    />
+  )
+}
+
 // ─── Vehicle Form Modal ───────────────────────────────────────────────────────
 function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onClose: () => void }) {
   const { store } = useAuthStore()
@@ -97,6 +183,7 @@ function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onCl
   const fileInputRef = useRef<HTMLInputElement>(null)
   const isMobileForm = useIsMobile()
   const { takePhoto, pickFromGallery, isNative } = useVehicleCamera()
+  const { scan, reset: resetScan, status: scanStatus, scanResult, fipeMatch, error: scanError, fetchFipePrice } = useVehicleAIScan()
 
   // Photos
   const [photos, setPhotos]       = useState<string[]>(vehicle?.photos ?? [])
@@ -105,6 +192,12 @@ function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onCl
   const [isDragOver, setIsDragOver] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  // AI Scan state
+  const [aiFilledFields, setAiFilledFields] = useState<Set<string>>(new Set())
+  const [showScanCard, setShowScanCard]     = useState(false)
+  const [selectedYearCode, setSelectedYearCode] = useState<string>('')
+  const [fetchingFipePrice, setFetchingFipePrice] = useState(false)
 
   // Form
   const [form, setForm] = useState({
@@ -115,25 +208,23 @@ function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onCl
     year_model:        vehicle?.year_model?.toString() ?? '',
     color:             vehicle?.color ?? '',
     plate:             vehicle?.plate ?? '',
-    km:                vehicle?.km?.toString() ?? '',
+    km:                vehicle?.km != null ? Math.round(vehicle.km).toString() : '',
     fuel:              vehicle?.fuel ?? 'Flex',
     transmission:      vehicle?.transmission ?? 'Automático',
     status:            vehicle?.status ?? 'available',
-    purchase_price:    vehicle?.purchase_price?.toString() ?? '',
-    sale_price:        vehicle?.sale_price?.toString() ?? '',
-    fipe_price:        vehicle?.fipe_price?.toString() ?? '',
+    purchase_price:    vehicle?.purchase_price != null ? Math.round(vehicle.purchase_price).toString() : '',
+    sale_price:        vehicle?.sale_price != null ? Math.round(vehicle.sale_price).toString() : '',
+    fipe_price:        vehicle?.fipe_price != null ? Math.round(vehicle.fipe_price).toString() : '',
     purchase_date:     vehicle?.purchase_date?.slice(0, 10) ?? '',
     description:       vehicle?.description ?? '',
   })
   const f = (k: keyof typeof form, v: string) => setForm(p => ({ ...p, [k]: v }))
 
   // Lucro calculado
-  const lucro = form.sale_price && form.purchase_price
-    ? parseFloat(form.sale_price) - parseFloat(form.purchase_price)
-    : null
-  const lucroPct = lucro !== null && form.sale_price
-    ? ((lucro / parseFloat(form.sale_price)) * 100).toFixed(1)
-    : null
+  const saleNum = parseBRFloat(form.sale_price)
+  const purchaseNum = parseBRFloat(form.purchase_price)
+  const lucro = saleNum !== null && purchaseNum !== null ? saleNum - purchaseNum : null
+  const lucroPct = lucro !== null && saleNum ? ((lucro / saleNum) * 100).toFixed(1) : null
 
   // Photo helpers
   const clampIdx = (arr: string[], i: number) => Math.min(Math.max(i, 0), arr.length - 1)
@@ -156,6 +247,10 @@ function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onCl
       setPhotos(p => {
         const updated = [...p, ...newUrls]
         setPhotoIdx(clampIdx(updated, updated.length - 1))
+        // Primeira foto num formulário de criação → oferecer escaneamento
+        if (p.length === 0 && newUrls.length > 0 && !isEdit) {
+          setShowScanCard(true)
+        }
         return updated
       })
     } catch (e) {
@@ -164,6 +259,46 @@ function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onCl
       setUploading(false)
     }
   }
+
+  // ── IA: aplica resultado do escaneamento no formulário ────────────────────
+  const applyAIScan = useCallback(() => {
+    if (!scanResult) return
+    const filled = new Set<string>()
+    const apply = (k: keyof typeof form, v: string | null | undefined) => {
+      if (v) { setForm(p => ({ ...p, [k]: v })); filled.add(k) }
+    }
+    apply('brand',        scanResult.brand)
+    apply('model',        scanResult.model)
+    apply('version',      scanResult.version)
+    apply('color',        scanResult.color)
+    apply('fuel',         scanResult.fuel)
+    apply('transmission', scanResult.transmission)
+    if (scanResult.plate) apply('plate', scanResult.plate)
+    setAiFilledFields(filled)
+    setShowScanCard(false)
+  }, [scanResult])
+
+  // ── FIPE: busca preço ao selecionar ano ───────────────────────────────────
+  const handleYearCodeChange = useCallback(async (yearCode: string) => {
+    setSelectedYearCode(yearCode)
+    // Extrai ano numérico do código FIPE (ex: "2023-1" → "2023")
+    const yearNum = yearCode.split('-')[0]
+    if (yearNum) {
+      setForm(p => ({ ...p, year_fabrication: yearNum, year_model: yearNum }))
+      setAiFilledFields(prev => new Set([...prev, 'year_fabrication', 'year_model']))
+    }
+    // Busca preço FIPE
+    setFetchingFipePrice(true)
+    try {
+      const price = await fetchFipePrice(yearCode)
+      if (price) {
+        setForm(p => ({ ...p, fipe_price: Math.round(price).toString() }))
+        setAiFilledFields(prev => new Set([...prev, 'fipe_price']))
+      }
+    } finally {
+      setFetchingFipePrice(false)
+    }
+  }, [fetchFipePrice])
 
   // Captura via Capacitor Camera (nativo) ou galeria
   const uploadBlob = async (blob: Blob) => {
@@ -182,7 +317,14 @@ function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onCl
     setUploading(true)
     try {
       const url = await uploadBlob(photo.blob)
-      if (url) setPhotos(p => { const updated = [...p, url]; setPhotoIdx(updated.length - 1); return updated })
+      if (url) {
+        setPhotos(p => {
+          const updated = [...p, url]
+          setPhotoIdx(updated.length - 1)
+          if (p.length === 0 && !isEdit) setShowScanCard(true)
+          return updated
+        })
+      }
     } catch (e) {
       toast.error('Erro ao enviar foto', (e as Error).message)
     } finally {
@@ -197,7 +339,14 @@ function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onCl
     setUploading(true)
     try {
       const url = await uploadBlob(photo.blob)
-      if (url) setPhotos(p => { const updated = [...p, url]; setPhotoIdx(updated.length - 1); return updated })
+      if (url) {
+        setPhotos(p => {
+          const updated = [...p, url]
+          setPhotoIdx(updated.length - 1)
+          if (p.length === 0 && !isEdit) setShowScanCard(true)
+          return updated
+        })
+      }
     } catch (e) {
       toast.error('Erro ao enviar foto', (e as Error).message)
     } finally {
@@ -409,91 +558,246 @@ function VehicleFormModal({ vehicle, onClose }: { vehicle?: Vehicle | null; onCl
             {photos.length >= 10 && <span style={{ fontSize: 10, color: 'var(--t3)' }}>Limite de 10 fotos</span>}
           </div>
 
+          {/* ── Card de escaneamento IA ──────────────────────────────────── */}
+          <AnimatePresence>
+            {(showScanCard || scanStatus === 'scanning' || scanStatus === 'fipe' || scanStatus === 'done' || scanStatus === 'error') && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                style={{ overflow: 'hidden', flexShrink: 0 }}
+              >
+                <div style={{
+                  margin: '0 0 0 0',
+                  padding: '12px 20px',
+                  borderBottom: '1px solid var(--b)',
+                  background: 'rgba(57,255,20,.04)',
+                }}>
+                  {/* Prompt inicial */}
+                  {showScanCard && scanStatus === 'idle' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <Sparkles size={16} style={{ color: 'var(--neon)', flexShrink: 0 }} />
+                      <p style={{ fontSize: 12, color: 'var(--t2)', flex: 1 }}>
+                        Deseja preencher os campos automaticamente com IA?
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => { scan(photos[0]); setShowScanCard(false) }}
+                        style={{ padding: '5px 12px', borderRadius: 7, border: '1.5px solid var(--neon)', background: 'var(--ng)', color: 'var(--neon)', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      >
+                        ✨ Escanear
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowScanCard(false)}
+                        style={{ padding: '4px 8px', background: 'transparent', border: 'none', color: 'var(--t3)', cursor: 'pointer', fontSize: 12 }}
+                      >
+                        Pular
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Analisando / buscando FIPE */}
+                  {(scanStatus === 'scanning' || scanStatus === 'fipe') && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <Loader2 size={15} style={{ color: 'var(--neon)', flexShrink: 0, animation: 'spin 1s linear infinite' }} />
+                      <div>
+                        <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--neon)', margin: 0 }}>
+                          {scanStatus === 'scanning' ? 'Identificando veículo...' : 'Consultando tabela FIPE...'}
+                        </p>
+                        <p style={{ fontSize: 10, color: 'var(--t3)', margin: '1px 0 0' }}>
+                          {scanStatus === 'scanning' ? 'Claude Vision está analisando a foto' : 'Buscando anos e preço de referência'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Resultado */}
+                  {scanStatus === 'done' && scanResult && (
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
+                        <CheckCircle size={15} style={{ color: 'var(--neon)', flexShrink: 0, marginTop: 1 }} />
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--neon)', margin: 0 }}>
+                            {scanResult.brand} {scanResult.model}
+                            {scanResult.version ? ` · ${scanResult.version}` : ''}
+                          </p>
+                          <p style={{ fontSize: 11, color: 'var(--t3)', margin: '2px 0 0' }}>
+                            {[
+                              scanResult.color,
+                              scanResult.year_min && scanResult.year_max
+                                ? (scanResult.year_min === scanResult.year_max
+                                    ? `${scanResult.year_min}`
+                                    : `${scanResult.year_min}–${scanResult.year_max}`)
+                                : null,
+                              scanResult.fuel,
+                              scanResult.transmission,
+                            ].filter(Boolean).join(' · ')}
+                            {' '}· <span style={{ color: scanResult.confidence >= 0.8 ? 'var(--neon)' : '#eab308' }}>
+                              {Math.round(scanResult.confidence * 100)}% confiança
+                            </span>
+                          </p>
+                          {scanResult.notes && (
+                            <p style={{ fontSize: 10, color: 'var(--t3)', margin: '3px 0 0', fontStyle: 'italic' }}>
+                              {scanResult.notes}
+                            </p>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                          <button
+                            type="button"
+                            onClick={applyAIScan}
+                            style={{ padding: '5px 12px', borderRadius: 7, border: '1.5px solid var(--neon)', background: 'var(--ng)', color: 'var(--neon)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                          >
+                            Aplicar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { resetScan(); setShowScanCard(false) }}
+                            style={{ padding: '4px 8px', background: 'transparent', border: 'none', color: 'var(--t3)', cursor: 'pointer', fontSize: 11 }}
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      </div>
+                      {/* Seletor de ano FIPE */}
+                      {fipeMatch && fipeMatch.years.length > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, padding: '8px 10px', background: 'rgba(255,255,255,.03)', borderRadius: 8, border: '1px solid rgba(57,255,20,.15)' }}>
+                          <span style={{ fontSize: 11, color: 'var(--t3)', whiteSpace: 'nowrap' }}>Ano FIPE:</span>
+                          <select
+                            value={selectedYearCode}
+                            onChange={e => handleYearCodeChange(e.target.value)}
+                            style={{ flex: 1, height: 30, padding: '0 8px', background: 'var(--el)', border: '1px solid var(--b)', borderRadius: 6, color: 'var(--t)', fontSize: 12, outline: 'none' }}
+                          >
+                            <option value="">Selecione o ano...</option>
+                            {fipeMatch.years.map(y => (
+                              <option key={y.codigo} value={y.codigo}>{y.nome}</option>
+                            ))}
+                          </select>
+                          {fetchingFipePrice && <Loader2 size={13} style={{ color: 'var(--neon)', animation: 'spin 1s linear infinite', flexShrink: 0 }} />}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Erro */}
+                  {scanStatus === 'error' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <AlertCircle size={15} style={{ color: '#ef4444', flexShrink: 0 }} />
+                      <p style={{ fontSize: 12, color: 'var(--t2)', flex: 1 }}>
+                        {scanError ?? 'Não foi possível identificar o veículo'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => { resetScan(); setShowScanCard(false) }}
+                        style={{ padding: '4px 8px', background: 'transparent', border: 'none', color: 'var(--t3)', cursor: 'pointer', fontSize: 11 }}
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* ── Scrollable form body ─────────────────────────────────────── */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
             {/* Row: Marca | Modelo */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <div>
-                <label style={lblS}>Marca</label>
-                <input style={inpS} value={form.brand} onChange={e => f('brand', e.target.value)} placeholder="BMW, Jeep..." />
-              </div>
-              <div>
-                <label style={lblS}>Modelo</label>
-                <input style={inpS} value={form.model} onChange={e => f('model', e.target.value)} placeholder="Civic, Compass..." />
-              </div>
+              <AiField label="Marca" ai={aiFilledFields.has('brand')}>
+                <input style={aiInpS(aiFilledFields.has('brand'))} value={form.brand}
+                  onChange={e => { f('brand', e.target.value); setAiFilledFields(p => { const n = new Set(p); n.delete('brand'); return n }) }}
+                  placeholder="BMW, Jeep..." />
+              </AiField>
+              <AiField label="Modelo" ai={aiFilledFields.has('model')}>
+                <input style={aiInpS(aiFilledFields.has('model'))} value={form.model}
+                  onChange={e => { f('model', e.target.value); setAiFilledFields(p => { const n = new Set(p); n.delete('model'); return n }) }}
+                  placeholder="Civic, Compass..." />
+              </AiField>
             </div>
 
             {/* Row: Versão | Cor */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <div>
-                <label style={lblS}>Versão</label>
-                <input style={inpS} value={form.version} onChange={e => f('version', e.target.value)} placeholder="M Sport, EXL..." />
-              </div>
-              <div>
-                <label style={lblS}>Cor</label>
-                <input style={inpS} value={form.color} onChange={e => f('color', e.target.value)} placeholder="Preto Safira" />
-              </div>
+              <AiField label="Versão" ai={aiFilledFields.has('version')}>
+                <input style={aiInpS(aiFilledFields.has('version'))} value={form.version}
+                  onChange={e => { f('version', e.target.value); setAiFilledFields(p => { const n = new Set(p); n.delete('version'); return n }) }}
+                  placeholder="M Sport, EXL..." />
+              </AiField>
+              <AiField label="Cor" ai={aiFilledFields.has('color')}>
+                <input style={aiInpS(aiFilledFields.has('color'))} value={form.color}
+                  onChange={e => { f('color', e.target.value); setAiFilledFields(p => { const n = new Set(p); n.delete('color'); return n }) }}
+                  placeholder="Preto Safira" />
+              </AiField>
             </div>
 
             {/* Row: Ano Fab. | Ano Modelo */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <div>
-                <label style={lblS}>Ano Fab.</label>
-                <input style={inpS} type="number" value={form.year_fabrication} onChange={e => f('year_fabrication', e.target.value)} placeholder="2022" />
-              </div>
-              <div>
-                <label style={lblS}>Ano Modelo</label>
-                <input style={inpS} type="number" value={form.year_model} onChange={e => f('year_model', e.target.value)} placeholder="2023" />
-              </div>
+              <AiField label="Ano Fab." ai={aiFilledFields.has('year_fabrication')}>
+                <input style={aiInpS(aiFilledFields.has('year_fabrication'))} type="text" inputMode="numeric"
+                  value={form.year_fabrication}
+                  onChange={e => { f('year_fabrication', e.target.value.replace(/\D/g, '')); setAiFilledFields(p => { const n = new Set(p); n.delete('year_fabrication'); return n }) }}
+                  placeholder="2022" maxLength={4} />
+              </AiField>
+              <AiField label="Ano Modelo" ai={aiFilledFields.has('year_model')}>
+                <input style={aiInpS(aiFilledFields.has('year_model'))} type="text" inputMode="numeric"
+                  value={form.year_model}
+                  onChange={e => { f('year_model', e.target.value.replace(/\D/g, '')); setAiFilledFields(p => { const n = new Set(p); n.delete('year_model'); return n }) }}
+                  placeholder="2023" maxLength={4} />
+              </AiField>
             </div>
 
             {/* Row: Quilometragem | Combustível */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div>
                 <label style={lblS}>Quilometragem</label>
-                <input style={inpS} type="number" value={form.km} onChange={e => f('km', e.target.value)} placeholder="45.000" />
+                <BRNumberInput style={inpS} value={form.km} onChange={v => f('km', v)} placeholder="45.000" />
               </div>
-              <div>
-                <label style={lblS}>Combustível</label>
-                <select style={{ ...inpS, appearance: 'none' as const }} value={form.fuel} onChange={e => f('fuel', e.target.value)}>
+              <AiField label="Combustível" ai={aiFilledFields.has('fuel')}>
+                <select style={{ ...aiInpS(aiFilledFields.has('fuel')), appearance: 'none' as const }}
+                  value={form.fuel}
+                  onChange={e => { f('fuel', e.target.value); setAiFilledFields(p => { const n = new Set(p); n.delete('fuel'); return n }) }}>
                   {FUEL_OPTIONS.map(o => <option key={o}>{o}</option>)}
                 </select>
-              </div>
+              </AiField>
             </div>
 
             {/* Row: Placa | Câmbio */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <div>
-                <label style={lblS}>Placa</label>
-                <input style={inpS} value={form.plate} onChange={e => f('plate', e.target.value)} placeholder="ABC-1234" />
-              </div>
-              <div>
-                <label style={lblS}>Câmbio</label>
-                <select style={{ ...inpS, appearance: 'none' as const }} value={form.transmission} onChange={e => f('transmission', e.target.value)}>
+              <AiField label="Placa" ai={aiFilledFields.has('plate')}>
+                <input style={aiInpS(aiFilledFields.has('plate'))} value={form.plate}
+                  onChange={e => { f('plate', e.target.value); setAiFilledFields(p => { const n = new Set(p); n.delete('plate'); return n }) }}
+                  placeholder="ABC-1234" />
+              </AiField>
+              <AiField label="Câmbio" ai={aiFilledFields.has('transmission')}>
+                <select style={{ ...aiInpS(aiFilledFields.has('transmission')), appearance: 'none' as const }}
+                  value={form.transmission}
+                  onChange={e => { f('transmission', e.target.value); setAiFilledFields(p => { const n = new Set(p); n.delete('transmission'); return n }) }}>
                   {TRANSMISSION_OPTIONS.map(o => <option key={o}>{o}</option>)}
                 </select>
-              </div>
+              </AiField>
             </div>
 
             {/* Row: Preço Compra | Preço Venda */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div>
-                <label style={lblS}>Preço de Compra (R$)</label>
-                <input style={inpS} type="number" value={form.purchase_price} onChange={e => f('purchase_price', e.target.value)} placeholder="368000" />
+                <label style={lblS}>Preço de Compra</label>
+                <BRPriceInput style={inpS} value={form.purchase_price} onChange={v => f('purchase_price', v)} placeholder="R$ 368.000" />
               </div>
               <div>
-                <label style={lblS}>Preço de Venda (R$)</label>
-                <input style={inpS} type="number" value={form.sale_price} onChange={e => f('sale_price', e.target.value)} placeholder="420000" />
+                <label style={lblS}>Preço de Venda</label>
+                <BRPriceInput style={inpS} value={form.sale_price} onChange={v => f('sale_price', v)} placeholder="R$ 420.000" />
               </div>
             </div>
 
             {/* Row: FIPE | Lucro Estimado */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <div>
-                <label style={lblS}>Tabela FIPE (R$)</label>
-                <input style={inpS} type="number" value={form.fipe_price} onChange={e => f('fipe_price', e.target.value)} placeholder="398000" />
-              </div>
+              <AiField label="Tabela FIPE" ai={aiFilledFields.has('fipe_price')}>
+                <BRPriceInput style={aiInpS(aiFilledFields.has('fipe_price'))} value={form.fipe_price}
+                  onChange={v => { f('fipe_price', v); setAiFilledFields(p => { const n = new Set(p); n.delete('fipe_price'); return n }) }}
+                  placeholder="R$ 398.000" />
+              </AiField>
               <div>
                 <label style={lblS}>Lucro Estimado</label>
                 <div style={{

@@ -27,6 +27,7 @@ import { toast } from '@/components/ui/Toast'
 import { formatCurrency, daysInStage } from '@/utils/format'
 import { getLeadUtmFields, clearStoredUtms } from '@/utils/utm'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import { useLeadFieldConfig } from '@/hooks/useLeadFieldConfig'
 import type { Lead, PipelineStage } from '@/types'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -58,25 +59,23 @@ async function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 const schema = z.object({
-  client_name: z.string().min(2, 'Nome obrigatório'),
-  client_phone: z.string().optional(),
-  client_email: z.string().optional(),
-  client_city: z.string().optional(),
+  client_name:      z.string().min(2, 'Nome obrigatório'),
+  client_phone:     z.string().optional(),
+  client_email:     z.string().optional(),
+  client_cpf:       z.string().optional(),
+  client_city:      z.string().optional(),
   vehicle_interest: z.string().optional(),
   vehicle_year_min: z.string().optional(),
   vehicle_year_max: z.string().optional(),
-  budget_min: z.string().optional(),
-  budget_max: z.string().optional(),
-  payment_type: z.enum(['avista', 'financiamento', 'consorcio', '']).optional(),
-  trade_in: z.boolean().optional(),
+  budget_min:       z.string().optional(),
+  budget_max:       z.string().optional(),
+  payment_type:     z.string().optional(),
+  trade_in:         z.boolean().optional(),
   trade_in_vehicle: z.string().optional(),
-  source: z.string().optional(),
-  temperature: z.enum(['hot', 'warm', 'cold']),
-  priority: z.enum(['high', 'medium', 'low']).optional(),
-  notes: z.string().optional(),
-  profissao: z.string().optional(),
-  renda: z.string().optional(),
-  cnh: z.boolean().optional(),
+  source:           z.string().optional(),
+  temperature:      z.enum(['hot', 'warm', 'cold']),
+  priority:         z.enum(['high', 'medium', 'low']).optional(),
+  notes:            z.string().optional(),
 })
 type FormData = z.infer<typeof schema>
 
@@ -96,40 +95,48 @@ function NewLeadModal({ open, onClose, stages, defaultStageId }: {
 }) {
   const { store, user } = useAuthStore()
   const queryClient = useQueryClient()
+  const fieldConfig = useLeadFieldConfig()
   const [stageId, setStageId] = useState(defaultStageId)
+  const [customValues, setCustomValues] = useState<Record<string, string>>({})
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { temperature: 'cold', priority: 'medium', trade_in: false, cnh: false },
+    defaultValues: { temperature: 'cold', priority: 'medium', trade_in: false },
   })
+  const tradeInWatched = watch('trade_in')
 
   const mut = useMutation({
     mutationFn: async (d: FormData) => {
       const utmFields = getLeadUtmFields()
+      // Build custom_fields from dynamic config
+      const customFieldsPayload: Record<string, string> = {}
+      for (const cf of fieldConfig.custom_fields) {
+        const v = customValues[cf.id]?.trim()
+        if (v) customFieldsPayload[cf.id] = v
+      }
       const { error } = await supabase.from('leads').insert({
-        store_id: store!.id, salesperson_id: user!.id, stage_id: stageId,
-        client_name: d.client_name,
-        client_phone: d.client_phone || null,
-        client_email: d.client_email || null,
-        client_city: d.client_city || null,
-        vehicle_interest: d.vehicle_interest || null,
-        vehicle_year_min: d.vehicle_year_min ? parseInt(d.vehicle_year_min) : null,
-        vehicle_year_max: d.vehicle_year_max ? parseInt(d.vehicle_year_max) : null,
-        budget_min: d.budget_min ? parseFloat(d.budget_min) : null,
-        budget_max: d.budget_max ? parseFloat(d.budget_max) : null,
-        payment_type: d.payment_type || null,
-        trade_in: d.trade_in ?? false,
-        trade_in_vehicle: d.trade_in_vehicle || null,
-        source: d.source || null,
-        temperature: d.temperature,
-        priority: d.priority || 'medium',
-        notes: d.notes || null,
-        status: 'active',
-        custom_fields: {
-          profissao: d.profissao || null,
-          renda: d.renda || null,
-          cnh: d.cnh ?? false,
-        },
+        store_id:       store!.id,
+        salesperson_id: user!.id,
+        stage_id:       stageId,
+        client_name:    d.client_name,
+        client_phone:   d.client_phone  || null,
+        client_email:   d.client_email  || null,
+        client_cpf:     d.client_cpf    || null,
+        client_city:    fieldConfig.show_city    ? (d.client_city || null) : null,
+        vehicle_interest: fieldConfig.show_vehicle ? (d.vehicle_interest || null) : null,
+        vehicle_year_min: fieldConfig.show_vehicle && d.vehicle_year_min ? parseInt(d.vehicle_year_min) : null,
+        vehicle_year_max: fieldConfig.show_vehicle && d.vehicle_year_max ? parseInt(d.vehicle_year_max) : null,
+        budget_min:     fieldConfig.show_budget && d.budget_min ? parseFloat(d.budget_min) : null,
+        budget_max:     fieldConfig.show_budget && d.budget_max ? parseFloat(d.budget_max) : null,
+        payment_type:   fieldConfig.show_payment_type ? (d.payment_type || null) : null,
+        trade_in:       fieldConfig.show_trade_in ? (d.trade_in ?? false) : false,
+        trade_in_vehicle: fieldConfig.show_trade_in && d.trade_in ? (d.trade_in_vehicle || null) : null,
+        source:         d.source        || null,
+        temperature:    d.temperature,
+        priority:       d.priority      || 'medium',
+        notes:          d.notes         || null,
+        status:         'active',
+        custom_fields:  Object.keys(customFieldsPayload).length ? customFieldsPayload : null,
         ...utmFields,
       })
       if (error) throw error
@@ -138,9 +145,11 @@ function NewLeadModal({ open, onClose, stages, defaultStageId }: {
     onSuccess: () => {
       toast.success('Lead criado!', 'Adicionado ao pipeline')
       queryClient.invalidateQueries({ queryKey: ['pipeline-leads'] })
-      reset(); onClose()
+      reset()
+      setCustomValues({})
+      onClose()
     },
-    onError: () => toast.error('Erro ao criar lead'),
+    onError: (e) => toast.error('Erro ao criar lead', (e as Error).message),
   })
 
   if (!open) return null
@@ -159,6 +168,19 @@ function NewLeadModal({ open, onClose, stages, defaultStageId }: {
       {children}
     </div>
   )
+
+  // Seção de interesse só aparece se pelo menos um campo estiver habilitado
+  const showInterestSection = fieldConfig.show_vehicle || fieldConfig.show_budget ||
+    fieldConfig.show_payment_type || fieldConfig.show_trade_in
+
+  const cfInp: React.CSSProperties = {
+    width: '100%', height: 34, padding: '0 10px',
+    borderRadius: 7, background: 'var(--bg3)',
+    border: '1px solid var(--border)',
+    color: 'var(--text)', fontSize: 12,
+    outline: 'none', fontFamily: 'inherit',
+    boxSizing: 'border-box',
+  }
 
   return (
     <AnimatePresence>
@@ -203,6 +225,8 @@ function NewLeadModal({ open, onClose, stages, defaultStageId }: {
 
           <form onSubmit={handleSubmit(d => mut.mutate(d))}>
             <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 14, maxHeight: '58vh', overflowY: 'auto' }}>
+
+              {/* ── Dados do comprador ── */}
               <Section icon={<User size={13} />} label="Dados do Comprador">
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div style={{ gridColumn: '1/-1' }}>
@@ -210,52 +234,105 @@ function NewLeadModal({ open, onClose, stages, defaultStageId }: {
                   </div>
                   <Input label="Telefone / WhatsApp" placeholder="(11) 99999-9999" {...register('client_phone')} />
                   <Input label="Email" placeholder="joao@email.com" {...register('client_email')} />
-                  <Input label="Cidade" placeholder="São Paulo" icon={<MapPin size={12} />} {...register('client_city')} />
-                  <Input label="Profissão" placeholder="Motorista, Empresário..." {...register('profissao')} />
-                  <Input label="Renda mensal" placeholder="5000" icon={<DollarSign size={12} />} {...register('renda')} />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 4 }}>
-                    <input type="checkbox" id="cnh" {...register('cnh')} style={{ width: 14, height: 14, accentColor: 'var(--neon)', cursor: 'pointer' }} />
-                    <label htmlFor="cnh" style={{ fontSize: 12, color: 'var(--text2)', cursor: 'pointer' }}>Possui CNH</label>
-                  </div>
+                  {fieldConfig.show_cpf && (
+                    <Input label="CPF" placeholder="000.000.000-00" {...register('client_cpf')} />
+                  )}
+                  {fieldConfig.show_city && (
+                    <Input label="Cidade" placeholder="São Paulo" icon={<MapPin size={12} />} {...register('client_city')} />
+                  )}
                 </div>
               </Section>
 
-              <Section icon={<Car size={13} />} label="Interesse no Veículo">
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div style={{ gridColumn: '1/-1' }}>
-                    <Input label="Veículo desejado" placeholder="HB20, Corolla, Civic..." {...register('vehicle_interest')} />
+              {/* ── Interesse (controlado pelo fieldConfig) ── */}
+              {showInterestSection && (
+                <Section icon={<Car size={13} />} label={fieldConfig.interest_label || 'Interesse no Produto'}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    {fieldConfig.show_vehicle && (
+                      <>
+                        <div style={{ gridColumn: '1/-1' }}>
+                          <Input label={fieldConfig.interest_label} placeholder="HB20, Corolla, Civic..." {...register('vehicle_interest')} />
+                        </div>
+                        <Input label="Ano mínimo" placeholder="2020" {...register('vehicle_year_min')} />
+                        <Input label="Ano máximo" placeholder="2024" {...register('vehicle_year_max')} />
+                      </>
+                    )}
+                    {fieldConfig.show_budget && (
+                      <>
+                        <Input label="Orçamento mínimo (R$)" placeholder="40000" {...register('budget_min')} />
+                        <Input label="Orçamento máximo (R$)" placeholder="70000" {...register('budget_max')} />
+                      </>
+                    )}
+                    {fieldConfig.show_payment_type && (
+                      <div>
+                        <SLabel>Forma de pagamento</SLabel>
+                        <select {...register('payment_type')} style={sel()}>
+                          <option value="">Selecionar</option>
+                          <option value="avista">À Vista / PIX</option>
+                          <option value="financiamento">Financiamento</option>
+                          <option value="consorcio">Consórcio</option>
+                          <option value="troca">Troca pura</option>
+                          <option value="troca_complemento">Troca + complemento</option>
+                          <option value="leasing">Leasing</option>
+                        </select>
+                      </div>
+                    )}
+                    <div>
+                      <SLabel>Urgência</SLabel>
+                      <select {...register('priority')} style={sel()}>
+                        <option value="high">🔴 Esta semana</option>
+                        <option value="medium">🟡 Este mês</option>
+                        <option value="low">🔵 Sem prazo</option>
+                      </select>
+                    </div>
+                    {fieldConfig.show_trade_in && (
+                      <>
+                        <div style={{ gridColumn: '1/-1', display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <input type="checkbox" id="trade_in" {...register('trade_in')} style={{ width: 14, height: 14, accentColor: 'var(--neon)', cursor: 'pointer' }} />
+                          <label htmlFor="trade_in" style={{ fontSize: 12, color: 'var(--text2)', cursor: 'pointer' }}>Possui veículo para troca</label>
+                        </div>
+                        {tradeInWatched && (
+                          <div style={{ gridColumn: '1/-1' }}>
+                            <Input label="Descreva o bem" placeholder="Ex: Toyota Corolla 2020, Apartamento 70m²…" {...register('trade_in_vehicle')} />
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
-                  <Input label="Ano mínimo" placeholder="2020" {...register('vehicle_year_min')} />
-                  <Input label="Ano máximo" placeholder="2024" {...register('vehicle_year_max')} />
-                  <Input label="Orçamento mínimo (R$)" placeholder="40000" {...register('budget_min')} />
-                  <Input label="Orçamento máximo (R$)" placeholder="70000" {...register('budget_max')} />
-                  <div>
-                    <SLabel>Forma de pagamento</SLabel>
-                    <select {...register('payment_type')} style={sel()}>
-                      <option value="">Selecionar</option>
-                      <option value="avista">À Vista</option>
-                      <option value="financiamento">Financiamento</option>
-                      <option value="consorcio">Consórcio</option>
-                    </select>
-                  </div>
-                  <div>
-                    <SLabel>Urgência</SLabel>
-                    <select {...register('priority')} style={sel()}>
-                      <option value="high">🔴 Esta semana</option>
-                      <option value="medium">🟡 Este mês</option>
-                      <option value="low">🔵 Sem prazo</option>
-                    </select>
-                  </div>
-                  <div style={{ gridColumn: '1/-1', display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <input type="checkbox" id="trade_in" {...register('trade_in')} style={{ width: 14, height: 14, accentColor: 'var(--neon)', cursor: 'pointer' }} />
-                    <label htmlFor="trade_in" style={{ fontSize: 12, color: 'var(--text2)', cursor: 'pointer' }}>Possui veículo para troca</label>
-                  </div>
-                  <div style={{ gridColumn: '1/-1' }}>
-                    <Input label="Veículo da troca (modelo e ano)" placeholder="Fiat Uno 2015..." {...register('trade_in_vehicle')} />
-                  </div>
-                </div>
-              </Section>
+                </Section>
+              )}
 
+              {/* ── Campos customizados (configurados em Configurações) ── */}
+              {fieldConfig.custom_fields.length > 0 && (
+                <Section icon={<Plus size={13} />} label="Informações Adicionais">
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    {fieldConfig.custom_fields.map(cf => (
+                      <div key={cf.id} style={{ gridColumn: cf.type === 'select' ? 'auto' : 'auto' }}>
+                        <SLabel>{cf.label}{cf.required ? ' *' : ''}</SLabel>
+                        {cf.type === 'select' && cf.options?.length ? (
+                          <select
+                            style={sel()}
+                            value={customValues[cf.id] ?? ''}
+                            onChange={e => setCustomValues(p => ({ ...p, [cf.id]: e.target.value }))}
+                          >
+                            <option value="">Selecionar…</option>
+                            {cf.options.map(o => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                        ) : (
+                          <input
+                            style={cfInp}
+                            type={cf.type === 'number' ? 'number' : cf.type === 'date' ? 'date' : 'text'}
+                            placeholder={cf.placeholder ?? cf.label + '…'}
+                            value={customValues[cf.id] ?? ''}
+                            onChange={e => setCustomValues(p => ({ ...p, [cf.id]: e.target.value }))}
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </Section>
+              )}
+
+              {/* ── Qualificação ── */}
               <Section icon={<BarChart2 size={13} />} label="Qualificação">
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div>
