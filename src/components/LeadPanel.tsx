@@ -1191,8 +1191,14 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
               <div style={S.section}>
                 <p style={S.sectionTitle}>Informações Adicionais</p>
                 {fieldConfig.custom_fields.map(cf => (
-                  <div key={cf.id} style={{ ...S.row, marginBottom: 6 }}>
-                    <span style={S.label}>{cf.label}</span>
+                  <div key={cf.id} style={{ marginBottom: 10 }}>
+                    {/* Label em bloco — suporta textos longos */}
+                    <p style={{
+                      fontSize: 10, color: '#686868', marginBottom: 3,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }} title={cf.label}>
+                      {cf.label}
+                    </p>
                     {cf.type === 'select' ? (
                       <select
                         value={customVals[cf.id] ?? ''}
@@ -1200,7 +1206,7 @@ export default function LeadPanel({ leadId, onClose, initialPosition, mode = 'vi
                           const updated = { ...customVals, [cf.id]: e.target.value }
                           save({ custom_fields: updated })
                         }}
-                        style={{ ...S.select, flex: 1 }}
+                        style={{ ...S.select, width: '100%' }}
                       >
                         <option value="">Selecionar</option>
                         {(cf.options ?? []).map(opt => (

@@ -89,6 +89,44 @@ const SOURCE_LABEL: Record<string, string> = {
 }
 const PAYMENT_LABEL: Record<string, string> = { financiamento: 'Financ.', avista: 'À vista', consorcio: 'Consórcio' }
 
+// ─── Subcomponentes estáveis (FORA do modal para não causar remount no render) ─
+// Se definidos DENTRO da função, React recria o tipo a cada render e desmonta
+// os inputs, fazendo o campo perder foco a cada tecla digitada.
+
+function ModalSLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
+  return (
+    <label style={{
+      fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
+      textTransform: 'uppercase', color: 'var(--text4)',
+      display: 'block', marginBottom: 5,
+    }}>
+      {children}{required && <span style={{ color: '#f43f5e', marginLeft: 2 }}>*</span>}
+    </label>
+  )
+}
+
+function ModalSection({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12 }}>
+        <span style={{ color: 'var(--neon)' }}>{icon}</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neon)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{label}</span>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+// Estilo estático para inputs de campos customizados (referência estável = sem remount)
+const cfInpStyle: React.CSSProperties = {
+  width: '100%', height: 34, padding: '0 10px',
+  borderRadius: 7, background: 'var(--bg3)',
+  border: '1px solid var(--border)',
+  color: 'var(--text)', fontSize: 12,
+  outline: 'none', fontFamily: 'inherit',
+  boxSizing: 'border-box',
+}
+
 // ─── New Lead Modal ────────────────────────────────────────────────────────────
 function NewLeadModal({ open, onClose, stages, defaultStageId }: {
   open: boolean; onClose: () => void; stages: PipelineStage[]; defaultStageId: string
@@ -154,33 +192,13 @@ function NewLeadModal({ open, onClose, stages, defaultStageId }: {
 
   if (!open) return null
 
-  const SLabel = ({ children }: { children: React.ReactNode }) => (
-    <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text4)', display: 'block', marginBottom: 5 }}>
-      {children}
-    </label>
-  )
-  const Section = ({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) => (
-    <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 4 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12 }}>
-        <span style={{ color: 'var(--neon)' }}>{icon}</span>
-        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--neon)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{label}</span>
-      </div>
-      {children}
-    </div>
-  )
+  // Usar ModalSLabel e ModalSection (definidos fora desta função)
+  const SLabel = ModalSLabel
+  const Section = ModalSection
 
   // Seção de interesse só aparece se pelo menos um campo estiver habilitado
   const showInterestSection = fieldConfig.show_vehicle || fieldConfig.show_budget ||
     fieldConfig.show_payment_type || fieldConfig.show_trade_in
-
-  const cfInp: React.CSSProperties = {
-    width: '100%', height: 34, padding: '0 10px',
-    borderRadius: 7, background: 'var(--bg3)',
-    border: '1px solid var(--border)',
-    color: 'var(--text)', fontSize: 12,
-    outline: 'none', fontFamily: 'inherit',
-    boxSizing: 'border-box',
-  }
 
   return (
     <AnimatePresence>
@@ -304,10 +322,16 @@ function NewLeadModal({ open, onClose, stages, defaultStageId }: {
               {/* ── Campos customizados (configurados em Configurações) ── */}
               {fieldConfig.custom_fields.length > 0 && (
                 <Section icon={<Plus size={13} />} label="Informações Adicionais">
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {fieldConfig.custom_fields.map(cf => (
-                      <div key={cf.id} style={{ gridColumn: cf.type === 'select' ? 'auto' : 'auto' }}>
-                        <SLabel>{cf.label}{cf.required ? ' *' : ''}</SLabel>
+                      <div key={cf.id}>
+                        <label style={{
+                          fontSize: 11, fontWeight: 600, color: 'var(--text3)',
+                          display: 'block', marginBottom: 5,
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        }} title={cf.label}>
+                          {cf.label}{cf.required && <span style={{ color: '#f43f5e', marginLeft: 2 }}>*</span>}
+                        </label>
                         {cf.type === 'select' && cf.options?.length ? (
                           <select
                             style={sel()}
@@ -319,9 +343,9 @@ function NewLeadModal({ open, onClose, stages, defaultStageId }: {
                           </select>
                         ) : (
                           <input
-                            style={cfInp}
+                            style={cfInpStyle}
                             type={cf.type === 'number' ? 'number' : cf.type === 'date' ? 'date' : 'text'}
-                            placeholder={cf.placeholder ?? cf.label + '…'}
+                            placeholder={cf.placeholder || ''}
                             value={customValues[cf.id] ?? ''}
                             onChange={e => setCustomValues(p => ({ ...p, [cf.id]: e.target.value }))}
                           />
