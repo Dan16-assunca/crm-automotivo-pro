@@ -155,7 +155,7 @@ function NewLeadModal({ open, onClose, stages, defaultStageId }: {
       const { error } = await supabase.from('leads').insert({
         store_id:       store!.id,
         salesperson_id: user!.id,
-        stage_id:       stageId,
+        stage_id:       stageId || null,
         client_name:    d.client_name,
         client_phone:   d.client_phone  || null,
         client_email:   d.client_email  || null,
