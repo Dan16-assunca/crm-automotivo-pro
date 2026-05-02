@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { QuickAddLeadSheet } from '@/components/mobile/QuickAddLeadSheet'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { formatCurrency, timeAgo } from '@/utils/format'
-import type { Lead } from '@/types'
+import type { Lead, PipelineStage } from '@/types'
 
 // ─── Temperatura ──────────────────────────────────────────────────────────────
 const TEMP_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -142,6 +142,8 @@ export default function Leads() {
   const [sheetOpen, setSheetOpen]     = useState(false)
   const [showColPicker, setShowColPicker] = useState(false)
   const colPickerRef = useRef<HTMLDivElement>(null)
+  const [filterStageId, setFilterStageId] = useState('')
+  // '' = todos | 'none' = não atendidos | '<uuid>' = estágio específico
 
   // ── Seleção e exclusão ───────────────────────────────────────────────────────
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set())
@@ -233,6 +235,18 @@ export default function Leads() {
     )
   }
 
+  // ── Pipeline stages (cache compartilhado com Pipeline.tsx) ──────────────────
+  const { data: pipelineStages = [] } = useQuery<PipelineStage[]>({
+    queryKey: ['pipeline-stages', store?.id],
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('pipeline_stages').select('*').eq('store_id', store!.id).order('position')
+      return (data ?? []) as PipelineStage[]
+    },
+    enabled: !!store?.id,
+  })
+
   // ── Realtime ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!store?.id) return
@@ -248,7 +262,7 @@ export default function Leads() {
 
   // ── Query ────────────────────────────────────────────────────────────────────
   const { data: leads, isLoading } = useQuery({
-    queryKey: ['leads-list', store?.id, search, filterTemp, filterSource],
+    queryKey: ['leads-list', store?.id, search, filterTemp, filterSource, filterStageId],
     queryFn: async () => {
       let query = supabase
         .from('leads')
@@ -259,6 +273,8 @@ export default function Leads() {
       if (search) query = query.or(`client_name.ilike.%${search}%,client_phone.ilike.%${search}%,client_email.ilike.%${search}%`)
       if (filterTemp) query = query.eq('temperature', filterTemp)
       if (filterSource) query = query.eq('source', filterSource)
+      if (filterStageId === 'none') query = query.is('stage_id', null)
+      else if (filterStageId)       query = query.eq('stage_id', filterStageId)
       const { data } = await query.limit(200)
       return (data ?? []) as Lead[]
     },
@@ -292,6 +308,38 @@ export default function Leads() {
               </button>
             ))}
           </div>
+          {/* Chips de estágio do funil */}
+          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' }}>
+            {/* Todos */}
+            <button
+              onClick={() => setFilterStageId('')}
+              style={{ flexShrink: 0, height: 32, padding: '0 14px', borderRadius: 20, border: filterStageId === '' ? '1.5px solid var(--neon)' : '1px solid var(--b)', background: filterStageId === '' ? 'var(--ng)' : 'var(--el)', color: filterStageId === '' ? 'var(--neon)' : 'var(--t2)', fontSize: 12, fontWeight: filterStageId === '' ? 700 : 500, cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              Todos
+            </button>
+            {/* Não atendidos */}
+            <button
+              onClick={() => setFilterStageId('none')}
+              style={{ flexShrink: 0, height: 32, padding: '0 14px', borderRadius: 20, border: filterStageId === 'none' ? '1.5px solid var(--neon)' : '1px solid var(--b)', background: filterStageId === 'none' ? 'var(--ng)' : 'var(--el)', color: filterStageId === 'none' ? 'var(--neon)' : 'var(--t2)', fontSize: 12, fontWeight: filterStageId === 'none' ? 700 : 500, cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              Não atendidos
+            </button>
+            {/* Um chip por etapa do funil (exceto etapas finais) */}
+            {pipelineStages.filter(s => !s.is_final).map(stage => {
+              const active = filterStageId === stage.id
+              return (
+                <button
+                  key={stage.id}
+                  onClick={() => setFilterStageId(stage.id)}
+                  style={{ flexShrink: 0, height: 32, padding: '0 12px', borderRadius: 20, border: active ? `1.5px solid var(--neon)` : '1px solid var(--b)', background: active ? 'var(--ng)' : 'var(--el)', color: active ? 'var(--neon)' : 'var(--t2)', fontSize: 12, fontWeight: active ? 700 : 500, cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}
+                >
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: stage.color, flexShrink: 0 }} />
+                  {stage.name}
+                </button>
+              )
+            })}
+          </div>
+
           <p style={{ fontSize: 11, color: 'var(--t3)' }}>{leads?.length ?? 0} leads</p>
         </div>
 
@@ -315,6 +363,13 @@ export default function Leads() {
                       </div>
                       <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
                         {tc && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 20, background: tc.bg, color: tc.color, border: `1px solid ${tc.border}` }}>{tc.label}</span>}
+                        {lead.stage
+                          ? <span style={{ fontSize: 9, fontWeight: 600, padding: '1px 7px', borderRadius: 20, background: 'rgba(255,255,255,.05)', color: 'var(--t2)', border: `1px solid ${(lead.stage as PipelineStage).color}44`, display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{ width: 5, height: 5, borderRadius: '50%', background: (lead.stage as PipelineStage).color, flexShrink: 0 }} />
+                              {(lead.stage as PipelineStage).name}
+                            </span>
+                          : <span style={{ fontSize: 9, color: 'var(--t3)', fontStyle: 'italic' }}>Não atendido</span>
+                        }
                         <span style={{ fontSize: 10, color: 'var(--t3)' }}>{lead.last_contact_at ? timeAgo(lead.last_contact_at) : timeAgo(lead.created_at)}</span>
                       </div>
                     </div>
