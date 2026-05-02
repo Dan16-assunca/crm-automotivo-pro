@@ -4,9 +4,10 @@ import {
   Car, Plus,
   LayoutDashboard, BarChart2, Target, Settings,
   Users, Link2, Calculator, LogOut, ChevronDown, X,
-  Zap,
+  Zap, Sun, Moon,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
+import { useUIStore } from '@/store/uiStore'
 import { QuickAddLeadSheet } from '@/components/mobile/QuickAddLeadSheet'
 import { supabase } from '@/lib/supabase'
 
@@ -50,6 +51,9 @@ export function MobileTopbar() {
   const location   = useLocation()
   const navigate   = useNavigate()
   const { user, store, logout } = useAuthStore()
+
+  const { theme, toggleTheme } = useUIStore()
+  const isDark = theme === 'dark'
 
   const [sheetOpen,   setSheetOpen]   = useState(false)
   const [menuOpen,    setMenuOpen]    = useState(false)
@@ -227,8 +231,47 @@ export function MobileTopbar() {
                   })}
                 </div>
 
-                {/* Separador + Sair */}
+                {/* Separador + Tema + Sair */}
                 <div style={{ borderTop: '1px solid var(--bs)', padding: '6px 0 8px' }}>
+                  {/* Toggle de tema */}
+                  <button
+                    onClick={toggleTheme}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '10px 16px', background: 'transparent', border: 'none',
+                      cursor: 'pointer', textAlign: 'left',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--el)' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      {isDark
+                        ? <Sun size={15} style={{ color: 'var(--t3)', flexShrink: 0 }} />
+                        : <Moon size={15} style={{ color: 'var(--t3)', flexShrink: 0 }} />
+                      }
+                      <span style={{ fontSize: 13, color: 'var(--t)' }}>
+                        {isDark ? 'Modo claro' : 'Modo escuro'}
+                      </span>
+                    </div>
+                    {/* Toggle pill */}
+                    <div style={{
+                      width: 38, height: 22, borderRadius: 11,
+                      background: isDark ? 'var(--el)' : 'var(--neon)',
+                      border: '1px solid var(--b)',
+                      position: 'relative', flexShrink: 0, transition: 'background .2s',
+                    }}>
+                      <div style={{
+                        position: 'absolute', top: 3,
+                        left: isDark ? 3 : 17,
+                        width: 14, height: 14, borderRadius: '50%',
+                        background: isDark ? 'var(--t3)' : '#000',
+                        transition: 'left .2s',
+                      }} />
+                    </div>
+                  </button>
+
+                  <div style={{ height: 1, background: 'var(--bs)', margin: '2px 0' }} />
+
                   <button
                     onClick={handleLogout}
                     style={{
