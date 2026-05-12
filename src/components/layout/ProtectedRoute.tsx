@@ -55,16 +55,7 @@ export function ProtectedRoute({ children, roles }: ProtectedRouteProps) {
   // Não autenticado → login
   if (!user) return <Navigate to="/login" replace />
 
-  // ── Verifica status da conta (trial expirado / suspensa / cancelada) ─────
-  const isBillingRoute = BILLING_WHITELIST.some(p => location.pathname.startsWith(p))
-  if (!isBillingRoute && store) {
-    const status = store.status ?? 'active'
-    const trialExpired = status === 'trial' && store.trial_ends_at
-      ? new Date(store.trial_ends_at) < new Date()
-      : false
-    const blocked = trialExpired || status === 'suspended' || status === 'cancelled'
-    if (blocked) return <Navigate to="/planos" replace />
-  }
+  // Cobrança desativada — acesso 100% gratuito por enquanto
 
   // Normaliza roles desconhecidos (ex: 'owner') para 'admin'
   const KNOWN_ROLES: UserRole[] = ['admin', 'manager', 'salesperson']

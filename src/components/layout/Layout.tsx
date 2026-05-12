@@ -16,57 +16,8 @@ const FULLSCREEN_ROUTES = ['/whatsapp']
 const LeadPanel = lazy(() => import('@/components/LeadPanel'))
 
 // ─── Trial Banner ─────────────────────────────────────────────────────────────
-function TrialBanner() {
-  const { store } = useAuthStore()
-  const navigate  = useNavigate()
-
-  if (!store) return null
-
-  const status      = store.status ?? 'trial'
-  const trialEndsAt = store.trial_ends_at
-
-  if (status === 'active') return null
-
-  const daysLeft = trialEndsAt
-    ? Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / 86_400_000))
-    : null
-
-  if (status === 'trial' && (daysLeft === null || daysLeft > 7)) return null
-
-  const isCritical  = status !== 'trial' || (daysLeft !== null && daysLeft <= 3)
-  const bgColor     = isCritical ? 'rgba(239,68,68,.12)' : 'rgba(234,179,8,.1)'
-  const borderColor = isCritical ? 'rgba(239,68,68,.35)'  : 'rgba(234,179,8,.3)'
-  const textColor   = isCritical ? '#EF4444'              : '#EAB308'
-
-  let message = ''
-  if (status === 'suspended' || status === 'cancelled') {
-    message = 'Conta suspensa — regularize o pagamento para continuar'
-  } else if (daysLeft === 0) {
-    message = 'Trial encerrado hoje — assine agora para não perder acesso'
-  } else {
-    message = `${daysLeft} ${daysLeft === 1 ? 'dia' : 'dias'} de trial restantes`
-  }
-
-  return (
-    <div style={{
-      background: bgColor, borderBottom: `1px solid ${borderColor}`,
-      padding: '7px 16px', display: 'flex', alignItems: 'center',
-      justifyContent: 'space-between', gap: 12, flexShrink: 0,
-    }}>
-      <span style={{ fontSize: 12, color: textColor, fontWeight: 600 }}>{message}</span>
-      <button
-        onClick={() => navigate('/planos')}
-        style={{
-          fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 6,
-          background: textColor, color: isCritical ? '#fff' : '#000',
-          border: 'none', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap',
-        }}
-      >
-        Assinar agora
-      </button>
-    </div>
-  )
-}
+// Banner de cobrança desativado — acesso 100% gratuito por enquanto
+function TrialBanner() { return null }
 
 // ─── Idle Warning Modal ────────────────────────────────────────────────────────
 function IdleWarningModal({ secondsLeft, onKeepAlive }: { secondsLeft: number; onKeepAlive: () => void }) {
