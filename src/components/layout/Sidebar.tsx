@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Columns3, Users, MessageCircle,
   Car, Target, Settings, LogOut,
   ChevronLeft, ChevronRight,
-  TrendingUp, Calculator, BarChart2, Zap, Plug, UserCog,
+  TrendingUp, Calculator, BarChart2, Zap, Plug, UserCog, Activity,
 } from 'lucide-react'
 import { useUIStore } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
@@ -45,6 +45,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/estoque',      icon: Car,        label: 'Estoque' },
       { to: '/inteligencia', icon: TrendingUp, label: 'Inteligência de Estoque', roles: ['admin', 'manager'] },
       { to: '/metas',        icon: Target,     label: 'Metas',                   roles: ['admin', 'manager'] },
+      { to: '/receita',      icon: Activity,   label: 'Motor de Receita',         roles: ['admin', 'manager'] },
     ],
   },
   {
