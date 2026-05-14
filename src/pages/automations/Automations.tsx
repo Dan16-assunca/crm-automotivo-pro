@@ -723,7 +723,7 @@ function ExecutionHistoryModal({ automation, onClose }: { automation: Automation
         .eq('automation_id', automation.id)
         .order('executed_at', { ascending: false })
         .limit(200)
-      return (data ?? []) as ExecutionRow[]
+      return (data ?? []) as unknown as ExecutionRow[]
     },
   })
 

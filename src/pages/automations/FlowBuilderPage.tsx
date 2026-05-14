@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Save, Play, Pause, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { useStore } from '@/hooks/useStore'
+import { useAuthStore } from '@/store/authStore'
 import type { FlowNode, FlowEdge, FlowNodeData, AutomationFlow } from './flow-types'
 import { NodePalette } from './NodePalette'
 import { PropertiesPanel } from './PropertiesPanel'
@@ -15,7 +15,7 @@ export default function FlowBuilderPage() {
   const { flowId } = useParams<{ flowId: string }>()
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const { store } = useStore()
+  const { store } = useAuthStore()
 
   const [nodes, setNodes] = useState<FlowNode[]>([])
   const [edges, setEdges] = useState<FlowEdge[]>([])
