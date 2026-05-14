@@ -6,7 +6,7 @@ import {
   Users, TrendingUp, DollarSign, Flame, AlertCircle,
   ArrowUpRight, ArrowDownRight, MessageSquare, Edit2,
   LayoutDashboard, Eye, EyeOff, X as XIcon, Check, Bell,
-  Plus, GripVertical, Trash2, Settings2,
+  Plus, GripVertical, Trash2, Settings2, Activity, ChevronRight,
 } from 'lucide-react'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import {
@@ -650,6 +650,46 @@ export default function Dashboard() {
     enabled: !!storeId,
   })
 
+  // ── Revenue Engine summary ──
+  const { data: revLeads } = useQuery({
+    queryKey: ['dash-rev-leads', storeId],
+    enabled: !!storeId,
+    staleTime: 2 * 60_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('leads')
+        .select('id, temperature, stage_id, budget_min, budget_max, won_value, score, client_name, vehicle_interest, created_at')
+        .eq('store_id', storeId)
+        .eq('status', 'active')
+      return data ?? []
+    },
+  })
+
+  const revSummary = useMemo(() => {
+    const WIN_PROB: Record<number, number> = { 0: 0.06, 1: 0.15, 2: 0.30, 3: 0.50, 4: 0.70, 5: 0.85, 6: 0.92 }
+    const DEFAULT_TICKET = 45_000
+    const fmtR = (v: number) => v >= 1_000_000 ? `R$ ${(v / 1_000_000).toFixed(1)}M` : v >= 1_000 ? `R$ ${(v / 1_000).toFixed(0)}k` : `R$ ${v.toFixed(0)}`
+    if (!revLeads || !stages) return { expected: 0, totalPipeline: 0, hot: 0, warm: 0, cold: 0, topLeads: [], fmtR }
+    let expected = 0, totalPipeline = 0, hot = 0, warm = 0, cold = 0
+    const enriched = revLeads.map(l => {
+      const stage = stages.find(s => s.id === l.stage_id)
+      if (!stage || stage.is_final) return { ...l, expectedValue: 0, prob: 0 }
+      const prob = WIN_PROB[Math.min(stage.position, 6)] ?? 0.92
+      const val = l.budget_max ?? l.budget_min ?? l.won_value ?? DEFAULT_TICKET
+      expected += prob * val
+      totalPipeline += val
+      if (l.temperature === 'hot') hot++
+      else if (l.temperature === 'warm') warm++
+      else cold++
+      return { ...l, expectedValue: prob * val, prob }
+    })
+    const topLeads = enriched
+      .filter(l => l.expectedValue > 0)
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+      .slice(0, 3)
+    return { expected, totalPipeline, hot, warm, cold, topLeads, fmtR }
+  }, [revLeads, stages])
+
   // ── Derived data ──
   const funnelBarData = useMemo(() => {
     if (!stages || !funnelCounts) return []
@@ -758,22 +798,47 @@ export default function Dashboard() {
         {kpisLoading ? (
           <Skeleton style={{ height: 96, borderRadius: 16 }} />
         ) : (
-          <div style={{
-            background: 'var(--ng)', border: '1px solid var(--nb)',
-            borderRadius: 18, padding: '18px 20px',
-            display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0,
-          }}>
-            <div style={{ borderRight: '1px solid var(--nb)', paddingRight: 16 }}>
-              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--neon)', textTransform: 'uppercase', letterSpacing: '.08em', opacity: .7 }}>Faturamento</p>
-              <p style={{ fontSize: 26, fontWeight: 900, color: 'var(--neon)', marginTop: 4, lineHeight: 1, letterSpacing: '-.02em' }}>
-                {kpis ? formatCurrency(kpis.revenue) : '—'}
-              </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{
+              background: 'var(--ng)', border: '1px solid var(--nb)',
+              borderRadius: 18, padding: '18px 20px',
+              display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0,
+            }}>
+              <div style={{ borderRight: '1px solid var(--nb)', paddingRight: 16 }}>
+                <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--neon)', textTransform: 'uppercase', letterSpacing: '.08em', opacity: .7 }}>Faturamento</p>
+                <p style={{ fontSize: 26, fontWeight: 900, color: 'var(--neon)', marginTop: 4, lineHeight: 1, letterSpacing: '-.02em' }}>
+                  {kpis ? formatCurrency(kpis.revenue) : '—'}
+                </p>
+              </div>
+              <div style={{ paddingLeft: 16 }}>
+                <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.08em' }}>Conversão</p>
+                <p style={{ fontSize: 26, fontWeight: 900, color: 'var(--t)', marginTop: 4, lineHeight: 1, letterSpacing: '-.02em' }}>
+                  {(kpis?.convRate ?? 0).toFixed(1)}%
+                </p>
+              </div>
             </div>
-            <div style={{ paddingLeft: 16 }}>
-              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.08em' }}>Conversão</p>
-              <p style={{ fontSize: 26, fontWeight: 900, color: 'var(--t)', marginTop: 4, lineHeight: 1, letterSpacing: '-.02em' }}>
-                {(kpis?.convRate ?? 0).toFixed(1)}%
-              </p>
+            {/* Revenue Engine card — mobile */}
+            <div
+              onClick={() => navigate('/receita')}
+              style={{
+                background: 'var(--card)', border: '1px solid var(--nb)', borderRadius: 14,
+                padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12,
+                cursor: 'pointer',
+              }}
+            >
+              <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--ng)', border: '1px solid var(--nb)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Activity size={14} style={{ color: 'var(--neon)' }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--neon)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 1 }}>Receita Esperada · Girard Engine</p>
+                <p style={{ fontSize: 20, fontWeight: 900, color: 'var(--neon)', fontFamily: 'var(--fm)', lineHeight: 1 }}>
+                  {revSummary.fmtR(revSummary.expected)}
+                </p>
+                <p style={{ fontSize: 9, color: 'var(--t3)', marginTop: 2 }}>
+                  🔥 {revSummary.hot} quentes · ⚡ {revSummary.warm} mornos · de {revSummary.fmtR(revSummary.totalPipeline)} em carteira
+                </p>
+              </div>
+              <ChevronRight size={14} style={{ color: 'var(--neon)', flexShrink: 0 }} />
             </div>
           </div>
         )}
@@ -1128,6 +1193,95 @@ export default function Dashboard() {
             </button>
           </div>
         )}
+
+        {/* ── Motor de Receita Banner ── */}
+        <div style={{
+          background: 'var(--card)', border: '1px solid var(--nb)',
+          borderRadius: 12, padding: '16px 20px',
+          boxShadow: '0 0 40px rgba(61,247,16,.06)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--ng)', border: '1px solid var(--nb)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Activity size={13} style={{ color: 'var(--neon)' }} />
+              </div>
+              <p style={{ fontSize: 11, fontWeight: 800, color: 'var(--neon)', textTransform: 'uppercase', letterSpacing: '.1em' }}>
+                Motor de Receita · Girard Engine
+              </p>
+            </div>
+            <button
+              onClick={() => navigate('/receita')}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--neon)', background: 'var(--ng)', border: '1px solid var(--nb)', borderRadius: 7, padding: '4px 10px', cursor: 'pointer' }}
+            >
+              Ver detalhes <ChevronRight size={12} />
+            </button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 10, alignItems: 'stretch' }}>
+            {/* Receita esperada */}
+            <div style={{ background: 'var(--ng)', border: '1px solid var(--nb)', borderRadius: 10, padding: '14px 16px' }}>
+              <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--neon)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 6 }}>Receita Esperada</p>
+              <p style={{ fontSize: 24, fontWeight: 900, color: 'var(--neon)', fontFamily: 'var(--fm)', lineHeight: 1 }}>
+                {revSummary.fmtR(revSummary.expected)}
+              </p>
+              <p style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4 }}>de {revSummary.fmtR(revSummary.totalPipeline)} em carteira</p>
+            </div>
+
+            {/* Temperatura */}
+            <div style={{ background: 'var(--el)', border: '1px solid var(--bs)', borderRadius: 10, padding: '14px 16px' }}>
+              <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>Temperatura</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {[
+                  { label: '🔥 Quentes', count: revSummary.hot,  color: '#22c55e' },
+                  { label: '⚡ Mornos',  count: revSummary.warm, color: '#eab308' },
+                  { label: '❄️ Frios',   count: revSummary.cold, color: '#94a3b8' },
+                ].map(t => (
+                  <div key={t.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 10, color: 'var(--t3)' }}>{t.label}</span>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: t.color, fontFamily: 'var(--fm)' }}>{t.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Top 3 Leads */}
+            {revSummary.topLeads.slice(0, 3).map((l, i) => {
+              const stage = stages?.find(s => s.id === l.stage_id)
+              const tempColor = l.temperature === 'hot' ? '#22c55e' : l.temperature === 'warm' ? '#eab308' : '#94a3b8'
+              return (
+                <div key={l.id} style={{ background: 'var(--el)', border: `1px solid ${i === 0 ? 'var(--nb)' : 'var(--bs)'}`, borderRadius: 10, padding: '10px 12px', cursor: 'pointer' }}
+                  onClick={() => navigate('/leads')}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--nb)' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = i === 0 ? 'var(--nb)' : 'var(--bs)' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                    <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--neon)', fontFamily: 'var(--fm)' }}>#{i + 1}</span>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: tempColor, background: `${tempColor}18`, padding: '1px 5px', borderRadius: 6 }}>
+                      {l.temperature === 'hot' ? '🔥' : l.temperature === 'warm' ? '⚡' : '❄️'}
+                    </span>
+                    {l.score > 0 && <span style={{ fontSize: 9, color: 'var(--t3)', marginLeft: 'auto' }}>Score {l.score}</span>}
+                  </div>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--t)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>
+                    {l.client_name}
+                  </p>
+                  <p style={{ fontSize: 9, color: 'var(--t3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {l.vehicle_interest ?? stage?.name ?? '—'}
+                  </p>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--neon)', fontFamily: 'var(--fm)', marginTop: 4 }}>
+                    {revSummary.fmtR(l.expectedValue)}
+                  </p>
+                </div>
+              )
+            })}
+
+            {/* Fill empty slots if < 3 top leads */}
+            {Array.from({ length: Math.max(0, 3 - revSummary.topLeads.length) }).map((_, i) => (
+              <div key={`empty-${i}`} style={{ background: 'var(--el)', border: '1px dashed var(--b)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontSize: 11, color: 'var(--t3)' }}>Sem leads</span>
+              </div>
+            ))}
+          </div>
+        </div>
 
         {/* ── BLOCO 1: Funil Comercial ── */}
         {vis('funil') && <div>
