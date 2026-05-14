@@ -4,7 +4,7 @@ import {
   Plus, Bot, Zap, Play, Pause, Trash2, Edit2, X,
   MessageSquare, Thermometer, GitBranch, CheckSquare,
   Archive, AlertCircle, Check, ArrowDown, Settings2,
-  ChevronRight, Library,
+  ChevronRight, Library, Clock, CheckCircle, XCircle, Users,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
@@ -690,16 +690,179 @@ function FlowEditor({
   )
 }
 
+// ─── Histórico de Execuções ───────────────────────────────────────────────────
+
+const ACTION_LABEL: Record<string, string> = {
+  send_whatsapp:      'WhatsApp enviado',
+  change_temperature: 'Temperatura alterada',
+  change_stage:       'Etapa alterada',
+  create_task:        'Tarefa criada',
+  archive_lead:       'Lead arquivado',
+}
+
+interface ExecutionRow {
+  id: string
+  action_index: number
+  status: string
+  error_message: string | null
+  executed_at: string
+  lead: { client_name: string; client_phone: string | null } | null
+}
+
+function ExecutionHistoryModal({ automation, onClose }: { automation: Automation; onClose: () => void }) {
+  const { data: rows = [], isLoading } = useQuery<ExecutionRow[]>({
+    queryKey: ['automation-executions', automation.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('automation_executions')
+        .select('id, action_index, status, error_message, executed_at, lead:leads(client_name, client_phone)')
+        .eq('automation_id', automation.id)
+        .order('executed_at', { ascending: false })
+        .limit(200)
+      return (data ?? []) as ExecutionRow[]
+    },
+  })
+
+  const total    = rows.length
+  const success  = rows.filter(r => r.status === 'success').length
+  const failed   = rows.filter(r => r.status !== 'success').length
+  const uniqueLeads = new Set(rows.map(r => r.lead?.client_name)).size
+
+  const formatDate = (iso: string) => {
+    const d = new Date(iso)
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+      + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 400, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+      onClick={onClose}>
+      {/* backdrop */}
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.65)', backdropFilter: 'blur(4px)' }} />
+
+      {/* Sheet */}
+      <div
+        style={{
+          position: 'relative', zIndex: 1, width: '100%', maxWidth: 760,
+          background: 'var(--surf)', border: '1px solid var(--bs)',
+          borderRadius: '14px 14px 0 0',
+          boxShadow: '0 -24px 80px rgba(0,0,0,.5)',
+          maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--bs)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 8, background: 'var(--ng)', border: '1px solid var(--nb)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Clock size={15} style={{ color: 'var(--neon)' }} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--t)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              Histórico — {automation.name}
+            </p>
+            <p style={{ fontSize: 11, color: 'var(--t3)' }}>Últimas {Math.min(total, 200)} execuções</p>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', padding: 4 }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Stats */}
+        {!isLoading && total > 0 && (
+          <div style={{ display: 'flex', gap: 12, padding: '12px 20px', borderBottom: '1px solid var(--bs)', flexShrink: 0 }}>
+            {[
+              { icon: <CheckCircle size={13} />, label: 'Sucesso',  value: success,     color: 'var(--neon)' },
+              { icon: <XCircle size={13} />,     label: 'Erros',    value: failed,      color: '#f87171' },
+              { icon: <Users size={13} />,       label: 'Leads',    value: uniqueLeads, color: 'var(--t2)' },
+            ].map(s => (
+              <div key={s.label} style={{ flex: 1, background: 'var(--el)', border: '1px solid var(--bs)', borderRadius: 8, padding: '8px 12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: s.color, marginBottom: 3 }}>
+                  {s.icon}
+                  <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em' }}>{s.label}</span>
+                </div>
+                <p style={{ fontSize: 18, fontWeight: 800, color: s.color, fontFamily: 'var(--fm)' }}>{s.value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Tabela */}
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {isLoading ? (
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--t3)', fontSize: 12 }}>Carregando...</div>
+          ) : total === 0 ? (
+            <div style={{ padding: '48px 0', textAlign: 'center' }}>
+              <Clock size={32} style={{ color: 'var(--t3)', opacity: .2, margin: '0 auto 10px' }} />
+              <p style={{ fontSize: 13, color: 'var(--t3)' }}>Nenhuma execução ainda</p>
+              <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>A automação ainda não rodou para nenhum lead.</p>
+            </div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  {['Lead', 'Ação', 'Status', 'Data'].map(h => (
+                    <th key={h} style={{ padding: '8px 16px', textAlign: 'left', fontSize: 9, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.06em', background: 'var(--el)', borderBottom: '1px solid var(--bs)', whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(row => {
+                  const action = automation.actions[row.action_index]
+                  const actionLabel = action ? (ACTION_LABEL[action.type] ?? action.type) : `Ação #${row.action_index + 1}`
+                  const isOk = row.status === 'success'
+                  return (
+                    <tr key={row.id} style={{ borderBottom: '1px solid var(--bs)' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--el)' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+                      <td style={{ padding: '9px 16px' }}>
+                        <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--t)' }}>{row.lead?.client_name ?? '—'}</p>
+                        {row.lead?.client_phone && <p style={{ fontSize: 10, color: 'var(--t3)', fontFamily: 'var(--fm)' }}>{row.lead.client_phone}</p>}
+                      </td>
+                      <td style={{ padding: '9px 16px' }}>
+                        <span style={{ fontSize: 11, color: 'var(--t2)' }}>{actionLabel}</span>
+                        {row.error_message && (
+                          <p style={{ fontSize: 10, color: '#f87171', marginTop: 2 }} title={row.error_message}>
+                            {row.error_message.slice(0, 60)}{row.error_message.length > 60 ? '…' : ''}
+                          </p>
+                        )}
+                      </td>
+                      <td style={{ padding: '9px 16px' }}>
+                        <span style={{
+                          fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 10,
+                          background: isOk ? 'rgba(61,247,16,.1)' : 'rgba(248,113,113,.1)',
+                          color: isOk ? 'var(--neon)' : '#f87171',
+                          border: `1px solid ${isOk ? 'rgba(61,247,16,.25)' : 'rgba(248,113,113,.25)'}`,
+                          textTransform: 'uppercase', letterSpacing: '.05em',
+                        }}>
+                          {isOk ? 'OK' : 'Erro'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '9px 16px' }}>
+                        <span style={{ fontSize: 11, color: 'var(--t3)', fontFamily: 'var(--fm)', whiteSpace: 'nowrap' }}>{formatDate(row.executed_at)}</span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── AutomationCard (lista) ───────────────────────────────────────────────────
 
 function AutomationCard({
-  automation, stages, onEdit, onDelete, onToggle,
+  automation, stages, onEdit, onDelete, onToggle, onHistory,
 }: {
   automation: Automation
   stages: { id: string; name: string }[]
   onEdit: () => void
   onDelete: () => void
   onToggle: () => void
+  onHistory: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const trigger = TRIGGERS.find(t => t.id === automation.trigger_type)!
@@ -750,6 +913,13 @@ function AutomationCard({
             onMouseEnter={e => { e.currentTarget.style.background = 'var(--el)' }}
             onMouseLeave={e => { e.currentTarget.style.background = 'none' }}>
             <Bot size={13} />
+          </button>
+          <button onClick={onHistory}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', display: 'flex', padding: 6, borderRadius: 6 }}
+            title="Histórico de execuções"
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--el)'; e.currentTarget.style.color = 'var(--neon)' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--t3)' }}>
+            <Clock size={13} />
           </button>
           <button onClick={onToggle}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: automation.active ? 'var(--neon)' : 'var(--t3)', display: 'flex', padding: 6, borderRadius: 6 }}
@@ -931,11 +1101,12 @@ export default function Automations() {
   const { store } = useAuthStore()
   const queryClient = useQueryClient()
 
-  const [showEditor, setShowEditor]       = useState(false)
-  const [editTarget, setEditTarget]       = useState<Automation | null>(null)
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [showEditor, setShowEditor]         = useState(false)
+  const [editTarget, setEditTarget]         = useState<Automation | null>(null)
+  const [deleteConfirm, setDeleteConfirm]   = useState<string | null>(null)
   const [activatingPreset, setActivatingPreset] = useState(false)
-  const [showTemplates, setShowTemplates] = useState(false)
+  const [showTemplates, setShowTemplates]   = useState(false)
+  const [showHistoryFor, setShowHistoryFor] = useState<Automation | null>(null)
 
   const { data: stages = [] } = useQuery({
     queryKey: ['pipeline-stages-simple', store?.id],
@@ -1174,6 +1345,7 @@ export default function Automations() {
               onEdit={() => { setEditTarget(auto); setShowEditor(true) }}
               onDelete={() => setDeleteConfirm(auto.id)}
               onToggle={() => toggleMutation.mutate({ id: auto.id, active: !auto.active })}
+              onHistory={() => setShowHistoryFor(auto)}
             />
           ))}
         </div>
@@ -1194,6 +1366,11 @@ export default function Automations() {
           O campo <b style={{ color: 'var(--t2)' }}>Dia</b> indica quantos dias após o gatilho a ação será disparada.
         </p>
       </div>
+
+      {/* Histórico de execuções */}
+      {showHistoryFor && (
+        <ExecutionHistoryModal automation={showHistoryFor} onClose={() => setShowHistoryFor(null)} />
+      )}
 
       {/* Modal de templates */}
       {showTemplates && (
