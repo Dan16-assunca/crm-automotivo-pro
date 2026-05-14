@@ -1,15 +1,19 @@
 import React, { useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Bot, Zap, Play, Pause, Trash2, Edit2, X,
   MessageSquare, Thermometer, GitBranch, CheckSquare,
   Archive, AlertCircle, Check, ArrowDown, Settings2,
   ChevronRight, Library, Clock, CheckCircle, XCircle, Users,
+  Loader2, Workflow,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { toast } from '@/components/ui/Toast'
 import type { Automation, AutomationAction } from '@/types'
+import type { AutomationFlow } from './flow-types'
+import { TRIGGER_TYPES } from './flow-types'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -1100,6 +1104,7 @@ function TemplatesModal({ onClose, onImport }: {
 export default function Automations() {
   const { store } = useAuthStore()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
 
   const [showEditor, setShowEditor]         = useState(false)
   const [editTarget, setEditTarget]         = useState<Automation | null>(null)
@@ -1107,6 +1112,80 @@ export default function Automations() {
   const [activatingPreset, setActivatingPreset] = useState(false)
   const [showTemplates, setShowTemplates]   = useState(false)
   const [showHistoryFor, setShowHistoryFor] = useState<Automation | null>(null)
+  const [creatingFlow, setCreatingFlow]     = useState(false)
+  const [deleteFlowConfirm, setDeleteFlowConfirm] = useState<string | null>(null)
+
+  // ─── Fluxos visuais ──────────────────────────────────────────────────────────
+
+  const { data: visualFlows = [], isLoading: flowsLoading } = useQuery<AutomationFlow[]>({
+    queryKey: ['automation-flows', store?.id],
+    enabled: !!store?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('automation_flows')
+        .select('*')
+        .eq('store_id', store!.id)
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return (data ?? []) as AutomationFlow[]
+    },
+  })
+
+  const createFlowMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase
+        .from('automation_flows')
+        .insert({
+          store_id: store!.id,
+          name: 'Novo Fluxo',
+          trigger_type: 'lead_created',
+          is_active: false,
+          nodes: [],
+          edges: [],
+          viewport: { x: 0, y: 0, zoom: 1 },
+          run_count: 0,
+        })
+        .select('id')
+        .single()
+      if (error) throw error
+      return data.id as string
+    },
+    onSuccess: (id) => {
+      queryClient.invalidateQueries({ queryKey: ['automation-flows'] })
+      navigate(`/automacoes/${id}`)
+    },
+    onError: () => toast.error('Erro ao criar fluxo'),
+  })
+
+  const toggleFlowMutation = useMutation({
+    mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      const { error } = await supabase
+        .from('automation_flows')
+        .update({ is_active: active })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['automation-flows'] }),
+  })
+
+  const deleteFlowMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('automation_flows').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['automation-flows'] })
+      setDeleteFlowConfirm(null)
+      toast.success('Fluxo excluído')
+    },
+    onError: () => toast.error('Erro ao excluir fluxo'),
+  })
+
+  const handleNewFlow = async () => {
+    setCreatingFlow(true)
+    try { await createFlowMutation.mutateAsync() }
+    finally { setCreatingFlow(false) }
+  }
 
   const { data: stages = [] } = useQuery({
     queryKey: ['pipeline-stages-simple', store?.id],
@@ -1251,6 +1330,130 @@ export default function Automations() {
         </div>
       )}
 
+      {/* ── Fluxos Visuais (n8n-style) ───────────────────────────────────────── */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Workflow size={14} style={{ color: 'var(--neon)' }} />
+            <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--t)' }}>Fluxos Visuais</h2>
+            <span style={{ fontSize: 10, color: 'var(--t3)', background: 'var(--el)', border: '1px solid var(--b)', padding: '1px 7px', borderRadius: 10 }}>
+              {visualFlows.length}
+            </span>
+          </div>
+          <button
+            onClick={handleNewFlow}
+            disabled={creatingFlow}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
+              borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              background: 'var(--ng)', border: '1px solid var(--nb)', color: 'var(--neon)',
+              opacity: creatingFlow ? .6 : 1,
+            }}
+          >
+            {creatingFlow
+              ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} />
+              : <Plus size={12} />
+            }
+            Novo Fluxo
+          </button>
+        </div>
+
+        {flowsLoading ? (
+          <div style={{ height: 56, background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 10, opacity: .4 }} />
+        ) : visualFlows.length === 0 ? (
+          <button
+            onClick={handleNewFlow}
+            disabled={creatingFlow}
+            style={{
+              width: '100%', padding: '24px 0', borderRadius: 10, cursor: 'pointer',
+              background: 'var(--ng)', border: '1px dashed var(--nb)', color: 'var(--neon)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+            }}
+          >
+            <Workflow size={22} />
+            <span style={{ fontSize: 12, fontWeight: 700 }}>Criar primeiro fluxo visual</span>
+            <span style={{ fontSize: 10, color: 'var(--t3)' }}>Arraste nós e conecte gatilhos, ações e condições no canvas</span>
+          </button>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {visualFlows.map(flow => {
+              const trigger = TRIGGER_TYPES.find(t => t.id === flow.trigger_type)
+              return (
+                <div
+                  key={flow.id}
+                  style={{
+                    background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 10,
+                    padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12,
+                    transition: 'border-color .15s',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--nb)')}
+                  onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--bs)')}
+                >
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 8, flexShrink: 0, fontSize: 18,
+                    background: flow.is_active ? 'var(--ng)' : 'var(--el)',
+                    border: `1px solid ${flow.is_active ? 'var(--nb)' : 'var(--b)'}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {trigger?.icon ?? '🔀'}
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--t)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {flow.name}
+                      </p>
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 10, flexShrink: 0,
+                        background: flow.is_active ? 'var(--ng)' : 'var(--el)',
+                        color: flow.is_active ? 'var(--neon)' : 'var(--t3)',
+                        border: `1px solid ${flow.is_active ? 'var(--nb)' : 'var(--b)'}`,
+                        textTransform: 'uppercase', letterSpacing: '.05em',
+                      }}>
+                        {flow.is_active ? 'ATIVO' : 'PAUSADO'}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 11, color: 'var(--t3)' }}>
+                      {trigger?.label ?? flow.trigger_type} · {(flow.nodes ?? []).length} nós · {flow.run_count ?? 0} execuções
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+                    <button
+                      onClick={() => toggleFlowMutation.mutate({ id: flow.id, active: !flow.is_active })}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: flow.is_active ? 'var(--neon)' : 'var(--t3)', display: 'flex', padding: 6, borderRadius: 6 }}
+                      title={flow.is_active ? 'Pausar' : 'Ativar'}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--el)' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'none' }}
+                    >
+                      {flow.is_active ? <Pause size={13} /> : <Play size={13} />}
+                    </button>
+                    <button
+                      onClick={() => navigate(`/automacoes/${flow.id}`)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', display: 'flex', padding: 6, borderRadius: 6 }}
+                      title="Editar fluxo"
+                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--el)'; e.currentTarget.style.color = 'var(--t)' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--t3)' }}
+                    >
+                      <Edit2 size={12} />
+                    </button>
+                    <button
+                      onClick={() => setDeleteFlowConfirm(flow.id)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', display: 'flex', padding: 6, borderRadius: 6 }}
+                      title="Excluir"
+                      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(244,63,94,.08)'; e.currentTarget.style.color = 'var(--red)' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--t3)' }}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Preset 21 dias */}
       {!hasPreset && (
         <div style={{ background: 'var(--card)', border: '1px solid var(--bs)', borderRadius: 10, padding: '16px 18px' }}>
@@ -1385,6 +1588,41 @@ export default function Automations() {
           onClose={() => { setShowEditor(false); setEditTarget(null) }}
           onSave={handleSave}
         />
+      )}
+
+      {/* Confirm delete visual flow */}
+      {deleteFlowConfirm && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setDeleteFlowConfirm(null)}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.5)' }} />
+          <div style={{
+            position: 'relative', zIndex: 1,
+            background: 'var(--card)', border: '1px solid var(--bs)',
+            borderRadius: 10, padding: '20px 24px', width: 320,
+            boxShadow: '0 16px 48px rgba(0,0,0,.4)',
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(244,63,94,.1)', border: '1px solid rgba(244,63,94,.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Trash2 size={15} style={{ color: 'var(--red)' }} />
+              </div>
+              <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--t)' }}>Excluir fluxo visual?</p>
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 16, lineHeight: 1.5 }}>
+              O fluxo e todo o histórico de execuções serão removidos. Esta ação não pode ser desfeita.
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setDeleteFlowConfirm(null)}
+                style={{ padding: '6px 14px', borderRadius: 7, border: '1px solid var(--b)', background: 'var(--el)', color: 'var(--t2)', fontSize: 12, cursor: 'pointer' }}>
+                Cancelar
+              </button>
+              <button onClick={() => deleteFlowMutation.mutate(deleteFlowConfirm)}
+                disabled={deleteFlowMutation.isPending}
+                style={{ padding: '6px 14px', borderRadius: 7, border: 'none', background: 'var(--red)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: deleteFlowMutation.isPending ? .6 : 1 }}>
+                {deleteFlowMutation.isPending ? 'Excluindo…' : 'Excluir'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Confirm delete */}

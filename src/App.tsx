@@ -27,6 +27,7 @@ const Goals = lazy(() => import('@/pages/goals/Goals'))
 const Clients = lazy(() => import('@/pages/clients/Clients'))
 const Team = lazy(() => import('@/pages/team/Team'))
 const Automations = lazy(() => import('@/pages/automations/Automations'))
+const FlowBuilderPage = lazy(() => import('@/pages/automations/FlowBuilderPage'))
 const Settings = lazy(() => import('@/pages/settings/Settings'))
 const Calculator = lazy(() => import('@/pages/calculator/Calculator'))
 const Integrations = lazy(() => import('@/pages/integrations/Integrations'))
@@ -101,6 +102,7 @@ function AppInner() {
             <Route path="analytics" element={<Analytics />} />
             <Route path="metas" element={<Goals />} />
             <Route path="automacoes" element={<Automations />} />
+            <Route path="automacoes/:flowId" element={<FlowBuilderPage />} />
             <Route path="equipe" element={
               <ProtectedRoute roles={['admin', 'manager']}><Team /></ProtectedRoute>
             } />
